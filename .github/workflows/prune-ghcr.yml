@@ -1,0 +1,52 @@
+name: "Prune GHCR images"
+
+# Thin caller. Pruning logic lives in
+# hwinther/reusable-workflows/.github/workflows/prune-ghcr.yml (see its header for the rules).
+#
+# Auth note:
+#   ghcr.io/hwinther/* is a USER-scoped registry. The repo's GITHUB_TOKEN can delete versions only
+#   when the package has "Inherit access from source repository" enabled. If deletion 403s, set repo
+#   secret GHCR_PRUNE_TOKEN to a PAT with `delete:packages` (+ `read:packages`), passed via
+#   secrets: inherit.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "When false, actually delete versions. Cron runs always force false."
+        type: boolean
+        default: true
+      images:
+        description: "Comma-separated package names to prune. Blank = auto-discover by prefix."
+        type: string
+        default: "skylens/api"
+      nuke_package:
+        description: "DESTRUCTIVE. Package name to delete entirely — leave blank for normal prune."
+        type: string
+        default: ""
+  schedule:
+    # Sundays 03:00 UTC. Cron always runs live (dry_run forced to false).
+    - cron: "0 3 * * 0"
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: prune-ghcr
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    permissions:
+      contents: read
+      packages: write
+    uses: hwinther/reusable-workflows/.github/workflows/prune-ghcr.yml@a0e722a6a3002b2095899c71861906262160b125 # v2.0.0
+    with:
+      dry_run: ${{ github.event_name == 'schedule' && false || inputs.dry_run }}
+      images: ${{ inputs.images || 'skylens/api' }}
+      package_namespace_prefix: skylens/
+      nuke_package: ${{ inputs.nuke_package || '' }}
+    # Passes the optional GHCR_PRUNE_TOKEN through to the pinned reusable prune workflow (which reads
+    # it via inherit). Accepted + documented in .github/zizmor.yml (secrets-inherit).
+    secrets: inherit

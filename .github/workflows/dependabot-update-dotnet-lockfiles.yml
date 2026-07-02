@@ -1,0 +1,27 @@
+name: "Automatically update dotnet lockfiles in dependabot PRs"
+
+# When Dependabot bumps a NuGet package, the committed packages.lock.json must be regenerated or the
+# locked-mode restore fails. This reusable workflow does that on the Dependabot PR branch.
+# Requires repo secret WORKFLOW_TOKEN (PAT that can push to the PR branch and re-trigger CI).
+
+on:
+  # pull_request_target is required so the reusable workflow can push the regenerated lockfile back
+  # to the Dependabot PR branch (Dependabot PRs run with a read-only token). It delegates entirely to
+  # a pinned, trusted reusable workflow and never checks out or runs PR-authored code, so the usual
+  # pull_request_target exploit surface does not apply here.
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
+    types:
+      - labeled
+      - synchronize
+
+jobs:
+  update-lockfiles:
+    uses: hwinther/reusable-workflows/.github/workflows/dependabot-update-dotnet-lockfiles.yml@a0e722a6a3002b2095899c71861906262160b125 # v2.0.0
+    permissions:
+      contents: read
+    with:
+      solution_path: backend
+      solution_name: Skylens.slnx
+      dotnet_version: 10.0.x
+    secrets:
+      WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}

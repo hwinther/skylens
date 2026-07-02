@@ -1,0 +1,3 @@
+# GitVersion configuration (matches the convention used across hwinther repos).
+# https://gitversion.net/docs/reference/configuration
+workflow: GitHubFlow/v1

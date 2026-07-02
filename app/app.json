@@ -1,0 +1,60 @@
+{
+  "expo": {
+    "name": "Skylens",
+    "slug": "skylens",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "skylens",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "no.wsh.skylens"
+    },
+    "android": {
+      "package": "no.wsh.skylens",
+      "adaptiveIcon": {
+        "backgroundColor": "#0B1622",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Skylens uses the camera to overlay aircraft labels on the live sky."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Skylens uses your location to compute the direction and elevation of nearby aircraft."
+        }
+      ],
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "Skylens uses device motion to align labels with the direction you are pointing the phone."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

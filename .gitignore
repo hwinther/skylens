@@ -1,0 +1,43 @@
+# .NET
+bin/
+obj/
+artifacts/
+*.user
+TestResults/
+[Tt]est[Rr]esults/
+coverage*.json
+coverage*.xml
+*.trx
+# NOTE: packages.lock.json is intentionally committed (locked-mode restore) — do NOT ignore it.
+
+# Node / Expo
+node_modules/
+dist/
+coverage/
+.expo/
+.expo-shared/
+web-build/
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Expo prebuild (managed workflow — native projects are generated, not committed)
+app/android/
+app/ios/
+
+# Expo export output (expo export --platform android bundler check in CI)
+app/dist/
+
+# Editors / OS
+.vs/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local env / secrets (never commit real API keys, MQTT creds, or home coordinates)
+.env
+.env.*
+!.env.sample
+*.keystore
+!debug.keystore

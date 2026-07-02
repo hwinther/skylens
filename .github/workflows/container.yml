@@ -1,0 +1,40 @@
+name: "Publish container to GHCR"
+
+# Single API image (ASP.NET Core gateway + baked aircraft.csv.gz enrichment DB). Built from the
+# repo-root Dockerfile. Pure .NET so multi-arch is fine, but the reusable workflow builds for the
+# runner arch (amd64) by default, which is all the skylens-production deployment needs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      grype_fail_build:
+        description: "Fail the build if Grype finds vulnerabilities"
+        type: boolean
+        default: true
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: "${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  container:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      actions: write
+      security-events: write
+      pull-requests: write
+    uses: hwinther/reusable-workflows/.github/workflows/docker-container.yml@a0e722a6a3002b2095899c71861906262160b125 # v2.0.0
+    with:
+      container_registry: ghcr.io
+      container_image_name_postfix: api
+      build_context: .
+      dockerfile: Dockerfile
+      # v2 string enum: 'never' only when a manual run unchecks the box; otherwise 'auto' (fail on release builds).
+      grype_fail_build: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.grype_fail_build == 'false' && 'never' || 'auto' }}

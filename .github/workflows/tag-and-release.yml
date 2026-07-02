@@ -1,0 +1,71 @@
+name: "Create tag and release"
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Tag name (e.g. v1.2.3), or 'auto' for the next GitVersion"
+        required: false
+        default: "auto"
+      release_notes:
+        description: "Release notes for this tag"
+        required: false
+      create_release:
+        description: "Create a GitHub Release for this tag"
+        type: boolean
+        default: true
+      container_grype_fail_build:
+        description: "Fail the container workflow if Grype finds vulnerabilities (turn off for a release override)"
+        type: boolean
+        default: true
+
+jobs:
+  tag:
+    # Required so we can dispatch the container workflow after tagging (a tag push made with
+    # GITHUB_TOKEN does not fire on.push.tags).
+    permissions:
+      contents: write
+      actions: write
+    uses: hwinther/reusable-workflows/.github/workflows/tag-and-release.yml@a0e722a6a3002b2095899c71861906262160b125 # v2.0.0
+    with:
+      tag_name: ${{ inputs.tag_name }}
+      release_notes: ${{ inputs.release_notes }}
+      create_release: ${{ inputs.create_release }}
+
+  trigger-container-build:
+    needs: tag
+    if: success()
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Determine ref for the container build
+        id: ref
+        run: |
+          git fetch --tags --force
+          TAG="${{ inputs.tag_name }}"
+          if [ "$TAG" = "auto" ] || [ -z "$TAG" ]; then
+            REF=$(git tag -l 'v*' --sort=-v:refname | head -n1)
+          else
+            REF="$TAG"
+          fi
+          if [ -z "$REF" ]; then
+            echo "::error::Could not resolve a tag ref for the container build."
+            exit 1
+          fi
+          echo "Using ref: $REF"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch container workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh workflow run container.yml
+          --ref "${{ steps.ref.outputs.ref }}"
+          -f grype_fail_build=${{ inputs.container_grype_fail_build }}

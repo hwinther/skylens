@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>Skylens.Api</RootNamespace>
+    <AssemblyName>Skylens.Api</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Skylens.Api.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- JwtBearer validates Authelia's RFC 9068 access tokens (the clutterstock/test-api pattern). -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
+    <!-- MQTTnet v5: hand-rolled reconnect BackgroundService (ManagedClient was removed in v5). -->
+    <PackageReference Include="MQTTnet" Version="5.2.0.1603" />
+    <!-- OpenTelemetry stack mirrors the proven test-api versions. -->
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.16.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.16.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.16.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.15.1" />
+  </ItemGroup>
+
+</Project>

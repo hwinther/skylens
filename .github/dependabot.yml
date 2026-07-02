@@ -1,0 +1,87 @@
+# Dependabot version updates. https://docs.github.com/code-security/dependabot
+version: 2
+updates:
+- package-ecosystem: "github-actions"
+  directories:
+  - "/"
+  open-pull-requests-limit: 20
+  target-branch: "main"
+  schedule:
+    interval: "weekly"
+    day: "sunday"
+  cooldown:
+    default-days: 7
+  assignees:
+  - "hwinther"
+  groups:
+    reusable-workflows:
+      patterns:
+      - "hwinther/reusable-workflows/*"
+
+- package-ecosystem: "docker"
+  directories:
+  - "/"
+  open-pull-requests-limit: 20
+  target-branch: "main"
+  schedule:
+    interval: "weekly"
+    day: "sunday"
+  cooldown:
+    default-days: 7
+  assignees:
+  - "hwinther"
+
+- package-ecosystem: "nuget"
+  directory: "/backend"
+  open-pull-requests-limit: 20
+  target-branch: "main"
+  schedule:
+    interval: "weekly"
+    day: "sunday"
+  cooldown:
+    default-days: 7
+  assignees:
+  - "hwinther"
+  groups:
+    microsoft:
+      patterns:
+      - "Microsoft.*"
+    xunit:
+      patterns:
+      - "xunit"
+      - "xunit.*"
+
+- package-ecosystem: "npm"
+  directories:
+  - "/app"
+  open-pull-requests-limit: 20
+  target-branch: "main"
+  schedule:
+    interval: "weekly"
+    day: "sunday"
+  cooldown:
+    default-days: 7
+  assignees:
+  - "hwinther"
+  ignore:
+  - dependency-name: "*"
+    update-types: [ "version-update:semver-patch" ]
+  groups:
+    expo:
+      patterns:
+      - "expo"
+      - "expo-*"
+      - "@expo/*"
+    react:
+      patterns:
+      - "react"
+      - "react-*"
+      - "react-native"
+      - "react-native-*"
+      - "@types/react*"
+    eslint:
+      patterns:
+      - "eslint"
+      - "eslint-*"
+      - "@eslint/*"
+      - "@types/*"

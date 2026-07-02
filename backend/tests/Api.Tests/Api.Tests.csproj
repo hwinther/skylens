@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Skylens.Api.Tests</RootNamespace>
+    <AssemblyName>Skylens.Api.Tests</AssemblyName>
+    <!-- Microsoft.Testing.Platform test projects are executables (see global.json test.runner). -->
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <!-- xUnit analyzer warnings shouldn't fail the test build. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3.mtp-v2" Version="3.2.2" />
+    <PackageReference Include="coverlet.MTP" Version="10.0.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.9" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.7.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Api/Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The dump1090 fixture is read at runtime by Dump1090ParserTests. -->
+    <Content Include="fixtures/aircraft.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

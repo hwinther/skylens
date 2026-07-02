@@ -1,0 +1,31 @@
+name: "Continuous Integration (PR build)"
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    types: [opened, reopened, labeled, synchronize, ready_for_review]
+
+concurrency:
+  group: "${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  pr-build:
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+      packages: read
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    uses: hwinther/reusable-workflows/.github/workflows/pr-build.yml@a0e722a6a3002b2095899c71861906262160b125 # v2.0.0
+    with:
+      node_enabled: true
+      node_version: "24.x"
+      node_working_directory: "app"
+      node_changes_regex: "app/.*"
+      dotnet_enabled: true
+      dotnet_version: "10.0.x"
+      dotnet_working_directory: "backend"
+      dotnet_solution_file: "Skylens.slnx"
