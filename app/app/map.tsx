@@ -8,14 +8,14 @@ import { useMemo, useState } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { selectAircraftList, useAircraftStore } from "@/state/aircraftStore";
+import { useAircraftList } from "@/state/aircraftStore";
 import { DetailSheet } from "@/components";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
 import { DEMO_HOME } from "@/mock/mockFeed";
 
 export default function MapScreen() {
-  const aircraft = useAircraftStore(selectAircraftList);
+  const aircraft = useAircraftList();
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
   const positioned = aircraft.filter((a) => a.lat != null && a.lon != null);

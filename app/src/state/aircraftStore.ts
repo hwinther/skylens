@@ -6,6 +6,7 @@
  */
 
 import { create } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 import type { AircraftDto } from "@/api/types";
 
 export type ConnectionState =
@@ -47,7 +48,22 @@ export const useAircraftStore = create<AircraftState>((set) => ({
   clear: () => set({ byHex: {}, lastSnapshotAt: 0 }),
 }));
 
-/** Selector: the current aircraft as an array (memo at the call site if needed). */
+/**
+ * Selector: the current aircraft as an array. NOTE this allocates a fresh array on
+ * every call, so it is NOT a stable snapshot — do not pass it straight to
+ * useAircraftStore or React's useSyncExternalStore will loop ("getSnapshot should be
+ * cached"). Use the useAircraftList() hook, which shallow-compares.
+ */
 export function selectAircraftList(state: AircraftState): AircraftDto[] {
   return Object.values(state.byHex);
+}
+
+/**
+ * Subscribe to the aircraft list with a stable reference. useShallow compares the
+ * array element-wise, so unrelated store updates (e.g. a connection change) reuse the
+ * previous array instead of forcing a re-render; a fresh 1 Hz snapshot swaps in new
+ * DTOs and does update.
+ */
+export function useAircraftList(): AircraftDto[] {
+  return useAircraftStore(useShallow(selectAircraftList));
 }

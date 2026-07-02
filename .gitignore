@@ -41,3 +41,5 @@ Thumbs.db
 !.env.sample
 *.keystore
 !debug.keystore
+
+.claude/settings.local.json

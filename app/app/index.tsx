@@ -27,7 +27,7 @@ import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
 import { startMockFeed, DEMO_HOME } from "@/mock/mockFeed";
 import {
-  selectAircraftList,
+  useAircraftList,
   useAircraftStore,
 } from "@/state/aircraftStore";
 import { useSettingsStore } from "@/state/settingsStore";
@@ -40,7 +40,7 @@ export default function ArScreen() {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
 
-  const aircraft = useAircraftStore(selectAircraftList);
+  const aircraft = useAircraftList();
   const snapshotAt = useAircraftStore((s) => s.lastSnapshotAt);
   const connection = useAircraftStore((s) => s.connection);
   const source = useAircraftStore((s) => s.source);
@@ -56,13 +56,17 @@ export default function ArScreen() {
   const demo = useDemoPose({ initialAzimuth: 90 });
 
   const poseRef = demoMode ? demo.poseRef : live.poseRef;
+  // usePoseRefs returns a fresh object each render, but setObserverPosition is a
+  // stable useCallback — depend on it, not on `live`, or the effect re-runs every
+  // render and thrashes setConnection.
+  const { setObserverPosition } = live;
 
   useEffect(() => {
     if (!demoMode) return;
     // Demo: replay recorded feed, fabricate a fixed observer at the series home.
     setSource("demo");
     setConnection("connected");
-    live.setObserverPosition({ lat: DEMO_HOME.lat, lon: DEMO_HOME.lon, alt: 100 });
+    setObserverPosition({ lat: DEMO_HOME.lat, lon: DEMO_HOME.lon, alt: 100 });
     const handle = startMockFeed({
       onSnapshot: (a) => setSnapshot(a),
     });
@@ -70,7 +74,7 @@ export default function ArScreen() {
       handle.stop();
       setConnection("disconnected");
     };
-  }, [demoMode, setSnapshot, setSource, setConnection, live]);
+  }, [demoMode, setSnapshot, setSource, setConnection, setObserverPosition]);
 
   useEffect(() => {
     if (demoMode) return;
