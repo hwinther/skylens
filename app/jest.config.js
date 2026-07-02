@@ -20,6 +20,9 @@ module.exports = {
     "!src/mock/**",
     "!src/components/**",
   ],
+  // Jest's istanbul cobertura reporter writes coverage/cobertura-coverage.xml so
+  // the reusable pr-build.yml node job (irongut/CodeCoverageSummary) always finds it.
+  coverageReporters: ["text", "lcov", "cobertura"],
   transformIgnorePatterns: [
     "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@microsoft/signalr))",
   ],
