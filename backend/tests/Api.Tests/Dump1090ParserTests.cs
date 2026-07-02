@@ -5,8 +5,11 @@ namespace Skylens.Api.Tests;
 
 public sealed class Dump1090ParserTests
 {
+    // Deterministic parser-contract assertions run against the synthetic fixture, which is hand-built
+    // to exercise the parser gotchas and never changes. The real capture (aircraft.json) is covered by
+    // Dump1090ParserRealCaptureTests with structural assertions only.
     private static string FixtureJson() =>
-        File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "fixtures", "aircraft.json"));
+        File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "fixtures", "aircraft-synthetic.json"));
 
     [Fact]
     public void Parse_reads_now_and_all_aircraft_from_fixture()
