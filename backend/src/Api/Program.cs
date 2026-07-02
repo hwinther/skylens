@@ -193,6 +193,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
 
+app.MapLandingEndpoints();
 app.MapHealthEndpoints();
 app.MapApiEndpoints();
 app.MapHub<AircraftHub>("/hubs/aircraft").RequireAuthorization();
