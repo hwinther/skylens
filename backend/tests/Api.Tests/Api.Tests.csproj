@@ -22,8 +22,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The dump1090 fixture is read at runtime by Dump1090ParserTests. -->
-    <Content Include="fixtures/aircraft.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The dump1090 fixtures are read at runtime: aircraft-synthetic.json by Dump1090ParserTests,
+         aircraft.json (real capture) by Dump1090ParserRealCaptureTests. -->
+    <Content Include="fixtures/*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

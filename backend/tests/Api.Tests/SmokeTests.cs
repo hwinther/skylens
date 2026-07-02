@@ -32,6 +32,17 @@ public sealed class SmokeTests : IClassFixture<SmokeTests.SkylensFactory>
     }
 
     [Fact]
+    public async Task Root_is_anonymous_and_returns_html_landing_page()
+    {
+        using var client = _factory.CreateClient();
+
+        using var resp = await client.GetAsync("/", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        Assert.Equal("text/html; charset=utf-8", resp.Content.Headers.ContentType?.ToString());
+    }
+
+    [Fact]
     public async Task Api_me_requires_authentication()
     {
         using var client = _factory.CreateClient();
