@@ -61,14 +61,18 @@ test("AR overlay renders aircraft on web and drag-to-look aims the view", async 
   await expect(page.getByTestId("ar-ground")).toBeVisible();
 
   const compass = page.locator('[data-testid^="compass-"]');
+  const icons = page.locator('[data-testid^="ac-icon-"]');
   let sawLabel = (await labels.count()) > 0;
+  let sawIcon = (await icons.count()) > 0;
   let sawCompass = (await compass.count()) > 0;
-  for (let i = 0; i < 20 && !(sawLabel && sawCompass); i++) {
+  for (let i = 0; i < 20 && !(sawLabel && sawIcon && sawCompass); i++) {
     await drag(cx + 80, cy, cx - 80, cy); // rotate heading ~24° per step
     if (!sawLabel) sawLabel = (await labels.count()) > 0;
+    if (!sawIcon) sawIcon = (await icons.count()) > 0;
     if (!sawCompass) sawCompass = (await compass.count()) > 0;
   }
   expect(sawLabel, "a drag sweep should bring at least one aircraft label into the FOV").toBe(true);
+  expect(sawIcon, "each aircraft label shows a type icon (plane/helicopter)").toBe(true);
   expect(sawCompass, "a compass hint (N/E/S/W) should appear while sweeping the heading").toBe(true);
 });
 

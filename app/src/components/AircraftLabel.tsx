@@ -4,9 +4,34 @@
  * overlay). Tapping it opens the detail sheet.
  */
 
-import { memo } from "react";
+import { memo, type ComponentProps } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { AircraftDto } from "@/api/types";
+
+type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
+
+/**
+ * Icon per ADS-B emitter category. Fixed-wing (A0–A6), gliders (B1), and unknown categories use the
+ * default airplane; everything with a distinct shape gets its own icon.
+ */
+const CATEGORY_ICON: Partial<Record<string, IconName>> = {
+  A7: "helicopter", // rotorcraft
+  B2: "airballoon", // lighter-than-air (balloon / airship)
+  B3: "parachute", // parachutist / skydiver
+  B4: "paragliding", // ultralight / hang-glider / paraglider
+  B6: "quadcopter", // UAV / drone
+  B7: "rocket-launch", // space / trans-atmospheric
+  C1: "car-emergency", // surface emergency vehicle
+  C2: "truck", // surface service vehicle
+  C3: "radio-tower", // point obstacle (e.g. tethered balloon)
+  C4: "transmission-tower", // cluster obstacle
+  C5: "transmission-tower", // line obstacle
+};
+
+function iconForCategory(cat: string | null): IconName {
+  return (cat ? CATEGORY_ICON[cat] : undefined) ?? "airplane";
+}
 
 export interface AircraftLabelProps {
   aircraft: AircraftDto;
@@ -45,9 +70,18 @@ function AircraftLabelBase({ aircraft, x, y, anchorY, rangeKm, onPress }: Aircra
         hitSlop={8}
       >
         <View style={styles.tick} />
-        <Text style={styles.title} numberOfLines={1}>
-          {title}
-        </Text>
+        <View style={styles.titleRow}>
+          <MaterialCommunityIcons
+            testID={`ac-icon-${aircraft.hex}`}
+            name={iconForCategory(aircraft.cat)}
+            size={13}
+            color="rgba(120, 200, 255, 0.95)"
+            style={styles.icon}
+          />
+          <Text style={styles.title} numberOfLines={1}>
+            {title}
+          </Text>
+        </View>
         <Text style={styles.sub} numberOfLines={1}>
           {fl}
           {range ? `  ${range}` : ""}
@@ -78,6 +112,8 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: "rgba(120, 200, 255, 0.95)",
   },
+  titleRow: { flexDirection: "row", alignItems: "center" },
+  icon: { marginRight: 3 },
   title: { color: "#EAF6FF", fontSize: 12, fontWeight: "600" },
   sub: { color: "#9FC7E0", fontSize: 10 },
   leader: {
