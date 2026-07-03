@@ -89,6 +89,21 @@ export class ApiClient {
     return this.request<RouteResponse>(`/api/aircraft/${encodeURIComponent(hex)}/route`);
   }
 
+  /**
+   * Cached-only route: the route if the backend already has it cached, else null. Never spends AeroAPI
+   * budget, so it's safe to auto-load on detail open. Fail-silent (errors / 204 → null).
+   */
+  async aircraftRouteCached(hex: string): Promise<RouteResponse | null> {
+    try {
+      const route = await this.request<RouteResponse | null>(
+        `/api/aircraft/${encodeURIComponent(hex)}/route/cached`,
+      );
+      return route ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   /** Away-mode area query (ADSBx via the backend). */
   area(lat: number, lon: number, radiusKm: number): Promise<AircraftDto[]> {
     return this.request<AircraftDto[]>(`/api/area?lat=${lat}&lon=${lon}&radiusKm=${radiusKm}`);

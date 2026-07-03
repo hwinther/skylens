@@ -43,4 +43,7 @@ public sealed class EnrichmentCache
             gate.Release();
         }
     }
+
+    /// <summary>Return an already-cached value without running the factory (never an upstream call).</summary>
+    public bool TryGet<T>(string key, out T? value) where T : class => _cache.TryGetValue(key, out value);
 }

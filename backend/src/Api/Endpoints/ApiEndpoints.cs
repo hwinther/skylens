@@ -94,6 +94,23 @@ public static class ApiEndpoints
            .RequireRateLimiting("enrichment")
            .WithName("AircraftRoute");
 
+        // GET /api/aircraft/{hex}/route/cached — the route only if it's ALREADY cached; never fetches or
+        // spends AeroAPI budget, so it's safe to auto-load on detail open (the on-tap-only rule protects
+        // the paid /route above, not this). 204 when nothing is cached yet. Uses the group's "global"
+        // rate limit, not the tight "enrichment" one, so auto-loads don't compete with paid /route taps.
+        api.MapGet("/aircraft/{hex}/route/cached",
+                   Results<Ok<FlightRoute>, NoContent, NotFound> (string hex,
+                                                                  AircraftStateStore store,
+                                                                  AeroApiClient aeroApi) =>
+                   {
+                       if (!store.TryGet(hex.ToLowerInvariant(), out var state) || state?.Flight is null)
+                           return TypedResults.NotFound();
+
+                       var route = aeroApi.GetCachedRoute(state.Flight);
+                       return route is not null ? TypedResults.Ok(route) : TypedResults.NoContent();
+                   })
+           .WithName("AircraftRouteCached");
+
         // GET /api/area?lat=&lon=&radiusKm= — ADSBx point-radius (away-mode coverage). Tight budget/rate limit.
         api.MapGet("/area",
                    async Task<Results<Ok<IReadOnlyList<AircraftDto>>, ProblemHttpResult>> (
