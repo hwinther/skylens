@@ -22,7 +22,7 @@
   "dependencies": {
     "@expo/metro-runtime": "~57.0.3",
     "@expo/vector-icons": "^15.0.2",
-    "@microsoft/signalr": "8.0.7",
+    "@microsoft/signalr": "10.0.0",
     "expo": "~57.0.1",
     "expo-auth-session": "~57.0.1",
     "expo-camera": "~57.0.0",
