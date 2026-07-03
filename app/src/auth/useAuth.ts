@@ -13,7 +13,7 @@
  * in Expo Go before the dev build exists.
  */
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import {
@@ -42,6 +42,40 @@ export const OIDC_REDIRECT_URI = AuthSession.makeRedirectUri({
   path: OIDC_REDIRECT_PATH,
 });
 
+/**
+ * Like AuthSession.useAutoDiscovery, but (a) only fetches when `enabled` and (b)
+ * swallows fetch/parse failures with a warning instead of leaking an unhandled
+ * promise rejection. Returns null until — and unless — the document loads, which is
+ * the same contract signIn() already guards on (`if (!request || !discovery) return`).
+ */
+function useOidcDiscovery(
+  issuer: string,
+  enabled: boolean,
+): AuthSession.DiscoveryDocument | null {
+  const [discovery, setDiscovery] =
+    useState<AuthSession.DiscoveryDocument | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    AuthSession.fetchDiscoveryAsync(issuer)
+      .then((doc) => {
+        if (alive) setDiscovery(doc);
+      })
+      .catch((err: unknown) => {
+        if (alive) {
+          setDiscovery(null);
+          console.warn(`OIDC discovery failed for ${issuer}:`, err);
+        }
+      });
+    return () => {
+      alive = false;
+    };
+  }, [issuer, enabled]);
+  // Ignore any previously-fetched doc while disabled (mock mode) so the real flow
+  // never runs against stale discovery.
+  return enabled ? discovery : null;
+}
+
 function toStored(result: AuthSession.TokenResponse, now = Date.now()): StoredTokens {
   const expiresInMs = (result.expiresIn ?? 3600) * 1000;
   return {
@@ -53,10 +87,16 @@ function toStored(result: AuthSession.TokenResponse, now = Date.now()): StoredTo
 }
 
 export function useAuth() {
-  const discovery = AuthSession.useAutoDiscovery(OIDC_ISSUER);
   const status = useAuthStore((s) => s.status);
   const mockMode = useAuthStore((s) => s.mockMode);
   const setStatus = useAuthStore((s) => s.setStatus);
+
+  // Only hit the IdP's discovery endpoint for the real PKCE flow. In mock mode we
+  // never use `discovery`, and fetching it unconditionally turned any non-JSON
+  // response from the issuer (WAF/captive-portal/redirect page — e.g. a body starting
+  // with "Y") into an uncaught "JSON Parse error" on startup: expo's useAutoDiscovery
+  // has no .catch, so the rejection escapes.
+  const discovery = useOidcDiscovery(OIDC_ISSUER, !mockMode);
 
   const [request, , promptAsync] = AuthSession.useAuthRequest(
     {
