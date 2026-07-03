@@ -76,22 +76,42 @@ test("AR overlay renders aircraft on web and drag-to-look aims the view", async 
   expect(sawCompass, "a compass hint (N/E/S/W) should appear while sweeping the heading").toBe(true);
 });
 
-test("map list renders aircraft from the backend", async ({ page }) => {
+function leadingInt(text: string | null): number {
+  return parseInt(text?.match(/\d+/)?.[0] ?? "0", 10);
+}
+
+test("map view: radar plots aircraft and the real map mounts", async ({ page }) => {
   await page.goto("/map");
 
-  const heading = page.getByTestId("map-aircraft-count");
-  await expect(heading).toBeVisible();
+  const count = page.getByTestId("map-aircraft-count");
+  await expect(count).toBeVisible();
   await expect
-    .poll(
-      async () => {
-        const match = (await heading.textContent())?.match(/\((\d+)\)/);
-        return match ? parseInt(match[1], 10) : 0;
-      },
-      { message: "the map list should show at least one aircraft", timeout: 30_000 },
-    )
+    .poll(async () => leadingInt(await count.textContent()), {
+      message: "the map should show at least one aircraft",
+      timeout: 30_000,
+    })
     .toBeGreaterThan(0);
 
-  await expect(
-    page.getByTestId("map-web").locator('[data-testid^="map-ac-"]').first(),
-  ).toBeVisible();
+  // Default Radar view plots a blip per aircraft.
+  await expect(page.getByTestId("map-web").locator('[data-testid^="map-ac-"]').first()).toBeVisible();
+
+  // Toggle to the real (Leaflet) map and confirm it mounts with type-icon markers.
+  await page.getByTestId("map-view-map").click();
+  await expect(page.locator(".leaflet-container")).toBeVisible({ timeout: 15_000 });
+
+  const glyph = page.locator(".leaflet-marker-icon span").first();
+  await expect(glyph).toBeVisible();
+  const font = await glyph.evaluate((el) => getComputedStyle(el).fontFamily);
+  expect(font.toLowerCase(), "leaflet markers use the aircraft icon font").toContain("community");
+});
+
+test("list tab shows backend aircraft", async ({ page }) => {
+  await page.goto("/list");
+
+  const count = page.getByTestId("list-count");
+  await expect(count).toBeVisible();
+  await expect
+    .poll(async () => leadingInt(await count.textContent()), { timeout: 30_000 })
+    .toBeGreaterThan(0);
+  await expect(page.locator('[data-testid^="list-ac-"]').first()).toBeVisible();
 });

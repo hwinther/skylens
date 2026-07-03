@@ -4,34 +4,11 @@
  * overlay). Tapping it opens the detail sheet.
  */
 
-import { memo, type ComponentProps } from "react";
+import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { AircraftDto } from "@/api/types";
-
-type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
-
-/**
- * Icon per ADS-B emitter category. Fixed-wing (A0–A6), gliders (B1), and unknown categories use the
- * default airplane; everything with a distinct shape gets its own icon.
- */
-const CATEGORY_ICON: Partial<Record<string, IconName>> = {
-  A7: "helicopter", // rotorcraft
-  B2: "airballoon", // lighter-than-air (balloon / airship)
-  B3: "parachute", // parachutist / skydiver
-  B4: "paragliding", // ultralight / hang-glider / paraglider
-  B6: "quadcopter", // UAV / drone
-  B7: "rocket-launch", // space / trans-atmospheric
-  C1: "car-emergency", // surface emergency vehicle
-  C2: "truck", // surface service vehicle
-  C3: "radio-tower", // point obstacle (e.g. tethered balloon)
-  C4: "transmission-tower", // cluster obstacle
-  C5: "transmission-tower", // line obstacle
-};
-
-function iconForCategory(cat: string | null | undefined): IconName {
-  return (cat ? CATEGORY_ICON[cat] : undefined) ?? "airplane";
-}
+import { iconForCategory } from "./aircraftIcon";
 
 export interface AircraftLabelProps {
   aircraft: AircraftDto;

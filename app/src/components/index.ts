@@ -1,4 +1,5 @@
 export * from "./AircraftLabel";
+export * from "./AircraftRadar";
 export * from "./ArOverlay";
 export * from "./DetailSheet";
 export * from "./CompassCalibration";

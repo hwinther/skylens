@@ -42,9 +42,10 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
     {
-      // --no-launch-profile: ignore Properties/launchSettings.json so the E2E is driven purely by
-      // the env below (Development + port 5099), independent of the local-dev http profile.
-      command: "dotnet run --project src/Api --no-launch-profile",
+      // --no-launch-profile: ignore Properties/launchSettings.json so the E2E is driven purely by the
+      // env below (Development + port 5099). -c Release: build to bin/Release so the E2E can run even
+      // while a local Debug `dotnet run` is up (they'd otherwise fight over Skylens.Api.exe).
+      command: "dotnet run --project src/Api -c Release --no-launch-profile",
       cwd: path.resolve(__dirname, "../backend"),
       url: `${BACKEND_URL}/healthz`,
       timeout: 120_000,

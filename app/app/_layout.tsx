@@ -48,6 +48,7 @@ export default function RootLayout() {
         >
           <Tabs.Screen name="index" options={{ title: "AR" }} />
           <Tabs.Screen name="map" options={{ title: "Map" }} />
+          <Tabs.Screen name="list" options={{ title: "List" }} />
           <Tabs.Screen name="settings" options={{ title: "Settings" }} />
           <Tabs.Screen name="sign-in" options={{ href: null }} />
         </Tabs>
