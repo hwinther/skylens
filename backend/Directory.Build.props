@@ -10,5 +10,12 @@
     <!-- Commit packages.lock.json for reproducible restores; the dependabot-update-dotnet-lockfiles
          workflow regenerates it on NuGet bump PRs. -->
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- Static local-dev version defaults (the clutterstock pattern). The Docker build overrides
+         InformationalVersion/SourceRevisionId with the real GitVersion semver + sha; everything
+         else (local builds, the emitted openapi.json) reports an obvious 0.0.0-dev, never a
+         plausible-looking SDK default like 1.0.0. -->
+    <AssemblyVersion>0.0.0.1</AssemblyVersion>
+    <FileVersion>0.0.0.1</FileVersion>
+    <InformationalVersion>0.0.0-dev</InformationalVersion>
   </PropertyGroup>
 </Project>

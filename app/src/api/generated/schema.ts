@@ -4,22 +4,6 @@
  */
 
 export interface paths {
-    "/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["Landing"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -28,6 +12,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["Healthz"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["Version"];
         put?: never;
         post?: never;
         delete?: never;
@@ -145,6 +145,10 @@ export interface components {
             preferredUsername?: string | null;
             groups?: string[] | null;
         };
+        "Skylens.Api.Endpoints.ApiEndpoints.VersionResponse": {
+            version?: string | null;
+            sha?: string | null;
+        };
         "Skylens.Api.Endpoints.HealthEndpoints.HealthResponse": {
             status?: string | null;
             mqttConnected?: boolean;
@@ -154,6 +158,7 @@ export interface components {
             aircraftCount?: number;
             /** Format: int64 */
             messageCount?: number;
+            version?: string | null;
         };
         "Skylens.Api.Enrichment.AircraftMetadata": {
             hex: string | null;
@@ -202,24 +207,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    Landing: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     Healthz: {
         parameters: {
             query?: never;
@@ -236,6 +223,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Skylens.Api.Endpoints.HealthEndpoints.HealthResponse"];
+                };
+            };
+        };
+    };
+    Version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Skylens.Api.Endpoints.ApiEndpoints.VersionResponse"];
                 };
             };
         };

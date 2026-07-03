@@ -51,7 +51,7 @@ export default function SettingsScreen() {
       if (status === "authenticated") {
         try {
           const v = await client.version();
-          if (alive) setBackend({ status: "ok", version: v.version, sha: v.sha ?? "" });
+          if (alive) setBackend({ status: "ok", version: v.version, sha: v.sha });
           return;
         } catch {
           // Fall through to the anonymous health probe.

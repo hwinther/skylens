@@ -26,21 +26,20 @@ export type RouteResponse = Schemas["Skylens.Api.Enrichment.FlightRoute"];
 export type MeResponse = Schemas["Skylens.Api.Endpoints.ApiEndpoints.MeResponse"];
 
 /**
- * GET /api/version — backend build info (requires bearer). Forward-declared by hand until the
- * backend ships the endpoint and openapi.json is regenerated; keep in sync with that contract:
- * `{ version, sha }`, where `sha` is the full 40-char commit sha (or empty when unavailable).
+ * GET /api/version — backend build info (requires bearer). `version` and `sha` are tightened like
+ * `hex` above: the backend record declares non-nullable strings (`sha` is the full 40-char commit
+ * sha, or "" when unavailable), but the generator's NRT quirk marks them nullable.
  */
-export interface VersionResponse {
-  version: string;
-  sha: string;
-}
+export type VersionResponse = Omit<
+  Schemas["Skylens.Api.Endpoints.ApiEndpoints.VersionResponse"],
+  "version" | "sha"
+> & { version: string; sha: string };
 
 /**
- * GET /healthz — anonymous health probe. Only the `version` field (added to the health payload
- * alongside the existing status) is consumed here, so the rest is left open. Forward-declared
- * for the same reason as VersionResponse.
+ * GET /healthz — anonymous health probe. `version` (the deployed backend build) is tightened for
+ * the same NRT-quirk reason: the backend record declares it as a non-nullable string.
  */
-export interface HealthResponse {
-  version?: string;
-  [key: string]: unknown;
-}
+export type HealthResponse = Omit<
+  Schemas["Skylens.Api.Endpoints.HealthEndpoints.HealthResponse"],
+  "version"
+> & { version: string };

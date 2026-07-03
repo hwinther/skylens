@@ -1,0 +1,43 @@
+name: "PR preview cleanup"
+
+# Removes the skylens preview env for a PR when it's closed (merged or not). Calls the generic
+# teardown reusable in hwinther/reusable-workflows, which removes the per-PR overlay from
+# hwinther/proxmox; Flux then prunes the namespace.
+#
+# No label gate — the teardown is idempotent (no-op if the overlay was never deployed), so it's safe
+# to run for every closed PR.
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions: {}
+
+jobs:
+  teardown:
+    permissions:
+      contents: read
+    uses: hwinther/reusable-workflows/.github/workflows/gitops-preview-teardown.yml@a0e722a6a3002b2095899c71861906262160b125 # v2.0.0
+    with:
+      target_repo: hwinther/proxmox
+      preview_base_path: clusters/production/apps/previews/skylens
+      pr_number: ${{ github.event.pull_request.number }}
+      app_name: skylens
+    secrets:
+      app_id: ${{ secrets.PROXMOX_GITOPS_APP_ID }}
+      app_private_key: ${{ secrets.PROXMOX_GITOPS_APP_PRIVATE_KEY }}
+
+  update-comment:
+    needs: [teardown]
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Mark the preview-URL comment as torn down
+        uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
+        with:
+          header: skylens-preview-env
+          message: |
+            ### Preview environment torn down
+
+            The PR is closed and the preview env has been removed from the cluster (Flux prune).
