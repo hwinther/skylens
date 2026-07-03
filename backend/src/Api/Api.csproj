@@ -1,8 +1,9 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <RootNamespace>Skylens.Api</RootNamespace>
     <AssemblyName>Skylens.Api</AssemblyName>
+    <UserSecretsId>702c0c26-67f9-47af-81b5-e8816e2aaee4</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

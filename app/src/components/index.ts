@@ -5,3 +5,4 @@ export * from "./CompassCalibration";
 export * from "./StatusStrip";
 export * from "./usePoseRefs";
 export * from "./useDemoPose";
+export * from "./useLiveFeed";

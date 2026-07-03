@@ -1,13 +1,12 @@
 /**
- * Map / list fallback view: react-native-maps with a marker per positioned aircraft
- * plus the observer's own position. Reads the same 1 Hz aircraft store as the AR
- * view. Tapping a marker opens the detail sheet.
+ * Map view (native): react-native-maps with a marker per positioned aircraft plus the
+ * observer's own position. Reads the same 1 Hz aircraft store as the AR view. Tapping a
+ * marker opens the detail sheet. Web has no react-native-maps — see map.web.tsx.
  */
 
 import { useMemo, useState } from "react";
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import MapView, { Marker } from "react-native-maps";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useAircraftList } from "@/state/aircraftStore";
 import { DetailSheet } from "@/components";
 import { ApiClient } from "@/api/client";
@@ -26,20 +25,6 @@ export default function MapScreen() {
     latitudeDelta: 1.2,
     longitudeDelta: 1.2,
   };
-
-  // react-native-maps has no web implementation; show a list fallback there.
-  if (Platform.OS === "web") {
-    return (
-      <SafeAreaView style={styles.root}>
-        <Text style={styles.heading}>Aircraft ({positioned.length})</Text>
-        {positioned.map((a) => (
-          <Text key={a.hex} style={styles.listItem}>
-            {a.flight?.trim() || a.hex.toUpperCase()} — {a.lat!.toFixed(3)}, {a.lon!.toFixed(3)}
-          </Text>
-        ))}
-      </SafeAreaView>
-    );
-  }
 
   return (
     <View style={styles.root}>
@@ -66,6 +51,4 @@ export default function MapScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#0B1622" },
-  heading: { color: "#EAF6FF", fontSize: 18, fontWeight: "700", padding: 16 },
-  listItem: { color: "#9FC7E0", fontSize: 14, paddingHorizontal: 16, paddingVertical: 4 },
 });

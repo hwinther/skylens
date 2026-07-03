@@ -24,7 +24,7 @@ import {
   usePoseRefs,
 } from "@/components";
 import { ApiClient } from "@/api/client";
-import { getApiBaseUrl } from "@/api/config";
+import { getApiBaseUrl, getHomeLocation } from "@/api/config";
 import { startMockFeed, DEMO_HOME } from "@/mock/mockFeed";
 import {
   useAircraftList,
@@ -40,6 +40,10 @@ export default function ArScreen() {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
 
+  const baseUrl = useMemo(() => getApiBaseUrl(), []);
+  // Fixed observer location for live mode until GPS provides a fix (null when unset).
+  const home = useMemo(() => getHomeLocation(), []);
+
   const aircraft = useAircraftList();
   const snapshotAt = useAircraftStore((s) => s.lastSnapshotAt);
   const connection = useAircraftStore((s) => s.connection);
@@ -48,7 +52,7 @@ export default function ArScreen() {
   const setSource = useAircraftStore((s) => s.setSource);
   const setConnection = useAircraftStore((s) => s.setConnection);
 
-  const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
+  const client = useMemo(() => new ApiClient({ baseUrl }), [baseUrl]);
 
   // Live sensor pose (only active when not in demo mode).
   const live = usePoseRefs({ trimDeg, enabled: !demoMode });
@@ -78,9 +82,11 @@ export default function ArScreen() {
 
   useEffect(() => {
     if (demoMode) return;
-    setSource("live");
+    // Seed the projection origin so the overlay can place aircraft before a GPS fix
+    // (and on web / the E2E, where there is no GPS at all). useLiveFeed sets the source.
+    if (home) setObserverPosition({ lat: home.lat, lon: home.lon, alt: 0 });
     if (!cameraPermission?.granted) void requestCameraPermission();
-  }, [demoMode, cameraPermission?.granted, requestCameraPermission, setSource]);
+  }, [demoMode, home, setObserverPosition, cameraPermission?.granted, requestCameraPermission]);
 
   const overlay = (
     <ArOverlay

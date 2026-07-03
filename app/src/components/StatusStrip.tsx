@@ -44,7 +44,9 @@ export function StatusStrip({
           <View style={[styles.dot, { backgroundColor: CONNECTION_COLOR[connection] }]} />
           <Text style={styles.connText}>{connection}</Text>
         </View>
-        <Text style={styles.count}>{aircraftCount} ac</Text>
+        <Text testID="status-aircraft-count" style={styles.count}>
+          {aircraftCount} ac
+        </Text>
       </View>
       <View style={styles.rowBottom}>
         <View style={styles.gpsWrap}>

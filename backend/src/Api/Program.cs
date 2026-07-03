@@ -29,6 +29,7 @@ builder.Services.AddOptions<OpenSkyOptions>().Bind(configuration.GetSection(Open
 builder.Services.AddOptions<AdsbxOptions>().Bind(configuration.GetSection(AdsbxOptions.SectionName));
 builder.Services.AddOptions<AeroApiOptions>().Bind(configuration.GetSection(AeroApiOptions.SectionName));
 builder.Services.AddOptions<AircraftDbOptions>().Bind(configuration.GetSection(AircraftDbOptions.SectionName));
+builder.Services.AddOptions<CorsOptions>().Bind(configuration.GetSection(CorsOptions.SectionName));
 
 var oidcConfig = configuration.GetSection(OidcOptions.SectionName).Get<OidcOptions>() ?? new OidcOptions();
 var authConfig = configuration.GetSection(AuthOptions.SectionName).Get<AuthOptions>() ?? new AuthOptions();
@@ -116,6 +117,20 @@ builder.Services.AddSignalR()
        .AddJsonProtocol(static opts =>
                             opts.PayloadSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase);
 
+// -- CORS --------------------------------------------------------------------------------------
+// Off by default (the mobile app isn't a browser). When Cors:Origins is set — the react-native-web
+// build / Playwright E2E — allow those origins with credentials so the SignalR hub works too.
+const string WebCorsPolicy = "web";
+var corsOrigins = (configuration.GetSection(CorsOptions.SectionName).Get<CorsOptions>() ?? new CorsOptions())
+    .ParsedOrigins();
+if (corsOrigins.Length > 0)
+    builder.Services.AddCors(options =>
+        options.AddPolicy(WebCorsPolicy, policy =>
+            policy.WithOrigins(corsOrigins)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials()));
+
 // -- Core state + ingest -----------------------------------------------------------------------
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IngestStatus>();
@@ -123,7 +138,13 @@ builder.Services.AddSingleton<ViewerRegistry>();
 builder.Services.AddSingleton<AircraftStateStore>();
 builder.Services.AddHostedService(static sp => sp.GetRequiredService<AircraftStateStore>());
 
-builder.Services.AddSingleton<IMqttTransport, MqttNetTransport>();
+// Dev/E2E: replay a captured aircraft.json through the real pipeline instead of a broker. Gated on
+// Development so production can never be fed fabricated aircraft (mirrors the DevAuth gate).
+var mqttConfig = configuration.GetSection(MqttOptions.SectionName).Get<MqttOptions>() ?? new MqttOptions();
+if (builder.Environment.IsDevelopment() && mqttConfig.Replay)
+    builder.Services.AddSingleton<IMqttTransport, ReplayMqttTransport>();
+else
+    builder.Services.AddSingleton<IMqttTransport, MqttNetTransport>();
 builder.Services.AddHostedService<MqttIngestService>();
 builder.Services.AddHostedService<SnapshotBroadcaster>();
 
@@ -188,6 +209,10 @@ builder.Services.AddOpenTelemetry()
 builder.Services.AddProblemDetails();
 
 var app = builder.Build();
+
+// CORS must run before auth so preflight/actual cross-origin calls to /api and /hubs are allowed.
+if (corsOrigins.Length > 0)
+    app.UseCors(WebCorsPolicy);
 
 app.UseAuthentication();
 app.UseAuthorization();
