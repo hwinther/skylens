@@ -41,6 +41,15 @@ public sealed class AeroApiClient
     /// <summary>The last outcome of <see cref="GetRouteAsync" /> when it returned null (for the endpoint's reason).</summary>
     public string? LastReason { get; private set; }
 
+    private static string RouteKey(string callsign) => $"aeroapi:route:{callsign.Trim().ToUpperInvariant()}";
+
+    /// <summary>
+    ///     Return an already-cached route without any upstream call or budget spend (null if not cached).
+    ///     Lets the client auto-show routes on detail open without the on-tap-only budget rule applying.
+    /// </summary>
+    public FlightRoute? GetCachedRoute(string callsign) =>
+        _cache.TryGet<FlightRoute>(RouteKey(callsign), out var route) ? route : null;
+
     public async Task<FlightRoute?> GetRouteAsync(string callsign, CancellationToken ct)
     {
         LastReason = null;
@@ -59,7 +68,7 @@ public sealed class AeroApiClient
 
         // Cache hit path never touches the budget.
         var cached = await _cache.GetOrCreateAsync(
-            $"aeroapi:route:{ident}",
+            RouteKey(ident),
             CacheTtl,
             async innerCt =>
             {

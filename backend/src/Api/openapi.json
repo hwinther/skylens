@@ -174,6 +174,42 @@
         }
       }
     },
+    "/api/aircraft/{hex}/route/cached": {
+      "get": {
+        "tags": [
+          "Skylens.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
+        ],
+        "operationId": "AircraftRouteCached",
+        "parameters": [
+          {
+            "name": "hex",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Skylens.Api.Enrichment.FlightRoute"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
     "/api/area": {
       "get": {
         "tags": [

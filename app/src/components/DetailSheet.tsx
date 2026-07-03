@@ -48,6 +48,11 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+    // Show a route immediately if the backend already has it cached (free — no AeroAPI spend). The
+    // "Route" button below still triggers the paid first-fetch for anything not yet cached.
+    client.aircraftRouteCached(hex).then((r) => {
+      if (!cancelled && r) setRoute(r);
+    });
     return () => {
       cancelled = true;
     };
@@ -89,11 +94,13 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
             />
             <Row label="Source" value={detail.state?.src ?? detail.metadata?.source} />
 
-            <Pressable style={styles.routeBtn} onPress={loadRoute} disabled={routeLoading}>
-              <Text style={styles.routeBtnText}>
-                {routeLoading ? "Loading route…" : "Route (uses AeroAPI)"}
-              </Text>
-            </Pressable>
+            {!route && (
+              <Pressable style={styles.routeBtn} onPress={loadRoute} disabled={routeLoading}>
+                <Text style={styles.routeBtnText}>
+                  {routeLoading ? "Loading route…" : "Route (uses AeroAPI)"}
+                </Text>
+              </Pressable>
+            )}
 
             {route && (
               <View style={styles.route}>
