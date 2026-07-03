@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Skylens.Api.Broadcast;
 using Skylens.Api.Enrichment;
+using Skylens.Api.Extensions;
 using Skylens.Api.State;
 
 namespace Skylens.Api.Endpoints;
@@ -18,6 +19,12 @@ public static class ApiEndpoints
         var api = app.MapGroup("/api")
                      .RequireAuthorization()
                      .RequireRateLimiting("global");
+
+        // GET /api/version — build version + git sha baked in at publish (empty sha in local dev).
+        api.MapGet("/version", () => TypedResults.Ok(new VersionResponse(
+                                                         Version: ApiBuildMetadata.Version,
+                                                         Sha: ApiBuildMetadata.Sha)))
+           .WithName("Version");
 
         // GET /api/me — echo the caller's identity claims.
         api.MapGet("/me", (ClaimsPrincipal user) => TypedResults.Ok(new MeResponse(
@@ -149,4 +156,6 @@ public static class ApiEndpoints
     public sealed record MeResponse(string? Sub, string? PreferredUsername, string[] Groups);
 
     public sealed record AircraftDetail(AircraftDto? State, AircraftMetadata? Metadata);
+
+    public sealed record VersionResponse(string Version, string Sha);
 }

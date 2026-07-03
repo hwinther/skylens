@@ -24,10 +24,40 @@ export interface StoredTokens {
 
 let current: StoredTokens | null = null;
 
+// SecureStore is native-only; on web the module is an empty stub whose methods throw,
+// and jest runs under a plain node env with no native module. Mirror the settingsStore
+// pattern: degrade to an in-memory map so sign-in/out works on web (a session simply
+// doesn't survive a full page reload there, which is acceptable) and tests don't crash.
+const memoryFallback = new Map<string, string>();
+
+async function readRaw(): Promise<string | null> {
+  try {
+    return (await SecureStore.getItemAsync(KEY)) ?? null;
+  } catch {
+    return memoryFallback.get(KEY) ?? null;
+  }
+}
+
+async function writeRaw(value: string): Promise<void> {
+  try {
+    await SecureStore.setItemAsync(KEY, value);
+  } catch {
+    memoryFallback.set(KEY, value);
+  }
+}
+
+async function deleteRaw(): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync(KEY);
+  } catch {
+    memoryFallback.delete(KEY);
+  }
+}
+
 /** Load persisted tokens into memory. Call once at app start. */
 export async function hydrateTokens(): Promise<StoredTokens | null> {
   try {
-    const raw = await SecureStore.getItemAsync(KEY);
+    const raw = await readRaw();
     if (!raw) {
       current = null;
       return null;
@@ -43,7 +73,7 @@ export async function hydrateTokens(): Promise<StoredTokens | null> {
 /** Persist and cache a new token set. */
 export async function setTokens(tokens: StoredTokens): Promise<void> {
   current = tokens;
-  await SecureStore.setItemAsync(KEY, JSON.stringify(tokens));
+  await writeRaw(JSON.stringify(tokens));
 }
 
 /** Read the current in-memory access token synchronously (for signalr/fetch). */
@@ -59,7 +89,7 @@ export function getTokensSync(): StoredTokens | null {
 /** Clear tokens from memory and disk (sign-out). */
 export async function clearTokens(): Promise<void> {
   current = null;
-  await SecureStore.deleteItemAsync(KEY);
+  await deleteRaw();
 }
 
 /** True when the access token is missing or within `skewMs` of expiry. */

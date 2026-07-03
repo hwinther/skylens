@@ -2,23 +2,10 @@
   "openapi": "3.0.4",
   "info": {
     "title": "Skylens API",
-    "description": "ADS-B plane-spotter gateway — API for the Skylens app.",
+    "description": "ADS-B plane-spotter gateway — API for the Skylens app.\n\n---\n\n**Version:** `1.0.0`\n**Git SHA:** `ce075dce22e258d70e51732709113653b566fa49`",
     "version": "v1"
   },
   "paths": {
-    "/": {
-      "get": {
-        "tags": [
-          "Skylens.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
-        ],
-        "operationId": "Landing",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
-      }
-    },
     "/healthz": {
       "get": {
         "tags": [
@@ -32,6 +19,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Skylens.Api.Endpoints.HealthEndpoints.HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/version": {
+      "get": {
+        "tags": [
+          "Skylens.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
+        ],
+        "operationId": "Version",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Skylens.Api.Endpoints.ApiEndpoints.VersionResponse"
                 }
               }
             }
@@ -297,6 +304,20 @@
         },
         "additionalProperties": false
       },
+      "Skylens.Api.Endpoints.ApiEndpoints.VersionResponse": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string",
+            "nullable": true
+          },
+          "sha": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "Skylens.Api.Endpoints.HealthEndpoints.HealthResponse": {
         "type": "object",
         "properties": {
@@ -319,6 +340,10 @@
           "messageCount": {
             "type": "integer",
             "format": "int64"
+          },
+          "version": {
+            "type": "string",
+            "nullable": true
           }
         },
         "additionalProperties": false

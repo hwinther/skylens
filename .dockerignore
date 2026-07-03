@@ -1,0 +1,36 @@
+# Node / Expo build artifacts — the `web` stage runs `npm ci` + `expo export` fresh from source.
+app/node_modules
+app/dist
+app/.expo
+app/.expo-shared
+app/web-build
+# Generated native projects (managed workflow — not needed for `expo export --platform web`).
+app/android
+app/ios
+
+# .NET build outputs — the backend is restored + published fresh inside the image.
+**/bin
+**/obj
+backend/data
+
+# Git / CI / editor metadata (not part of any build stage).
+.git
+.gitignore
+.github
+.vs
+.idea
+.vscode
+
+# Local env / secrets — never bake real API keys, MQTT creds, or home coordinates into the context.
+**/.env
+**/.env.*
+!**/.env.sample
+*.keystore
+!debug.keystore
+
+# OS cruft.
+.DS_Store
+Thumbs.db
+
+# Docs (no build stage consumes markdown; the aircraft.json fixture below is deliberately NOT ignored).
+**/*.md

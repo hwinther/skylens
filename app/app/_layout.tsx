@@ -9,11 +9,17 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Tabs } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import { hydrateTokens } from "@/auth/tokenStore";
 import { useAuthStore } from "@/state/authStore";
 import { useSettingsStore } from "@/state/settingsStore";
 import { getApiBaseUrl, getHomeLocation } from "@/api/config";
 import { useLiveFeed } from "@/components";
+
+// On web, the OAuth popup redirects back to /oauth inside this same single-page bundle;
+// this posts the auth response to the opener and dismisses the popup. No-op on native
+// (the native flow calls it from useAuth), and safe to call more than once.
+WebBrowser.maybeCompleteAuthSession();
 
 export default function RootLayout() {
   const setStatus = useAuthStore((s) => s.setStatus);
@@ -51,6 +57,7 @@ export default function RootLayout() {
           <Tabs.Screen name="list" options={{ title: "List" }} />
           <Tabs.Screen name="settings" options={{ title: "Settings" }} />
           <Tabs.Screen name="sign-in" options={{ href: null }} />
+          <Tabs.Screen name="oauth" options={{ href: null }} />
         </Tabs>
       </SafeAreaProvider>
     </GestureHandlerRootView>

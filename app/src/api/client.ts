@@ -10,8 +10,10 @@ import { getAccessTokenSync } from "@/auth/tokenStore";
 import type {
   AircraftDetail,
   AircraftDto,
+  HealthResponse,
   MeResponse,
   RouteResponse,
+  VersionResponse,
 } from "./types";
 
 export class ApiError extends Error {
@@ -70,6 +72,16 @@ export class ApiClient {
 
   me(): Promise<MeResponse> {
     return this.request<MeResponse>("/api/me");
+  }
+
+  /** GET /api/version — backend build info. Requires a valid bearer (401 when anonymous). */
+  version(): Promise<VersionResponse> {
+    return this.request<VersionResponse>("/api/version");
+  }
+
+  /** GET /healthz — anonymous health probe; its `version` field is the deployed backend build. */
+  health(): Promise<HealthResponse> {
+    return this.request<HealthResponse>("/healthz");
   }
 
   /** List aircraft, optionally filtered to a radius around a point. */
