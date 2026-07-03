@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { HubConnectionState, type HubConnection } from "@microsoft/signalr";
-import { createAircraftHubConnection, onSnapshot, subscribe } from "@/api/signalr";
+import { createAircraftHubConnection, onSnapshot, onStatus, subscribe } from "@/api/signalr";
 import { useAircraftStore } from "@/state/aircraftStore";
 
 export interface LiveObserver {
@@ -64,6 +64,10 @@ export function useLiveFeed({ enabled, baseUrl, observer, radiusKm }: UseLiveFee
     const conn = createAircraftHubConnection({ baseUrl });
     connRef.current = conn;
     const offSnapshot = onSnapshot(conn, (aircraft) => setSnapshot(aircraft));
+    // A "status" frame means the server has no aircraft for us this tick (own feed empty and
+    // away-mode unavailable) — clear the list so stale aircraft don't linger, and it silences
+    // SignalR's "no client method 'status'" warning.
+    const offStatus = onStatus(conn, () => setSnapshot([]));
     conn.onreconnecting(() => setConnection("reconnecting"));
     conn.onreconnected(() => {
       setConnection("connected");
@@ -73,6 +77,8 @@ export function useLiveFeed({ enabled, baseUrl, observer, radiusKm }: UseLiveFee
 
     let cancelled = false;
     setConnection("connecting");
+    // Dev aid: surface the resolved hub URL so device networking is debuggable from the Metro log.
+    if (__DEV__) console.log(`[skylens] hub connecting → ${baseUrl}/hubs/aircraft`);
     conn
       .start()
       .then(() => {
@@ -89,6 +95,7 @@ export function useLiveFeed({ enabled, baseUrl, observer, radiusKm }: UseLiveFee
     return () => {
       cancelled = true;
       offSnapshot();
+      offStatus();
       connRef.current = null;
       setConnection("disconnected");
       void conn.stop();

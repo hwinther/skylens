@@ -64,6 +64,25 @@ export function onSnapshot(
   return () => connection.off("snapshot", handler);
 }
 
+/** A status frame: the server has no snapshot this tick (e.g. away-mode unavailable). */
+export interface HubStatus {
+  reason: string;
+}
+
+/**
+ * Register the status handler; returns an unsubscribe. The server sends "status" instead of
+ * "snapshot" when it can't serve aircraft — no own-feed matches AND away-mode unavailable
+ * (budget/unconfigured/upstream). Registering it also silences SignalR's "no client method
+ * 'status'" warning.
+ */
+export function onStatus(
+  connection: HubConnection,
+  handler: (status: HubStatus) => void,
+): () => void {
+  connection.on("status", handler);
+  return () => connection.off("status", handler);
+}
+
 /** Send a subscription request to the hub (server throttles to 1/10 s). */
 export function subscribe(
   connection: HubConnection,

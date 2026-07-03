@@ -3,16 +3,16 @@
  * with the aircraft overlay on top, a status strip, and a tap-to-open detail sheet.
  *
  * Two pose sources:
- *  - live: usePoseRefs subscribes to DeviceMotion (~60 Hz) + location/heading.
- *  - demo: useDemoPose drives the pose from a drag gesture; the mock feed replays
- *    the recorded snapshot series. This is what runs in Expo Go / on an emulator.
+ *  - live: usePoseRefs subscribes to DeviceMotion (~60 Hz) + location/heading (native only).
+ *  - drag: useDemoPose drives the pose from a drag gesture. Used in demo mode AND on web —
+ *    which has no orientation sensor — so you can look around without a compass/gyro.
  *
  * The 1 Hz aircraft list lives in zustand; the 60 Hz pose lives in refs (never in
  * zustand) and is consumed by the overlay's rAF loop.
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { ImageBackground, StyleSheet, View } from "react-native";
+import { ImageBackground, Platform, StyleSheet, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { CameraView, useCameraPermissions } from "expo-camera";
@@ -56,10 +56,11 @@ export default function ArScreen() {
 
   // Live sensor pose (only active when not in demo mode).
   const live = usePoseRefs({ trimDeg, enabled: !demoMode });
-  // Demo drag-to-look pose.
+  // Drag-to-look pose (demo mode, and web live — no orientation sensor there).
   const demo = useDemoPose({ initialAzimuth: 90 });
 
-  const poseRef = demoMode ? demo.poseRef : live.poseRef;
+  const useDragPose = demoMode || Platform.OS === "web";
+  const poseRef = useDragPose ? demo.poseRef : live.poseRef;
   // usePoseRefs returns a fresh object each render, but setObserverPosition is a
   // stable useCallback — depend on it, not on `live`, or the effect re-runs every
   // render and thrashes setConnection.
@@ -96,6 +97,8 @@ export default function ArScreen() {
       positionRef={live.positionRef}
       hFovDeg={hFovDeg}
       onSelect={setSelectedHex}
+      // No camera feed (web, or native without permission) → draw a synthetic horizon.
+      showHorizon={!demoMode && !cameraPermission?.granted}
     />
   );
 
@@ -107,10 +110,18 @@ export default function ArScreen() {
             {overlay}
           </ImageBackground>
         </GestureDetector>
+      ) : Platform.OS === "web" ? (
+        // Live on web: no camera preview and no compass/gyro — drag to look around the overlay.
+        <GestureDetector gesture={demo.gesture}>
+          <View style={[StyleSheet.absoluteFill, styles.noCam]}>{overlay}</View>
+        </GestureDetector>
       ) : cameraPermission?.granted ? (
-        <CameraView style={StyleSheet.absoluteFill} facing="back">
+        // CameraView doesn't support children — the overlay is absoluteFill, so render it as a
+        // sibling on top instead.
+        <>
+          <CameraView style={StyleSheet.absoluteFill} facing="back" />
           {overlay}
-        </CameraView>
+        </>
       ) : (
         <View style={[StyleSheet.absoluteFill, styles.noCam]}>{overlay}</View>
       )}

@@ -39,6 +39,7 @@ function AircraftLabelBase({ aircraft, x, y, anchorY, rangeKm, onPress }: Aircra
         />
       )}
       <Pressable
+        testID={`ac-label-${aircraft.hex}`}
         onPress={() => onPress(aircraft.hex)}
         style={[styles.label, { left: x, top: y }]}
         hitSlop={8}
