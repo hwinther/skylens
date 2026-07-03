@@ -6,23 +6,31 @@
  */
 
 import Constants from "expo-constants";
+import { NativeModules } from "react-native";
 
 const DEFAULT_BASE_URL = "https://skylens.wsh.no";
 const DEV_BACKEND_PORT = 5000;
 
 /**
- * The host Metro is served from (e.g. "10.20.1.163:8081" on a physical device, "localhost:8081"
- * on web / emulator). We reuse it to reach the backend running on the same PC, so a device doesn't
- * need the machine's LAN IP hardcoded. null when unavailable.
+ * The host serving this JS session — i.e. the dev machine — so a physical device reaches the backend
+ * on the same host with no hardcoded LAN IP. Sources, in order:
+ *  - web: the page's own hostname.
+ *  - native dev build: the Metro bundle URL (where our JS came from), e.g.
+ *    "http://10.20.1.163:8081/index.bundle?platform=android"; expo-constants as a fallback.
+ * Returns null in production / when unavailable.
  */
 function devServerHost(): string | null {
-  const hostUri =
+  const webHost = (globalThis as { location?: { hostname?: string } }).location?.hostname;
+  if (webHost) return webHost;
+
+  const scriptURL = (NativeModules as { SourceCode?: { scriptURL?: string } })?.SourceCode?.scriptURL;
+  const hostPort =
+    (scriptURL ? scriptURL.split("://")[1]?.split("/")[0] : undefined) ??
     Constants.expoConfig?.hostUri ??
-    (Constants as { expoGoConfig?: { debuggerHost?: string } }).expoGoConfig?.debuggerHost ??
-    null;
-  if (!hostUri) return null;
-  const host = hostUri.split("/")[0].split(":")[0];
-  return host || null;
+    (Constants as { expoGoConfig?: { debuggerHost?: string } }).expoGoConfig?.debuggerHost;
+  if (!hostPort) return null;
+
+  return hostPort.split("/")[0].split(":")[0] || null;
 }
 
 /**
