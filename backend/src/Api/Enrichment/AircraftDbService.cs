@@ -15,12 +15,14 @@ namespace Skylens.Api.Enrichment;
 public sealed class AircraftDbService : IHostedService
 {
     private readonly AircraftDbOptions _options;
+    private readonly IHostEnvironment _env;
     private readonly ILogger<AircraftDbService> _logger;
     private FrozenDictionary<string, AircraftMetadata> _db = FrozenDictionary<string, AircraftMetadata>.Empty;
 
-    public AircraftDbService(IOptions<AircraftDbOptions> options, ILogger<AircraftDbService> logger)
+    public AircraftDbService(IOptions<AircraftDbOptions> options, IHostEnvironment env, ILogger<AircraftDbService> logger)
     {
         _options = options.Value;
+        _env = env;
         _logger = logger;
     }
 
@@ -37,9 +39,17 @@ public sealed class AircraftDbService : IHostedService
     public Task StartAsync(CancellationToken cancellationToken)
     {
         // Fire-and-forget: don't block host startup / healthz on a ~600k-row parse.
-        _ = Task.Run(() => Load(_options.Path), CancellationToken.None);
+        _ = Task.Run(() => Load(ResolvePath(_options.Path)), CancellationToken.None);
         return Task.CompletedTask;
     }
+
+    /// <summary>
+    ///     Absolute paths (prod's <c>/app/data/aircraft.csv.gz</c>) are used as-is; a relative path
+    ///     (local dev) resolves against the content root so <c>dotnet run</c> finds the DB regardless
+    ///     of the working directory.
+    /// </summary>
+    private string ResolvePath(string path) =>
+        Path.IsPathRooted(path) ? path : Path.GetFullPath(Path.Combine(_env.ContentRootPath, path));
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 

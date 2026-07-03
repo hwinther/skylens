@@ -29,6 +29,9 @@ export interface ArOverlayProps {
   positionRef: React.MutableRefObject<GeoPoint | null>;
   hFovDeg: number;
   onSelect: (hex: string) => void;
+  /** Draw synthetic orientation aids — horizon, ground plane, and cardinal (N/E/S/W) hints —
+   *  when there's no camera feed to orient against. */
+  showHorizon?: boolean;
 }
 
 interface RenderLabel {
@@ -44,6 +47,20 @@ interface RenderArrow {
   bearingDeg: number;
 }
 
+interface CardinalMark {
+  label: string;
+  x: number;
+  primary: boolean;
+}
+
+/** Cardinal points to hint on the horizon. N/S are emphasised; E/W are lighter. */
+const CARDINALS: { label: string; az: number; primary: boolean }[] = [
+  { label: "N", az: 0, primary: true },
+  { label: "E", az: 90, primary: false },
+  { label: "S", az: 180, primary: true },
+  { label: "W", az: 270, primary: false },
+];
+
 export function ArOverlay({
   aircraft,
   snapshotAt,
@@ -51,22 +68,29 @@ export function ArOverlay({
   positionRef,
   hFovDeg,
   onSelect,
+  showHorizon = false,
 }: ArOverlayProps) {
   const { width, height } = useWindowDimensions();
   const [labels, setLabels] = useState<RenderLabel[]>([]);
   const [arrows, setArrows] = useState<RenderArrow[]>([]);
   const [clusters, setClusters] = useState<{ x: number; y: number; count: number }[]>([]);
+  // Screen y (px) of the elevation-0 horizon at the current pose; null when not shown.
+  const [horizonY, setHorizonY] = useState<number | null>(null);
+  // Cardinal-point hints (N/E/S/W) that are within the horizontal FOV this frame.
+  const [cardinals, setCardinals] = useState<CardinalMark[]>([]);
 
   // Keep the latest inputs in refs so the rAF loop (started once) reads fresh data.
   // Syncing happens in an effect (not during render) so ref writes stay side-effects.
   const aircraftRef = useRef(aircraft);
   const snapshotAtRef = useRef(snapshotAt);
   const hFovRef = useRef(hFovDeg);
+  const showHorizonRef = useRef(showHorizon);
   useEffect(() => {
     aircraftRef.current = aircraft;
     snapshotAtRef.current = snapshotAt;
     hFovRef.current = hFovDeg;
-  }, [aircraft, snapshotAt, hFovDeg]);
+    showHorizonRef.current = showHorizon;
+  }, [aircraft, snapshotAt, hFovDeg, showHorizon]);
 
   useEffect(() => {
     let raf = 0;
@@ -136,6 +160,23 @@ export function ArOverlay({
       setArrows(nextArrows);
       setClusters(chips.map((c) => ({ x: c.x, y: c.y, count: c.count })));
 
+      // Synthetic horizon + compass. Pose-only (no observer needed), so it orients you even
+      // before a GPS fix. Cardinal points sit on the horizon (elevation 0) at their azimuth,
+      // and are shown only while inside the horizontal FOV.
+      if (showHorizonRef.current) {
+        const h = project({ azimuth: pose.azimuth, elevation: 0 }, pose, config);
+        setHorizonY(height / 2 - (h.yNdc * height) / 2);
+
+        const marks: CardinalMark[] = [];
+        for (const c of CARDINALS) {
+          const p = project({ azimuth: c.az, elevation: 0 }, pose, config);
+          if (!p.behind && Math.abs(p.xNdc) <= 1) {
+            marks.push({ label: c.label, x: (p.xNdc * width) / 2 + width / 2, primary: c.primary });
+          }
+        }
+        setCardinals(marks);
+      }
+
       raf = requestAnimationFrame(tick);
     };
 
@@ -144,7 +185,31 @@ export function ArOverlay({
   }, [width, height, poseRef, positionRef]);
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+    <View style={[StyleSheet.absoluteFill, { pointerEvents: "box-none" }]}>
+      {showHorizon && horizonY != null && (
+        <>
+          <View
+            testID="ar-ground"
+            style={[styles.ground, { top: Math.max(0, Math.min(height, horizonY)) }]}
+          />
+          {horizonY >= 0 && horizonY <= height && (
+            <View testID="ar-horizon" style={[styles.horizon, { top: horizonY }]} />
+          )}
+          {cardinals.map((c) => (
+            <Text
+              key={c.label}
+              testID={`compass-${c.label}`}
+              style={[
+                styles.cardinal,
+                c.primary && styles.cardinalPrimary,
+                { left: c.x - 10, top: horizonY + 4 },
+              ]}
+            >
+              {c.label}
+            </Text>
+          ))}
+        </>
+      )}
       {labels.map((l) => (
         <AircraftLabel
           key={l.aircraft.hex}
@@ -164,7 +229,7 @@ export function ArOverlay({
       {arrows.map((a) => (
         <View
           key={`ar${a.hex}`}
-          pointerEvents="none"
+          testID={`ac-arrow-${a.hex}`}
           style={[styles.arrow, arrowPosition(a.bearingDeg, width, height)]}
         >
           <Text style={styles.arrowText}>▲</Text>
@@ -188,6 +253,39 @@ function arrowPosition(bearingDeg: number, width: number, height: number) {
 }
 
 const styles = StyleSheet.create({
+  // Earthy fill below the horizon so "down" is obvious against the navy "sky" when there's
+  // no camera; the horizon line is the level reference you tilt against.
+  ground: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(20, 46, 30, 0.7)",
+    pointerEvents: "none",
+  },
+  horizon: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: "rgba(120, 200, 255, 0.6)",
+    pointerEvents: "none",
+  },
+  // Light cardinal hints on the horizon; N/S emphasised over E/W.
+  cardinal: {
+    position: "absolute",
+    width: 20,
+    textAlign: "center",
+    color: "rgba(234, 246, 255, 0.5)",
+    fontSize: 12,
+    fontWeight: "600",
+    pointerEvents: "none",
+  },
+  cardinalPrimary: {
+    color: "rgba(234, 246, 255, 0.92)",
+    fontSize: 13,
+    fontWeight: "800",
+  },
   cluster: {
     position: "absolute",
     backgroundColor: "rgba(255, 180, 80, 0.85)",
@@ -197,6 +295,6 @@ const styles = StyleSheet.create({
     transform: [{ translateX: -12 }, { translateY: -10 }],
   },
   clusterText: { color: "#1a1a1a", fontSize: 11, fontWeight: "700" },
-  arrow: { position: "absolute", width: 24, height: 24, alignItems: "center", justifyContent: "center" },
+  arrow: { position: "absolute", width: 24, height: 24, alignItems: "center", justifyContent: "center", pointerEvents: "none" },
   arrowText: { color: "rgba(120, 200, 255, 0.9)", fontSize: 18 },
 });

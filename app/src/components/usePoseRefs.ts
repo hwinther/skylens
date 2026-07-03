@@ -12,6 +12,7 @@
  */
 
 import { useCallback, useEffect, useRef } from "react";
+import { Platform } from "react-native";
 import { DeviceMotion } from "expo-sensors";
 import * as Location from "expo-location";
 import {
@@ -71,22 +72,28 @@ export function usePoseRefs(options: UsePoseRefsOptions): PoseRefs {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (cancelled) return;
 
-      DeviceMotion.setUpdateInterval(16); // ~60 Hz
-      motionSub = DeviceMotion.addListener((data) => {
-        if (!data.rotation) return;
-        const next = cameraPoseFromRotation(
-          {
-            alpha: data.rotation.alpha,
-            beta: data.rotation.beta,
-            gamma: data.rotation.gamma,
-          },
-          declinationRef.current,
-          trimRef.current,
-        );
-        poseRef.current = smoothPose(poseRef.current, next, alpha);
-      });
+      // DeviceMotion (orientation) has no web implementation — calling addListener there throws.
+      // Skip it on web so the overlay falls back to a fixed north-facing pose instead of crashing;
+      // native is unchanged.
+      if (Platform.OS !== "web") {
+        DeviceMotion.setUpdateInterval(16); // ~60 Hz
+        motionSub = DeviceMotion.addListener((data) => {
+          if (!data.rotation) return;
+          const next = cameraPoseFromRotation(
+            {
+              alpha: data.rotation.alpha,
+              beta: data.rotation.beta,
+              gamma: data.rotation.gamma,
+            },
+            declinationRef.current,
+            trimRef.current,
+          );
+          poseRef.current = smoothPose(poseRef.current, next, alpha);
+        });
+      }
 
       if (status === "granted") {
+        // GPS works on web via the browser Geolocation API (secure context, incl. localhost).
         positionSub = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.High, timeInterval: 2000, distanceInterval: 5 },
           (loc) => {
@@ -99,11 +106,14 @@ export function usePoseRefs(options: UsePoseRefsOptions): PoseRefs {
           },
         );
 
-        headingSub = await Location.watchHeadingAsync((heading) => {
-          // declination = trueHeading − magHeading (Android computes WMM true north).
-          declinationRef.current = heading.trueHeading - heading.magHeading;
-          headingAccuracyRef.current = heading.accuracy ?? 0;
-        });
+        // Compass heading is a native magnetometer feature; browsers have no equivalent.
+        if (Platform.OS !== "web") {
+          headingSub = await Location.watchHeadingAsync((heading) => {
+            // declination = trueHeading − magHeading (Android computes WMM true north).
+            declinationRef.current = heading.trueHeading - heading.magHeading;
+            headingAccuracyRef.current = heading.accuracy ?? 0;
+          });
+        }
       }
     })();
 

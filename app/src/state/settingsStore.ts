@@ -27,6 +27,11 @@ interface SettingsState {
   setDemoMode: (on: boolean) => void;
 }
 
+// Opt-in override so the web build / Playwright E2E can boot straight into live mode (which talks to
+// the backend) instead of the default demo replay. No effect unless the env var is set.
+const forceLive =
+  process.env.EXPO_PUBLIC_FORCE_LIVE === "1" || process.env.EXPO_PUBLIC_FORCE_LIVE === "true";
+
 const memoryFallback = new Map<string, string>();
 
 const secureStorage: StateStorage = {
@@ -59,7 +64,7 @@ export const useSettingsStore = create<SettingsState>()(
       azimuthTrimDeg: 0,
       hFovDeg: DEFAULT_HFOV_DEG,
       radiusKm: 60,
-      demoMode: true,
+      demoMode: !forceLive,
       setAzimuthTrim: (azimuthTrimDeg) => set({ azimuthTrimDeg }),
       setHFov: (hFovDeg) => set({ hFovDeg }),
       setRadiusKm: (radiusKm) => set({ radiusKm }),

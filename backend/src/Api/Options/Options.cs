@@ -34,6 +34,33 @@ public sealed class MqttOptions
     public string Topic { get; set; } = "adsb/aircraft";
     public string? Username { get; set; }
     public string? Password { get; set; }
+
+    /// <summary>
+    ///     Dev/E2E only: swap the real broker for a transport that replays <see cref="ReplayFile" />
+    ///     through the normal ingest pipeline at 1 Hz. Honored only in Development (see Program.cs).
+    ///     <see cref="Host" /> must still be non-empty for the ingest loop to run.
+    /// </summary>
+    public bool Replay { get; set; }
+
+    /// <summary>Path to a dump1090 <c>aircraft.json</c> replayed when <see cref="Replay" /> is true.</summary>
+    public string ReplayFile { get; set; } = string.Empty;
+}
+
+/// <summary>
+///     Browser CORS. Empty in production — the mobile app is not a browser and needs no CORS. Set to
+///     the web dev origin(s), comma-separated, so the react-native-web build / Playwright E2E can call
+///     the API and SignalR hub cross-origin.
+/// </summary>
+public sealed class CorsOptions
+{
+    public const string SectionName = "Cors";
+
+    /// <summary>Comma-separated allowed origins, e.g. "http://localhost:8081".</summary>
+    public string Origins { get; set; } = string.Empty;
+
+    /// <summary>Split + trimmed origins; empty array means CORS stays off.</summary>
+    public string[] ParsedOrigins() =>
+        Origins.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 }
 
 /// <summary>Home feed location + coverage radius. Coords are secret by repo convention.</summary>

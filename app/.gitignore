@@ -30,8 +30,10 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# local env files (real API base / home coords go in .env.local — never committed)
+.env
+.env.*
+!.env.example
 
 # typescript
 *.tsbuildinfo
@@ -39,6 +41,11 @@ yarn-error.*
 # testing
 coverage/
 eslint-report.json
+
+# playwright e2e
+/test-results
+/playwright-report
+/playwright/.cache
 
 # generated native folders
 /ios

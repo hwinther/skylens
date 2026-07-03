@@ -1,8 +1,9 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <RootNamespace>Skylens.Api</RootNamespace>
     <AssemblyName>Skylens.Api</AssemblyName>
+    <UserSecretsId>702c0c26-67f9-47af-81b5-e8816e2aaee4</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -12,6 +13,9 @@
   <ItemGroup>
     <!-- JwtBearer validates Authelia's RFC 9068 access tokens (the clutterstock/test-api pattern). -->
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
+    <!-- OpenAPI: built-in doc + Swashbuckle (the "v1" doc the CLI writes to openapi.json). -->
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.2" />
     <!-- MQTTnet v5: hand-rolled reconnect BackgroundService (ManagedClient was removed in v5). -->
     <PackageReference Include="MQTTnet" Version="5.2.0.1603" />
     <!-- OpenTelemetry stack mirrors the proven test-api versions. -->
@@ -21,5 +25,21 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.16.0" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.15.1" />
   </ItemGroup>
+
+  <!-- Restore the local swagger CLI (.config/dotnet-tools.json lives in THIS project folder so the
+       local tool is used, not a global install). -->
+  <Target Name="RestoreDotnetTools" BeforeTargets="CollectPackageReferences">
+    <Message Text="Restoring dotnet tools" Importance="High" />
+    <Exec Command="dotnet tool restore" WorkingDirectory="$(ProjectDir)" />
+  </Target>
+
+  <!-- Emit openapi.json on every Debug build so the app's generated TS client can't silently drift.
+       A dedicated "Swagger" environment + disabled OTEL keeps doc generation offline and side-effect free. -->
+  <Target Name="CreateSwaggerJson" AfterTargets="Build" Condition="'$(Configuration)' == 'Debug'">
+    <Message Text="Generating openapi.json" Importance="High" />
+    <Exec Command="dotnet swagger tofile --output openapi.json &quot;$(OutputPath)$(AssemblyName).dll&quot; v1"
+          WorkingDirectory="$(ProjectDir)"
+          EnvironmentVariables="ASPNETCORE_ENVIRONMENT=Swagger;DOTNET_ENVIRONMENT=Swagger;OTEL_SDK_DISABLED=true" />
+  </Target>
 
 </Project>

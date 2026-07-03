@@ -10,7 +10,6 @@ import { getAccessTokenSync } from "@/auth/tokenStore";
 import type {
   AircraftDetail,
   AircraftDto,
-  AircraftSnapshot,
   MeResponse,
   RouteResponse,
 } from "./types";
@@ -43,7 +42,10 @@ export class ApiClient {
   constructor(config: ApiClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/+$/, "");
     this.getToken = config.getToken ?? getAccessTokenSync;
-    this.fetchImpl = config.fetchImpl ?? fetch;
+    // Bind to the global: browser fetch throws "Illegal invocation" if called with a `this` other
+    // than the Window, which happens when we store and call it as this.fetchImpl(...). (RN's fetch
+    // doesn't care, so this only bit on web.)
+    this.fetchImpl = config.fetchImpl ?? fetch.bind(globalThis);
   }
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -71,11 +73,11 @@ export class ApiClient {
   }
 
   /** List aircraft, optionally filtered to a radius around a point. */
-  aircraft(params?: { lat: number; lon: number; radiusKm: number }): Promise<AircraftSnapshot> {
+  aircraft(params?: { lat: number; lon: number; radiusKm: number }): Promise<AircraftDto[]> {
     const qs = params
       ? `?lat=${params.lat}&lon=${params.lon}&radiusKm=${params.radiusKm}`
       : "";
-    return this.request<AircraftSnapshot>(`/api/aircraft${qs}`);
+    return this.request<AircraftDto[]>(`/api/aircraft${qs}`);
   }
 
   aircraftDetail(hex: string): Promise<AircraftDetail> {

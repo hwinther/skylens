@@ -108,13 +108,15 @@ public sealed class AdsbxClient : IAwayModeSource
         {
             if (a.Hex is null || a.Lat is null || a.Lon is null)
                 continue;
+            var alt = ParseAlt(a.AltBaro);
             result.Add(new AircraftDto
             {
                 Hex = a.Hex.ToLowerInvariant(),
-                Fl = a.Flight?.Trim(),
+                Flight = a.Flight?.Trim(),
+                Fl = alt is { } altFt ? (int)Math.Round(altFt / 100.0) : null,
                 Lat = a.Lat,
                 Lon = a.Lon,
-                Alt = ParseAlt(a.AltBaro),
+                Alt = alt,
                 Gs = a.GroundSpeed,
                 Trk = a.Track,
                 Vr = a.BaroRate,

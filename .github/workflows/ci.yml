@@ -24,7 +24,10 @@ jobs:
       node_enabled: true
       node_version: "24.x"
       node_working_directory: "app"
-      node_changes_regex: "app/.*"
+      # Include the backend contract so a PR that touches openapi.json re-runs the node job; the extra
+      # command regenerates the typed client and the workflow fails on any uncommitted drift.
+      node_changes_regex: "app/.*|backend/src/Api/openapi.json"
+      node_extra_command: "npm run openapi:generate"
       dotnet_enabled: true
       dotnet_version: "10.0.x"
       dotnet_working_directory: "backend"

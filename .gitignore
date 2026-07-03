@@ -10,6 +10,9 @@ coverage*.xml
 *.trx
 # NOTE: packages.lock.json is intentionally committed (locked-mode restore) — do NOT ignore it.
 
+# Local dev enrichment DB (Docker bakes its own; fetch locally via backend/scripts/fetch-aircraft-db.ps1)
+backend/data/
+
 # Node / Expo
 node_modules/
 dist/

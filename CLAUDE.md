@@ -37,7 +37,9 @@ npm install
 npm run typecheck                 # tsc --noEmit
 npm run lint:ci                   # eslint --format json
 npm test                          # jest
+npm run e2e                       # Playwright web ↔ backend E2E (see app/e2e/README.md)
 npx expo start
+npx expo start --web              # react-native-web build (map screen → map.web.tsx list)
 ```
 
 ## Conventions & hard rules

@@ -40,6 +40,21 @@ module.exports = defineConfig([
     },
   },
   {
+    // Playwright E2E tooling runs under Node, not the RN app bundle — give it Node globals
+    // and drop the app-only import guard.
+    files: ["e2e/**/*.ts", "playwright.config.ts"],
+    languageOptions: {
+      globals: {
+        process: "readonly",
+        __dirname: "readonly",
+        console: "readonly",
+      },
+    },
+    rules: {
+      "import/no-extraneous-dependencies": "off",
+    },
+  },
+  {
     // src/ar/ must be pure TypeScript so jest can run it without the RN runtime.
     files: ["src/ar/**/*.ts"],
     rules: {

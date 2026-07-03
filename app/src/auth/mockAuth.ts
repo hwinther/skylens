@@ -10,9 +10,9 @@
  */
 
 import type { StoredTokens } from "./tokenStore";
-import type { MeResponse } from "@/api/types";
 
-export const MOCK_USER: MeResponse = {
+/** The identity baked into the mock JWT (client-side only; not the /api/me response shape). */
+export const MOCK_USER = {
   sub: "mock-user",
   preferredUsername: "demo",
   name: "Demo User",
