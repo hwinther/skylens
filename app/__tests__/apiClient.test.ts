@@ -1,5 +1,4 @@
 import { ApiClient, ApiError } from "@/api/client";
-import type { AircraftSnapshot } from "@/api/types";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -13,7 +12,7 @@ describe("ApiClient", () => {
     const calls: { url: string; headers: Headers }[] = [];
     const fetchImpl = (async (url: string, init?: RequestInit) => {
       calls.push({ url: String(url), headers: new Headers(init?.headers) });
-      return jsonResponse({ ts: 1, aircraft: [] } satisfies AircraftSnapshot);
+      return jsonResponse([]);
     }) as unknown as typeof fetch;
 
     const client = new ApiClient({
@@ -33,7 +32,7 @@ describe("ApiClient", () => {
     let seen: Headers | null = null;
     const fetchImpl = (async (_url: string, init?: RequestInit) => {
       seen = new Headers(init?.headers);
-      return jsonResponse({ ts: 1, aircraft: [] });
+      return jsonResponse([]);
     }) as unknown as typeof fetch;
     const client = new ApiClient({ baseUrl: "http://x", getToken: () => null, fetchImpl });
     await client.aircraft();
@@ -44,7 +43,7 @@ describe("ApiClient", () => {
     let url = "";
     const fetchImpl = (async (u: string) => {
       url = String(u);
-      return jsonResponse({ ts: 1, aircraft: [] });
+      return jsonResponse([]);
     }) as unknown as typeof fetch;
     const client = new ApiClient({ baseUrl: "http://x", getToken: () => null, fetchImpl });
     await client.aircraft({ lat: 59.9, lon: 10.7, radiusKm: 60 });

@@ -16,7 +16,8 @@
     "test": "jest",
     "coverage:ci": "jest --coverage",
     "e2e": "playwright test",
-    "e2e:report": "playwright show-report"
+    "e2e:report": "playwright show-report",
+    "openapi:generate": "openapi-typescript ../backend/src/Api/openapi.json -o src/api/generated/schema.ts"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.3",
@@ -55,6 +56,7 @@
     "jest": "30.2.0",
     "jest-expo": "~57.0.0",
     "jest-junit": "^17.0.0",
+    "openapi-typescript": "^7.13.0",
     "typescript": "~5.9.2"
   }
 }

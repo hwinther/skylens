@@ -73,21 +73,21 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
         {detail && (
           <>
             <Text style={styles.title}>
-              {detail.flight?.trim() || detail.hex.toUpperCase()}
+              {detail.state?.flight?.trim() ||
+                (detail.state?.hex ?? detail.metadata?.hex ?? hex ?? "").toUpperCase()}
             </Text>
-            <Row label="Registration" value={detail.registration} />
-            <Row label="Type" value={detail.typeName ?? detail.typeCode} />
-            <Row label="Operator" value={detail.operator} />
-            <Row label="Country" value={detail.country} />
+            <Row label="Registration" value={detail.metadata?.registration} />
+            <Row label="Type" value={detail.metadata?.typeName ?? detail.metadata?.typeCode} />
+            <Row label="Operator" value={detail.metadata?.operator} />
             <Row
               label="Altitude"
-              value={detail.alt != null ? `${detail.alt.toLocaleString()} ft` : null}
+              value={detail.state?.alt != null ? `${detail.state.alt.toLocaleString()} ft` : null}
             />
             <Row
               label="Ground speed"
-              value={detail.gs != null ? `${Math.round(detail.gs)} kt` : null}
+              value={detail.state?.gs != null ? `${Math.round(detail.state.gs)} kt` : null}
             />
-            <Row label="Source" value={detail.src} />
+            <Row label="Source" value={detail.state?.src ?? detail.metadata?.source} />
 
             <Pressable style={styles.routeBtn} onPress={loadRoute} disabled={routeLoading}>
               <Text style={styles.routeBtnText}>
@@ -98,7 +98,7 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
             {route && (
               <View style={styles.route}>
                 <Text style={styles.routeText}>
-                  {route.origin ?? "?"} → {route.destination ?? "?"}
+                  {route.originIcao ?? "?"} → {route.destinationIcao ?? "?"}
                 </Text>
                 {route.originName && route.destinationName && (
                   <Text style={styles.routeSub}>

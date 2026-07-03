@@ -10,7 +10,6 @@ import { getAccessTokenSync } from "@/auth/tokenStore";
 import type {
   AircraftDetail,
   AircraftDto,
-  AircraftSnapshot,
   MeResponse,
   RouteResponse,
 } from "./types";
@@ -71,11 +70,11 @@ export class ApiClient {
   }
 
   /** List aircraft, optionally filtered to a radius around a point. */
-  aircraft(params?: { lat: number; lon: number; radiusKm: number }): Promise<AircraftSnapshot> {
+  aircraft(params?: { lat: number; lon: number; radiusKm: number }): Promise<AircraftDto[]> {
     const qs = params
       ? `?lat=${params.lat}&lon=${params.lon}&radiusKm=${params.radiusKm}`
       : "";
-    return this.request<AircraftSnapshot>(`/api/aircraft${qs}`);
+    return this.request<AircraftDto[]>(`/api/aircraft${qs}`);
   }
 
   aircraftDetail(hex: string): Promise<AircraftDetail> {

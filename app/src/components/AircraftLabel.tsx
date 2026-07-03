@@ -29,7 +29,7 @@ const CATEGORY_ICON: Partial<Record<string, IconName>> = {
   C5: "transmission-tower", // line obstacle
 };
 
-function iconForCategory(cat: string | null): IconName {
+function iconForCategory(cat: string | null | undefined): IconName {
   return (cat ? CATEGORY_ICON[cat] : undefined) ?? "airplane";
 }
 

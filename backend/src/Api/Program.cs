@@ -12,6 +12,7 @@ using Skylens.Api.Auth;
 using Skylens.Api.Broadcast;
 using Skylens.Api.Endpoints;
 using Skylens.Api.Enrichment;
+using Skylens.Api.Extensions;
 using Skylens.Api.Hubs;
 using Skylens.Api.Ingest;
 using Skylens.Api.Options;
@@ -208,7 +209,13 @@ builder.Services.AddOpenTelemetry()
 
 builder.Services.AddProblemDetails();
 
+// -- OpenAPI -----------------------------------------------------------------------------------
+builder.Services.AddOpenApiDocumentation();
+
 var app = builder.Build();
+
+// OpenAPI (/openapi, /swagger) before auth so the docs stay anonymous.
+app.UseOpenApiDocumentation();
 
 // CORS must run before auth so preflight/actual cross-origin calls to /api and /hubs are allowed.
 if (corsOrigins.Length > 0)
