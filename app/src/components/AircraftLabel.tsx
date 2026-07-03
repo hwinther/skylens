@@ -33,7 +33,6 @@ function AircraftLabelBase({ aircraft, x, y, anchorY, rangeKm, onPress }: Aircra
     <>
       {pushed && (
         <View
-          pointerEvents="none"
           style={[
             styles.leader,
             { left: x, top: Math.min(anchorY, y), height: Math.abs(y - anchorY) },
@@ -97,6 +96,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     width: StyleSheet.hairlineWidth,
     backgroundColor: "rgba(120, 200, 255, 0.5)",
+    pointerEvents: "none",
   },
 });
 

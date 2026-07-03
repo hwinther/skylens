@@ -53,26 +53,25 @@ export function AircraftRadar({ aircraft, observer, onSelect }: AircraftRadarPro
             return (
               <View
                 key={`ring-${f}`}
-                pointerEvents="none"
                 style={[styles.ring, { width: d, height: d, borderRadius: d / 2, left: cx - R * f, top: cy - R * f }]}
               />
             );
           })}
-          <View pointerEvents="none" style={[styles.axis, { left: cx - 0.5, top: cy - R, width: 1, height: 2 * R }]} />
-          <View pointerEvents="none" style={[styles.axis, { left: cx - R, top: cy - 0.5, width: 2 * R, height: 1 }]} />
+          <View style={[styles.axis, { left: cx - 0.5, top: cy - R, width: 1, height: 2 * R }]} />
+          <View style={[styles.axis, { left: cx - R, top: cy - 0.5, width: 2 * R, height: 1 }]} />
 
           {RINGS.map((f) => (
-            <Text key={`lbl-${f}`} pointerEvents="none" style={[styles.rangeLabel, { left: cx + 3, top: cy - R * f - 13 }]}>
+            <Text key={`lbl-${f}`} style={[styles.rangeLabel, { left: cx + 3, top: cy - R * f - 13 }]}>
               {Math.round(maxRange * f)} km
             </Text>
           ))}
 
-          <Text pointerEvents="none" style={[styles.cardinal, styles.cardinalPrimary, { left: cx - 5, top: cy - R - 17 }]}>N</Text>
-          <Text pointerEvents="none" style={[styles.cardinal, { left: cx + R + 3, top: cy - 8 }]}>E</Text>
-          <Text pointerEvents="none" style={[styles.cardinal, styles.cardinalPrimary, { left: cx - 4, top: cy + R + 3 }]}>S</Text>
-          <Text pointerEvents="none" style={[styles.cardinal, { left: cx - R - 15, top: cy - 8 }]}>W</Text>
+          <Text style={[styles.cardinal, styles.cardinalPrimary, { left: cx - 5, top: cy - R - 17 }]}>N</Text>
+          <Text style={[styles.cardinal, { left: cx + R + 3, top: cy - 8 }]}>E</Text>
+          <Text style={[styles.cardinal, styles.cardinalPrimary, { left: cx - 4, top: cy + R + 3 }]}>S</Text>
+          <Text style={[styles.cardinal, { left: cx - R - 15, top: cy - 8 }]}>W</Text>
 
-          <View pointerEvents="none" style={[styles.observer, { left: cx - 4, top: cy - 4 }]} />
+          <View style={[styles.observer, { left: cx - 4, top: cy - 4 }]} />
 
           {rel.map(({ a, distanceKm, bearingDeg }) => {
             const rr = Math.min(distanceKm / maxRange, 1) * R;
@@ -99,11 +98,11 @@ export function AircraftRadar({ aircraft, observer, onSelect }: AircraftRadarPro
 
 const styles = StyleSheet.create({
   root: { flex: 1, alignItems: "center", justifyContent: "center", padding: 8 },
-  ring: { position: "absolute", borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(120, 200, 255, 0.28)" },
-  axis: { position: "absolute", backgroundColor: "rgba(120, 200, 255, 0.18)" },
-  rangeLabel: { position: "absolute", color: "rgba(159, 199, 224, 0.75)", fontSize: 10 },
-  cardinal: { position: "absolute", color: "rgba(234, 246, 255, 0.5)", fontSize: 12, fontWeight: "600" },
+  ring: { position: "absolute", borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(120, 200, 255, 0.28)", pointerEvents: "none" },
+  axis: { position: "absolute", backgroundColor: "rgba(120, 200, 255, 0.18)", pointerEvents: "none" },
+  rangeLabel: { position: "absolute", color: "rgba(159, 199, 224, 0.75)", fontSize: 10, pointerEvents: "none" },
+  cardinal: { position: "absolute", color: "rgba(234, 246, 255, 0.5)", fontSize: 12, fontWeight: "600", pointerEvents: "none" },
   cardinalPrimary: { color: "rgba(234, 246, 255, 0.9)", fontWeight: "800" },
-  observer: { position: "absolute", width: 8, height: 8, borderRadius: 4, backgroundColor: "#7CFC9A" },
+  observer: { position: "absolute", width: 8, height: 8, borderRadius: 4, backgroundColor: "#7CFC9A", pointerEvents: "none" },
   blip: { position: "absolute", width: 24, height: 24, alignItems: "center", justifyContent: "center" },
 });

@@ -185,22 +185,20 @@ export function ArOverlay({
   }, [width, height, poseRef, positionRef]);
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+    <View style={[StyleSheet.absoluteFill, { pointerEvents: "box-none" }]}>
       {showHorizon && horizonY != null && (
         <>
           <View
             testID="ar-ground"
-            pointerEvents="none"
             style={[styles.ground, { top: Math.max(0, Math.min(height, horizonY)) }]}
           />
           {horizonY >= 0 && horizonY <= height && (
-            <View testID="ar-horizon" pointerEvents="none" style={[styles.horizon, { top: horizonY }]} />
+            <View testID="ar-horizon" style={[styles.horizon, { top: horizonY }]} />
           )}
           {cardinals.map((c) => (
             <Text
               key={c.label}
               testID={`compass-${c.label}`}
-              pointerEvents="none"
               style={[
                 styles.cardinal,
                 c.primary && styles.cardinalPrimary,
@@ -232,7 +230,6 @@ export function ArOverlay({
         <View
           key={`ar${a.hex}`}
           testID={`ac-arrow-${a.hex}`}
-          pointerEvents="none"
           style={[styles.arrow, arrowPosition(a.bearingDeg, width, height)]}
         >
           <Text style={styles.arrowText}>▲</Text>
@@ -264,6 +261,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: "rgba(20, 46, 30, 0.7)",
+    pointerEvents: "none",
   },
   horizon: {
     position: "absolute",
@@ -271,6 +269,7 @@ const styles = StyleSheet.create({
     right: 0,
     height: 2,
     backgroundColor: "rgba(120, 200, 255, 0.6)",
+    pointerEvents: "none",
   },
   // Light cardinal hints on the horizon; N/S emphasised over E/W.
   cardinal: {
@@ -280,6 +279,7 @@ const styles = StyleSheet.create({
     color: "rgba(234, 246, 255, 0.5)",
     fontSize: 12,
     fontWeight: "600",
+    pointerEvents: "none",
   },
   cardinalPrimary: {
     color: "rgba(234, 246, 255, 0.92)",
@@ -295,6 +295,6 @@ const styles = StyleSheet.create({
     transform: [{ translateX: -12 }, { translateY: -10 }],
   },
   clusterText: { color: "#1a1a1a", fontSize: 11, fontWeight: "700" },
-  arrow: { position: "absolute", width: 24, height: 24, alignItems: "center", justifyContent: "center" },
+  arrow: { position: "absolute", width: 24, height: 24, alignItems: "center", justifyContent: "center", pointerEvents: "none" },
   arrowText: { color: "rgba(120, 200, 255, 0.9)", fontSize: 18 },
 });

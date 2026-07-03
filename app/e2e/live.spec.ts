@@ -115,3 +115,13 @@ test("list tab shows backend aircraft", async ({ page }) => {
     .toBeGreaterThan(0);
   await expect(page.locator('[data-testid^="list-ac-"]').first()).toBeVisible();
 });
+
+test("tapping an aircraft opens its detail sheet", async ({ page }) => {
+  await page.goto("/list");
+  const firstRow = page.locator('[data-testid^="list-ac-"]').first();
+  await expect(firstRow).toBeVisible({ timeout: 30_000 });
+  await firstRow.click();
+  // The detail sheet fetches GET /api/aircraft/{hex}; the title only renders if that fetch succeeds
+  // (guards the fetch `this`-binding — browser fetch throws "Illegal invocation" otherwise).
+  await expect(page.getByTestId("detail-title")).toBeVisible({ timeout: 15_000 });
+});

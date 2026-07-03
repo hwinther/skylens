@@ -126,7 +126,7 @@ export default function ArScreen() {
         <View style={[StyleSheet.absoluteFill, styles.noCam]}>{overlay}</View>
       )}
 
-      <SafeAreaView edges={["top"]} style={styles.top} pointerEvents="box-none">
+      <SafeAreaView edges={["top"]} style={styles.top}>
         <StatusStrip
           gpsAccuracyM={live.gpsAccuracyRef.current}
           headingAccuracy={live.headingAccuracyRef.current}
@@ -144,6 +144,6 @@ export default function ArScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#0B1622" },
-  top: { position: "absolute", top: 0, left: 0, right: 0 },
+  top: { position: "absolute", top: 0, left: 0, right: 0, pointerEvents: "box-none" },
   noCam: { backgroundColor: "#0B1622" },
 });

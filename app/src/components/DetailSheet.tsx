@@ -72,7 +72,7 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
         {error && <Text style={styles.error}>{error}</Text>}
         {detail && (
           <>
-            <Text style={styles.title}>
+            <Text testID="detail-title" style={styles.title}>
               {detail.state?.flight?.trim() ||
                 (detail.state?.hex ?? detail.metadata?.hex ?? hex ?? "").toUpperCase()}
             </Text>
