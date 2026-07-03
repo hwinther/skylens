@@ -1,0 +1,6 @@
+# Generated codegen artifacts. The backend emits openapi.json on every Debug build and the app
+# generates schema.ts from it; the writers use LF, but a Windows checkout with core.autocrlf would
+# otherwise flip line endings and show them as modified after every build. Pin LF (like clutterstock's
+# swagger.json) and mark them generated so GitHub collapses them in diffs.
+backend/src/Api/openapi.json eol=lf linguist-generated=true
+app/src/api/generated/schema.ts eol=lf linguist-generated=true
