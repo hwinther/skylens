@@ -22,7 +22,8 @@ internal static class OpenApiExtensions
             {
                 Version = "v1",
                 Title = "Skylens API",
-                Description = "ADS-B plane-spotter gateway — API for the Skylens app.",
+                Description = ApiBuildMetadata.BuildOpenApiDescription(
+                    "ADS-B plane-spotter gateway — API for the Skylens app."),
             });
         });
 

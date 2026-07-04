@@ -1,0 +1,57 @@
+# E2E compose stack for the pr-preview workflow (and local Playwright runs against a built image).
+#
+# One combined skylens image (ASP.NET Core 10 API + the Expo web SPA in wwwroot, same-origin) run in
+# MQTT-replay + DevAuth mode, so Playwright can drive the real web frontend against a real backend
+# with NO broker, NO OIDC, NO database, and NO secrets. The env block mirrors the preview Deployment
+# (hwinther/proxmox: clusters/production/apps/previews/skylens/base/deployment.yaml) so the e2e stack
+# and the deployed preview behave identically.
+#
+# The image ref comes from the API_IMAGE env var so the same file works for any digest:
+#   API_IMAGE=ghcr.io/hwinther/skylens/api@sha256:...
+# pr-preview.yml sets it (via the reusable's install command) to the digest the PR build just pushed.
+# For a local run: export API_IMAGE=... then `docker compose -f docker-compose.e2e.yml up --wait`.
+
+services:
+  app:
+    image: ${API_IMAGE:?set API_IMAGE to the skylens api image ref, e.g. ghcr.io/hwinther/skylens/api@sha256:...}
+    environment:
+      # REQUIRED replay contract — all four flags are IsDevelopment()-gated in Program.cs, so
+      # ASPNETCORE_ENVIRONMENT=Development is what unlocks DevAuth + MQTT replay.
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      Auth__Disabled: "true"
+      Mqtt__Replay: "true"
+      Mqtt__ReplayFile: /app/fixtures/aircraft.json
+      # MqttIngestService returns early when Mqtt:Host is empty even in replay mode; any non-empty
+      # placeholder keeps the ingest loop alive (no broker named "replay" is ever contacted).
+      Mqtt__Host: replay
+      # COARSE feed origin (1-decimal, ~11 km) — precise home coordinates must never appear in a
+      # public repo. Matches the Playwright context geolocation in app/playwright.ci.config.ts so the
+      # replayed aircraft fall inside the own-feed radius and the browser gets an "adsb" snapshot.
+      FEED__LAT: "59.9"
+      FEED__LON: "11.1"
+      FEED__RADIUSKM: "500"
+      # No OTLP collector in the e2e stack — disable the SDK so there is no export retry noise.
+      OTEL_SDK_DISABLED: "true"
+    ports:
+      # Playwright (on the runner/host) browses the container's own origin; the production web bundle
+      # resolves the API base URL to window.location.origin, so the SPA and API are same-origin here.
+      - "8081:8080"
+
+  # Readiness gate. The mcr.microsoft.com/dotnet/aspnet:10.0 base image ships no curl/wget, so `app`
+  # carries no healthcheck of its own. This tiny curl sidecar polls /healthz (which always returns
+  # 200, degraded flag when replay is stale); `docker compose up --wait` blocks until the sidecar
+  # reports healthy, i.e. until the API is actually serving. (A run-to-completion sidecar does NOT
+  # gate --wait — only a long-running service that owns a healthcheck does.)
+  app-ready:
+    image: curlimages/curl:8.10.1
+    depends_on:
+      app:
+        condition: service_started
+    entrypoint: ["sh", "-c", "sleep 3600"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://app:8080/healthz"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 3s

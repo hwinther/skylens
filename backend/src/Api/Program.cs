@@ -225,10 +225,34 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
 
-app.MapLandingEndpoints();
+// -- SPA static files --------------------------------------------------------------------------
+// The Expo web build is baked into wwwroot at image build (a placeholder index.html is committed so
+// "/" still works in local dev / tests). UseDefaultFiles rewrites "/" to index.html; UseStaticFiles
+// serves the hashed _expo/ assets with their default (cacheable) headers. index.html itself is served
+// no-store so a new deploy is picked up immediately. Static-file middleware is terminal and runs
+// before endpoint routing, so "/" and the assets are served without hitting the fallback auth policy.
+app.UseDefaultFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = static ctx =>
+    {
+        if (string.Equals(ctx.File.Name, "index.html", StringComparison.OrdinalIgnoreCase))
+            ctx.Context.Response.Headers.CacheControl = "no-store";
+    },
+});
+
 app.MapHealthEndpoints();
 app.MapApiEndpoints();
 app.MapHub<AircraftHub>("/hubs/aircraft").RequireAuthorization();
+
+// SPA fallback — any unmatched, non-file route serves the app shell for client-side routing. Real
+// mapped routes (/api, /hubs, /swagger, /healthz) are matched first, so no exclusion regex is needed.
+// AllowAnonymous is load-bearing: the fallback authorization policy would otherwise 401 the SPA shell.
+// The fallback always serves index.html, so it's unconditionally no-store.
+app.MapFallbackToFile("index.html", new StaticFileOptions
+{
+    OnPrepareResponse = static ctx => ctx.Context.Response.Headers.CacheControl = "no-store",
+}).AllowAnonymous();
 
 app.Run();
 

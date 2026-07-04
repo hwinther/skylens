@@ -1,16 +1,37 @@
 # syntax=docker/dockerfile:1
 #
-# Single image for the skylens backend gateway: ASP.NET Core 10 Minimal API + SignalR, with the
-# pinned wiedehopf/tar1090-db aircraft.csv.gz baked in for offline registration/type enrichment.
-# Pure .NET — multi-arch OK (no native binaries).
+# Single image for the skylens gateway: ASP.NET Core 10 Minimal API + SignalR, serving the Expo web
+# app (SPA) from wwwroot same-origin, with the pinned wiedehopf/tar1090-db aircraft.csv.gz baked in
+# for offline registration/type enrichment. Pure .NET runtime — multi-arch OK (no native binaries).
 
-# 1) Publish the API -> /app/publish
+# 1) Build the Expo web SPA -> /src/app/dist
+FROM node:24-bookworm-slim AS web
+WORKDIR /src/app
+# Restore first for layer caching. .npmrc carries legacy-peer-deps=true and is load-bearing for `npm ci`.
+COPY app/package.json app/package-lock.json app/.npmrc ./
+RUN npm ci
+COPY app/ ./
+# Version metadata + force-live are compiled into the public JS bundle. NEVER add EXPO_PUBLIC_HOME_LAT/LON
+# (secret home coordinates) and NO EXPO_PUBLIC_API_BASE_URL (the app resolves the gateway same-origin).
+ARG APP_VERSION=0.0.0-dev
+ARG GIT_SHA=unknown
+ENV EXPO_PUBLIC_FORCE_LIVE=1 \
+    EXPO_PUBLIC_APP_VERSION=$APP_VERSION \
+    EXPO_PUBLIC_GIT_SHA=$GIT_SHA
+RUN npx expo export --platform web
+
+# 2) Publish the API -> /app/publish. The SPA is copied into wwwroot BEFORE publish so it's embedded.
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS backend
+ARG APP_VERSION=0.0.0-dev
+ARG GIT_SHA=unknown
 WORKDIR /src
 COPY backend/ ./backend/
-RUN dotnet publish backend/src/Api/Api.csproj -c Release -o /app/publish /p:UseAppHost=false
+COPY --from=web /src/app/dist/ ./backend/src/Api/wwwroot/
+# The SDK appends "+$(SourceRevisionId)" to InformationalVersion → parsed back apart by ApiBuildMetadata.
+RUN dotnet publish backend/src/Api/Api.csproj -c Release -o /app/publish /p:UseAppHost=false \
+    -p:InformationalVersion="$APP_VERSION" -p:SourceRevisionId="$GIT_SHA"
 
-# 2) Fetch the PINNED offline aircraft DB and verify its checksum. Pinning the git commit + sha256
+# 3) Fetch the PINNED offline aircraft DB and verify its checksum. Pinning the git commit + sha256
 #    keeps the baked DB reproducible; a mismatch fails the build rather than shipping a swapped file.
 FROM debian:trixie-slim AS aircraftdb
 ENV DEBIAN_FRONTEND=noninteractive
@@ -24,11 +45,14 @@ RUN set -eux; \
     echo "${AIRCRAFT_DB_SHA256}  /out/aircraft.csv.gz" | sha256sum -c -; \
     rm -rf /var/lib/apt/lists/*
 
-# 3) Runtime
+# 4) Runtime
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 COPY --from=backend /app/publish ./
 COPY --from=aircraftdb /out/aircraft.csv.gz /app/data/aircraft.csv.gz
+# Public ADS-B capture replayed by Mqtt__Replay + Mqtt__ReplayFile in preview/e2e envs (never in prod;
+# replay is gated on Development). ADS-B is broadcast data, so committing/baking the capture is fine.
+COPY backend/tests/Api.Tests/fixtures/aircraft.json /app/fixtures/aircraft.json
 
 ENV ASPNETCORE_URLS=http://0.0.0.0:8080 \
     DOTNET_RUNNING_IN_CONTAINER=true

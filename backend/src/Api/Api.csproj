@@ -33,6 +33,15 @@
     <Exec Command="dotnet tool restore" WorkingDirectory="$(ProjectDir)" />
   </Target>
 
+  <!-- Debug builds emit openapi.json (CreateSwaggerJson below). Keep that file byte-stable across
+       commits by NOT letting the SDK append "+<git sha>" to the informational version in Debug —
+       otherwise the spec (and CI's changes-after-build check) churns on every commit. Release keeps
+       the SDK behavior: the Docker build's -p:InformationalVersion + -p:SourceRevisionId become
+       "<semver>+<sha>", which ApiBuildMetadata parses back apart. (Same pattern as clutterstock.) -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
   <!-- Emit openapi.json on every Debug build so the app's generated TS client can't silently drift.
        A dedicated "Swagger" environment + disabled OTEL keeps doc generation offline and side-effect free. -->
   <Target Name="CreateSwaggerJson" AfterTargets="Build" Condition="'$(Configuration)' == 'Debug'">

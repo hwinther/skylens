@@ -5,12 +5,21 @@
  * to avoid an extra native dependency; the values feed straight into the AR pipeline.
  */
 
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSettingsStore } from "@/state/settingsStore";
 import { useAuthStore } from "@/state/authStore";
 import { useAuth } from "@/auth/useAuth";
 import { DEFAULT_HFOV_DEG } from "@/ar/projection";
+import { ApiClient, getApiBaseUrl } from "@/api";
+import { getVersionLine } from "@/lib/version";
+
+/** Backend build info fetch state for the About section. */
+type BackendState =
+  | { status: "loading" }
+  | { status: "error" }
+  | { status: "ok"; version: string; sha: string };
 
 export default function SettingsScreen() {
   const {
@@ -27,6 +36,45 @@ export default function SettingsScreen() {
   const mockMode = useAuthStore((s) => s.mockMode);
   const setMockMode = useAuthStore((s) => s.setMockMode);
   const { signIn, signOut } = useAuth();
+
+  const app = useMemo(() => getVersionLine(), []);
+  const [backend, setBackend] = useState<BackendState>({ status: "loading" });
+  const [showFullSha, setShowFullSha] = useState(false);
+
+  // Backend build info. Prefer /api/version (carries the full sha) when signed in; otherwise fall
+  // back to the anonymous /healthz `version` field. Fail-soft: any error → "unavailable", never
+  // crashes the screen. Re-runs when auth status changes so signing in upgrades to the full sha.
+  useEffect(() => {
+    let alive = true;
+    const client = new ApiClient({ baseUrl: getApiBaseUrl() });
+    (async () => {
+      if (status === "authenticated") {
+        try {
+          const v = await client.version();
+          if (alive) setBackend({ status: "ok", version: v.version, sha: v.sha });
+          return;
+        } catch {
+          // Fall through to the anonymous health probe.
+        }
+      }
+      try {
+        const h = await client.health();
+        if (!alive) return;
+        setBackend(
+          h.version ? { status: "ok", version: h.version, sha: "" } : { status: "error" },
+        );
+      } catch {
+        if (alive) setBackend({ status: "error" });
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [status]);
+
+  const appValue = appVersionValue(app.line, app.sha, showFullSha);
+  const backendValue = backendVersionValue(backend, showFullSha);
+  const hasFullSha = app.sha.length > 0 || (backend.status === "ok" && backend.sha.length > 0);
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -81,9 +129,49 @@ export default function SettingsScreen() {
             <Switch value={demoMode} onValueChange={setDemoMode} />
           </Row>
         </Section>
+
+        <Section title="About">
+          <Pressable
+            style={styles.row}
+            disabled={!hasFullSha}
+            onPress={() => setShowFullSha((s) => !s)}
+          >
+            <Text style={styles.rowLabel}>App</Text>
+            <Text style={styles.aboutValue}>{appValue}</Text>
+          </Pressable>
+          <Pressable
+            style={styles.row}
+            disabled={!hasFullSha}
+            onPress={() => setShowFullSha((s) => !s)}
+          >
+            <Text style={styles.rowLabel}>Backend</Text>
+            <Text style={styles.aboutValue}>{backendValue}</Text>
+          </Pressable>
+          {hasFullSha && (
+            <Text style={styles.hint}>
+              {showFullSha ? "Tap to hide full commit hash" : "Tap to reveal full commit hash"}
+            </Text>
+          )}
+        </Section>
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+/** App version cell: reveal the full sha (swapped in for the 7-char short form) when tapped. */
+function appVersionValue(line: string, sha: string, showFull: boolean): string {
+  if (!line) return "unknown";
+  if (!showFull || !sha) return line;
+  const short = sha.slice(0, 7);
+  return line.includes(short) ? line.replace(short, sha) : `${line} · ${sha}`;
+}
+
+/** Backend version cell: "checking…" / "unavailable" / "<version>" or "<version> · <sha>". */
+function backendVersionValue(state: BackendState, showFull: boolean): string {
+  if (state.status === "loading") return "checking…";
+  if (state.status === "error") return "unavailable";
+  if (!state.sha) return state.version;
+  return `${state.version} · ${showFull ? state.sha : state.sha.slice(0, 7)}`;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -188,6 +276,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   rowLabel: { color: "#EAF6FF", fontSize: 15 },
   rowValue: { color: "#9FC7E0", fontSize: 15, textTransform: "capitalize" },
+  aboutValue: { color: "#9FC7E0", fontSize: 15, flexShrink: 1, textAlign: "right", marginLeft: 12 },
   hint: { color: "#5c7a94", fontSize: 12 },
   stepper: { gap: 8 },
   stepperHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },

@@ -21,10 +21,11 @@ import {
   DetailSheet,
   StatusStrip,
   useDemoPose,
+  useObserverLocation,
   usePoseRefs,
 } from "@/components";
 import { ApiClient } from "@/api/client";
-import { getApiBaseUrl, getHomeLocation } from "@/api/config";
+import { getApiBaseUrl } from "@/api/config";
 import { startMockFeed, DEMO_HOME } from "@/mock/mockFeed";
 import {
   useAircraftList,
@@ -41,8 +42,9 @@ export default function ArScreen() {
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
 
   const baseUrl = useMemo(() => getApiBaseUrl(), []);
-  // Fixed observer location for live mode until GPS provides a fix (null when unset).
-  const home = useMemo(() => getHomeLocation(), []);
+  // Live-mode observer: baked home coords, else a one-shot device/browser geolocation fix
+  // (same source the root layout's hub subscription uses).
+  const observer = useObserverLocation(!demoMode);
 
   const aircraft = useAircraftList();
   const snapshotAt = useAircraftStore((s) => s.lastSnapshotAt);
@@ -83,11 +85,12 @@ export default function ArScreen() {
 
   useEffect(() => {
     if (demoMode) return;
-    // Seed the projection origin so the overlay can place aircraft before a GPS fix
-    // (and on web / the E2E, where there is no GPS at all). useLiveFeed sets the source.
-    if (home) setObserverPosition({ lat: home.lat, lon: home.lon, alt: 0 });
+    // Seed the projection origin so the overlay can place aircraft before (or instead of) the
+    // native GPS watch — on web the one-shot browser fix from useObserverLocation is all we get.
+    // useLiveFeed sets the source.
+    if (observer) setObserverPosition({ lat: observer.lat, lon: observer.lon, alt: 0 });
     if (!cameraPermission?.granted) void requestCameraPermission();
-  }, [demoMode, home, setObserverPosition, cameraPermission?.granted, requestCameraPermission]);
+  }, [demoMode, observer, setObserverPosition, cameraPermission?.granted, requestCameraPermission]);
 
   const overlay = (
     <ArOverlay

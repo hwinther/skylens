@@ -6,6 +6,14 @@
 
 import { create } from "zustand";
 
+// Same opt-in override settingsStore uses: the hosted web build is baked with
+// EXPO_PUBLIC_FORCE_LIVE=1 so it boots into the real OIDC flow, while native/Expo-Go
+// dev (env unset) still defaults to mock auth until a custom-scheme dev build exists.
+// The live SignalR feed is gated on demoMode, not auth, so mock vs live sign-in never
+// affects the (empty-bearer) live connect used by the E2E and preview envs.
+const forceLive =
+  process.env.EXPO_PUBLIC_FORCE_LIVE === "1" || process.env.EXPO_PUBLIC_FORCE_LIVE === "true";
+
 export type AuthStatus =
   | "unknown" // before hydrate() has run
   | "unauthenticated"
@@ -22,8 +30,9 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>((set) => ({
   status: "unknown",
-  // Default to mock mode until the custom-scheme dev build exists (plan Phase 3).
-  mockMode: true,
+  // Mock auth by default (Expo Go / native dev before the custom-scheme dev build),
+  // but the FORCE_LIVE web build boots straight into the real OIDC flow.
+  mockMode: !forceLive,
   setStatus: (status) => set({ status }),
   setMockMode: (mockMode) => set({ mockMode }),
 }));

@@ -38,7 +38,9 @@ function devServerHost(): string | null {
  *   1. EXPO_PUBLIC_API_BASE_URL (explicit override — set it for a non-default port or remote backend).
  *   2. In dev, http://<metro-host>:5000 — works for web (localhost) AND a physical device (the PC's
  *      LAN IP, same host Metro serves from), with no per-machine config.
- *   3. Production host.
+ *   3. Production web: the page's own origin, so the one bundle serves the API from wherever it is
+ *      hosted — skylens.wsh.no AND the skylens-N.preview.wsh.no preview hosts — with no rebuild.
+ *   4. Production native: the hardcoded production host (no window/origin on native).
  */
 export function getApiBaseUrl(): string {
   const fromEnv = process.env.EXPO_PUBLIC_API_BASE_URL;
@@ -48,6 +50,9 @@ export function getApiBaseUrl(): string {
     const host = devServerHost();
     if (host) return `http://${host}:${DEV_BACKEND_PORT}`;
   }
+
+  const origin = (globalThis as { location?: { origin?: string } }).location?.origin;
+  if (origin) return origin;
 
   return DEFAULT_BASE_URL;
 }

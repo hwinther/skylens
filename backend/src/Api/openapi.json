@@ -2,27 +2,14 @@
   "openapi": "3.0.4",
   "info": {
     "title": "Skylens API",
-    "description": "ADS-B plane-spotter gateway — API for the Skylens app.",
+    "description": "ADS-B plane-spotter gateway — API for the Skylens app.\n\n---\n\n**Version:** `0.0.0-dev`",
     "version": "v1"
   },
   "paths": {
-    "/": {
-      "get": {
-        "tags": [
-          "Skylens.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
-        ],
-        "operationId": "Landing",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
-      }
-    },
     "/healthz": {
       "get": {
         "tags": [
-          "Skylens.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
+          "Skylens.Api, Version=0.0.0.1, Culture=neutral, PublicKeyToken=null"
         ],
         "operationId": "Healthz",
         "responses": {
@@ -39,10 +26,30 @@
         }
       }
     },
+    "/api/version": {
+      "get": {
+        "tags": [
+          "Skylens.Api, Version=0.0.0.1, Culture=neutral, PublicKeyToken=null"
+        ],
+        "operationId": "Version",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Skylens.Api.Endpoints.ApiEndpoints.VersionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/me": {
       "get": {
         "tags": [
-          "Skylens.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
+          "Skylens.Api, Version=0.0.0.1, Culture=neutral, PublicKeyToken=null"
         ],
         "operationId": "Me",
         "responses": {
@@ -62,7 +69,7 @@
     "/api/aircraft": {
       "get": {
         "tags": [
-          "Skylens.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
+          "Skylens.Api, Version=0.0.0.1, Culture=neutral, PublicKeyToken=null"
         ],
         "operationId": "AircraftList",
         "parameters": [
@@ -111,7 +118,7 @@
     "/api/aircraft/{hex}": {
       "get": {
         "tags": [
-          "Skylens.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
+          "Skylens.Api, Version=0.0.0.1, Culture=neutral, PublicKeyToken=null"
         ],
         "operationId": "AircraftDetail",
         "parameters": [
@@ -144,7 +151,7 @@
     "/api/aircraft/{hex}/route": {
       "get": {
         "tags": [
-          "Skylens.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
+          "Skylens.Api, Version=0.0.0.1, Culture=neutral, PublicKeyToken=null"
         ],
         "operationId": "AircraftRoute",
         "parameters": [
@@ -177,7 +184,7 @@
     "/api/aircraft/{hex}/route/cached": {
       "get": {
         "tags": [
-          "Skylens.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
+          "Skylens.Api, Version=0.0.0.1, Culture=neutral, PublicKeyToken=null"
         ],
         "operationId": "AircraftRouteCached",
         "parameters": [
@@ -213,7 +220,7 @@
     "/api/area": {
       "get": {
         "tags": [
-          "Skylens.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
+          "Skylens.Api, Version=0.0.0.1, Culture=neutral, PublicKeyToken=null"
         ],
         "operationId": "Area",
         "parameters": [
@@ -297,6 +304,20 @@
         },
         "additionalProperties": false
       },
+      "Skylens.Api.Endpoints.ApiEndpoints.VersionResponse": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string",
+            "nullable": true
+          },
+          "sha": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "Skylens.Api.Endpoints.HealthEndpoints.HealthResponse": {
         "type": "object",
         "properties": {
@@ -319,6 +340,10 @@
           "messageCount": {
             "type": "integer",
             "format": "int64"
+          },
+          "version": {
+            "type": "string",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -458,7 +483,7 @@
   },
   "tags": [
     {
-      "name": "Skylens.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
+      "name": "Skylens.Api, Version=0.0.0.1, Culture=neutral, PublicKeyToken=null"
     }
   ]
 }

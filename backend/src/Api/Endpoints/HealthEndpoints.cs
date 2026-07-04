@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Skylens.Api.Extensions;
 using Skylens.Api.State;
 
 namespace Skylens.Api.Endpoints;
@@ -25,7 +26,8 @@ public static class HealthEndpoints
                    MqttConnected: status.Connected,
                    LastMessageAgeSeconds: ageSeconds,
                    AircraftCount: status.LastAircraftCount,
-                   MessageCount: status.MessageCount));
+                   MessageCount: status.MessageCount,
+                   Version: ApiBuildMetadata.Version));
            })
            .AllowAnonymous()
            .WithName("Healthz");
@@ -39,5 +41,6 @@ public static class HealthEndpoints
         bool MqttConnected,
         double? LastMessageAgeSeconds,
         int AircraftCount,
-        long MessageCount);
+        long MessageCount,
+        string Version);
 }

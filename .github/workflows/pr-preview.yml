@@ -1,0 +1,112 @@
+name: "PR preview"
+
+# Builds + pushes the PR image, runs a Playwright e2e against it, then deploys an ephemeral preview
+# env to the homelab cluster via GitOps (renders the per-PR overlay under
+# clusters/production/apps/previews/skylens in hwinther/proxmox; Flux reconciles within ~1 min).
+#
+# The preview runs the backend in Development mode (DevAuth + MQTT replay of the baked-in fixture),
+# so it needs no secrets, no broker, and no database; the Authelia forward-auth ingress is the gate.
+#
+# Opt-in per PR via the `deploy-feature` label. Requires repo secrets PROXMOX_GITOPS_APP_ID +
+# PROXMOX_GITOPS_APP_PRIVATE_KEY (the GitHub App that can commit to hwinther/proxmox).
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled]
+
+concurrency:
+  group: "pr-preview-${{ github.event.pull_request.number }}"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: contains(github.event.pull_request.labels.*.name, 'deploy-feature')
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+      actions: write
+      pull-requests: write
+    uses: hwinther/reusable-workflows/.github/workflows/docker-container.yml@a0e722a6a3002b2095899c71861906262160b125 # v2.0.0
+    with:
+      container_registry: ghcr.io
+      container_image_name_postfix: api
+      build_context: .
+      dockerfile: Dockerfile
+      platforms: linux/amd64
+      # auto = report/SARIF only on PRs (fails on other events).
+      grype_fail_build: auto
+
+  e2e:
+    needs: build
+    if: contains(github.event.pull_request.labels.*.name, 'deploy-feature')
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      actions: read
+    uses: hwinther/reusable-workflows/.github/workflows/playwright-e2e.yml@a0e722a6a3002b2095899c71861906262160b125 # v2.0.0
+    with:
+      compose_file: docker-compose.e2e.yml
+      playwright_working_directory: app
+      # v2 pushes the image to GHCR (no loadable artifact), so there is nothing to `docker load`; the
+      # empty map makes the reusable skip artifact loading and `docker compose pull` the image instead.
+      image_artifacts_json: "{}"
+      # setup-node's registry-url defaults to GitHub Packages, which would repoint the GLOBAL npm
+      # registry and break `npm ci` of the app's public deps. Pin it back to public npm.
+      npm_registry_url: https://registry.npmjs.org
+      # The reusable exports playwright_env AFTER `docker compose up`, so API_IMAGE cannot be passed
+      # that way for compose image resolution. The install command runs BEFORE compose up, so we set
+      # API_IMAGE (to the exact digest the build pushed) into $GITHUB_ENV there; `docker compose pull`
+      # / `up` then resolve it from GHCR (the reusable already logs into ghcr.io).
+      playwright_install_command: 'npm ci && echo "API_IMAGE=ghcr.io/hwinther/skylens/api@${{ needs.build.outputs.image_digest }}" >> "$GITHUB_ENV"'
+      playwright_run_command: npm run e2e:ci
+      # Base URL the CI config reads (defaults to the same value; set explicitly for clarity).
+      playwright_env: |
+        E2E_BASE_URL=http://localhost:8081
+
+  deploy-preview:
+    needs: [build, e2e]
+    if: contains(github.event.pull_request.labels.*.name, 'deploy-feature')
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: hwinther/reusable-workflows/.github/workflows/gitops-preview-upsert.yml@a0e722a6a3002b2095899c71861906262160b125 # v2.0.0
+    with:
+      target_repo: hwinther/proxmox
+      preview_base_path: clusters/production/apps/previews/skylens
+      pr_number: ${{ github.event.pull_request.number }}
+      host: skylens-${{ github.event.pull_request.number }}.preview.wsh.no
+      app_name: skylens
+      image_tag: ${{ needs.build.outputs.version }}
+      image_digest: ${{ needs.build.outputs.image_digest }}
+    secrets:
+      app_id: ${{ secrets.PROXMOX_GITOPS_APP_ID }}
+      app_private_key: ${{ secrets.PROXMOX_GITOPS_APP_PRIVATE_KEY }}
+
+  comment:
+    needs: deploy-preview
+    if: contains(github.event.pull_request.labels.*.name, 'deploy-feature')
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Post or update the preview-URL sticky comment
+        uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
+        with:
+          header: skylens-preview-env
+          message: |
+            ### Preview environment
+
+            Deployed via Flux (reconciles within ~1 min) after the image passed Playwright e2e.
+            Runs the backend in Development mode (MQTT replay of the baked-in fixture).
+
+            - Preview URL: ${{ needs.deploy-preview.outputs.preview_url }}
+
+            In-app sign-in is intentionally disabled on previews (the backend runs with DevAuth, and
+            no Authelia OIDC redirect URIs are registered for `*.preview.wsh.no`). Access is gated by
+            the Authelia forward-auth middleware on the ingress instead.
+
+            Closing the PR removes the env via `pr-preview-cleanup.yml`.

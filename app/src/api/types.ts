@@ -24,3 +24,22 @@ export type RouteResponse = Schemas["Skylens.Api.Enrichment.FlightRoute"];
 
 /** GET /api/me — the authenticated user's identity as the backend sees it. */
 export type MeResponse = Schemas["Skylens.Api.Endpoints.ApiEndpoints.MeResponse"];
+
+/**
+ * GET /api/version — backend build info (requires bearer). `version` and `sha` are tightened like
+ * `hex` above: the backend record declares non-nullable strings (`sha` is the full 40-char commit
+ * sha, or "" when unavailable), but the generator's NRT quirk marks them nullable.
+ */
+export type VersionResponse = Omit<
+  Schemas["Skylens.Api.Endpoints.ApiEndpoints.VersionResponse"],
+  "version" | "sha"
+> & { version: string; sha: string };
+
+/**
+ * GET /healthz — anonymous health probe. `version` (the deployed backend build) is tightened for
+ * the same NRT-quirk reason: the backend record declares it as a non-nullable string.
+ */
+export type HealthResponse = Omit<
+  Schemas["Skylens.Api.Endpoints.HealthEndpoints.HealthResponse"],
+  "version"
+> & { version: string };
