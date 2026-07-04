@@ -2,9 +2,10 @@
 #
 # One combined skylens image (ASP.NET Core 10 API + the Expo web SPA in wwwroot, same-origin) run in
 # MQTT-replay + DevAuth mode, so Playwright can drive the real web frontend against a real backend
-# with NO broker, NO OIDC, NO database, and NO secrets. The env block mirrors the preview Deployment
-# (hwinther/proxmox: clusters/production/apps/previews/skylens/base/deployment.yaml) so the e2e stack
-# and the deployed preview behave identically.
+# with NO broker, NO OIDC, NO database, and NO secrets. NOTE: this deliberately DIVERGES from the
+# deployed preview (hwinther/proxmox: clusters/production/apps/previews/skylens/base/deployment.yaml),
+# which runs REAL JwtBearer against auth.wsh.no so auth behavior is testable pre-release — the CI e2e
+# keeps DevAuth because its specs assert on anonymous live data (no interactive Authelia login in CI).
 #
 # The image ref comes from the API_IMAGE env var so the same file works for any digest:
 #   API_IMAGE=ghcr.io/hwinther/skylens/api@sha256:...

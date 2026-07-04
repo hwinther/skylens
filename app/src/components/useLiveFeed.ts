@@ -13,6 +13,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { HubConnectionState, type HubConnection } from "@microsoft/signalr";
 import { createAircraftHubConnection, onSnapshot, onStatus, subscribe } from "@/api/signalr";
 import { useAircraftStore } from "@/state/aircraftStore";
+import { useAuthStore } from "@/state/authStore";
 
 export interface LiveObserver {
   lat: number;
@@ -34,6 +35,13 @@ export function useLiveFeed({ enabled, baseUrl, observer, radiusKm }: UseLiveFee
   const setSnapshot = useAircraftStore((s) => s.setSnapshot);
   const setConnection = useAircraftStore((s) => s.setConnection);
   const setSource = useAircraftStore((s) => s.setSource);
+  // In production the hub requires a bearer (RequireAuthorization), so an anonymous connect 401s
+  // at the WS handshake. accessTokenFactory reads the token store at connect time, but a FAILED
+  // start is never retried — so sign-in/out must tear the connection down and reconnect. Keyed on
+  // the boolean (not the raw status) so unknown→unauthenticated and the transient "authenticating"
+  // state don't flap the connection; environments where sign-in never happens (preview DevAuth,
+  // container e2e) see a constant false and behave exactly as before.
+  const authenticated = useAuthStore((s) => s.status === "authenticated");
 
   const connRef = useRef<HubConnection | null>(null);
   // Latest observer/radius held in refs so re-subscribing never tears the connection down.
@@ -100,7 +108,7 @@ export function useLiveFeed({ enabled, baseUrl, observer, radiusKm }: UseLiveFee
       setConnection("disconnected");
       void conn.stop();
     };
-  }, [enabled, baseUrl, setSnapshot, setConnection, setSource, subscribeNow]);
+  }, [enabled, baseUrl, authenticated, setSnapshot, setConnection, setSource, subscribeNow]);
 
   // Re-subscribe when the observer position or radius changes (hub throttles to 1/10 s).
   useEffect(() => {

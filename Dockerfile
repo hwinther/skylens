@@ -8,8 +8,13 @@
 FROM node:24-bookworm-slim AS web
 WORKDIR /src/app
 # Restore first for layer caching. .npmrc carries legacy-peer-deps=true and is load-bearing for `npm ci`.
+# --omit=dev: `expo export` only needs the prod tree (babel-preset-expo rides in via expo) — skipping
+# jest/eslint/playwright halves the install and drops their deprecated transitive chains (inflight,
+# glob@7/@10, jsdom's abab/domexception) from the build log. The one remaining deprecation warning
+# (uuid@7 via expo -> @expo/config-plugins -> xcode) is upstream Expo's and harmless: that chain is
+# iOS-prebuild tooling, never executed here and never part of the exported bundle.
 COPY app/package.json app/package-lock.json app/.npmrc ./
-RUN npm ci
+RUN npm ci --omit=dev --no-audit --no-fund
 COPY app/ ./
 # Version metadata + force-live are compiled into the public JS bundle. NEVER add EXPO_PUBLIC_HOME_LAT/LON
 # (secret home coordinates) and NO EXPO_PUBLIC_API_BASE_URL (the app resolves the gateway same-origin).
