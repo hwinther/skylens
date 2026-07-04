@@ -221,16 +221,18 @@ app.UseOpenApiDocumentation();
 if (corsOrigins.Length > 0)
     app.UseCors(WebCorsPolicy);
 
-app.UseAuthentication();
-app.UseAuthorization();
-app.UseRateLimiter();
-
 // -- SPA static files --------------------------------------------------------------------------
 // The Expo web build is baked into wwwroot at image build (a placeholder index.html is committed so
 // "/" still works in local dev / tests). UseDefaultFiles rewrites "/" to index.html; UseStaticFiles
 // serves the hashed _expo/ assets with their default (cacheable) headers. index.html itself is served
-// no-store so a new deploy is picked up immediately. Static-file middleware is terminal and runs
-// before endpoint routing, so "/" and the assets are served without hitting the fallback auth policy.
+// no-store so a new deploy is picked up immediately.
+//
+// ORDER IS LOAD-BEARING: static files must be served BEFORE UseAuthentication/UseAuthorization.
+// Asset paths (extension ⇒ the SPA fallback's {*path:nonfile} constraint excludes them) match NO
+// endpoint, and the fallback authorization policy applies to endpoint-less requests that reach any
+// middleware placed after UseAuthorization — which 401'd every /_expo asset + favicon in production
+// (preview's DevAuth authenticated everything and masked it). wwwroot only holds the public SPA
+// bundle, so serving it pre-auth is safe. See SmokeTests.Static_files_are_served_anonymously.
 app.UseDefaultFiles();
 app.UseStaticFiles(new StaticFileOptions
 {
@@ -240,6 +242,10 @@ app.UseStaticFiles(new StaticFileOptions
             ctx.Context.Response.Headers.CacheControl = "no-store";
     },
 });
+
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseRateLimiter();
 
 app.MapHealthEndpoints();
 app.MapApiEndpoints();

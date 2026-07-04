@@ -82,6 +82,22 @@ public sealed class SmokeTests
     }
 
     [Fact]
+    public async Task Static_files_are_served_anonymously()
+    {
+        using var client = _factory.CreateClient();
+
+        // A real file with an extension matches NO endpoint (the SPA fallback's {*path:nonfile}
+        // constraint excludes file-like paths), so only the static-file middleware can serve it — and
+        // that middleware must run BEFORE auth: the fallback authorization policy applies to
+        // non-endpoint requests that reach middleware behind UseAuthorization. This is exactly how the
+        // hashed /_expo assets and favicon 401'd in production while preview's DevAuth masked it.
+        using var resp = await client.GetAsync("/index.html", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        Assert.StartsWith("text/html", resp.Content.Headers.ContentType?.ToString());
+    }
+
+    [Fact]
     public async Task Api_me_requires_authentication()
     {
         using var client = _factory.CreateClient();
