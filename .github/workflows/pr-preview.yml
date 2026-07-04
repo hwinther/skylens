@@ -101,12 +101,16 @@ jobs:
             ### Preview environment
 
             Deployed via Flux (reconciles within ~1 min) after the image passed Playwright e2e.
-            Runs the backend in Development mode (MQTT replay of the baked-in fixture).
+            Runs the backend in Development mode (MQTT replay of the baked-in fixture) with REAL
+            OIDC JWT auth, so the production sign-in path is testable here.
 
             - Preview URL: ${{ needs.deploy-preview.outputs.preview_url }}
 
-            In-app sign-in is intentionally disabled on previews (the backend runs with DevAuth, and
-            no Authelia OIDC redirect URIs are registered for `*.preview.wsh.no`). Access is gated by
-            the Authelia forward-auth middleware on the ingress instead.
+            Access to the host is gated by the Authelia forward-auth middleware on the ingress;
+            in-app sign-in then works like production, provided this PR number is inside the
+            registered redirect-URI window on the Authelia `skylens` client (see
+            authelia-helmrelease.yaml in hwinther/proxmox — extend the window when exhausted).
+            Anonymous visitors see a disconnected, empty feed (the /hubs connection is rejected
+            with 401 until sign-in, same as production).
 
             Closing the PR removes the env via `pr-preview-cleanup.yml`.
