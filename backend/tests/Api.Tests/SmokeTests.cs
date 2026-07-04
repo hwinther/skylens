@@ -98,6 +98,22 @@ public sealed class SmokeTests
     }
 
     [Fact]
+    public async Task Missing_static_assets_return_404_not_401()
+    {
+        using var client = _factory.CreateClient();
+
+        // A miss under the bundle's static roots must be a plain 404. Without the short-circuit in
+        // Program.cs it would fall past UseStaticFiles into endpoint routing, match no endpoint, and
+        // the fallback authorization policy would 401 it — masking "file missing from wwwroot" as an
+        // auth failure (exactly how the fonts stripped by publish's node_modules exclusion surfaced).
+        using var assets = await client.GetAsync("/assets/definitely-missing.ttf", TestContext.Current.CancellationToken);
+        using var expo = await client.GetAsync("/_expo/static/js/web/missing.js", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, assets.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, expo.StatusCode);
+    }
+
+    [Fact]
     public async Task Api_me_requires_authentication()
     {
         using var client = _factory.CreateClient();

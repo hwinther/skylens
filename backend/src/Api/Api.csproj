@@ -11,6 +11,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The Expo web export mirrors module paths into asset URLs, so fonts land under
+         wwwroot/assets/node_modules/@expo/vector-icons/... . The Web SDK's DefaultItemExcludes
+         contains **/node_modules/**, which silently strips those files from `dotnet publish` — in
+         production that surfaced as vector-icon fonts 401ing (a missing file-like path falls
+         through static-files into the fallback auth policy). Re-include everything under wwwroot
+         regardless of node_modules path segments. -->
+    <Content Include="wwwroot\**\node_modules\**" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- JwtBearer validates Authelia's RFC 9068 access tokens (the clutterstock/test-api pattern). -->
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
     <!-- OpenAPI: built-in doc + Swashbuckle (the "v1" doc the CLI writes to openapi.json). -->

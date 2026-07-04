@@ -243,6 +243,22 @@ app.UseStaticFiles(new StaticFileOptions
     },
 });
 
+// Unknown paths under the exported bundle's static roots are plain 404s. Without this, a missing
+// asset sails past UseStaticFiles into endpoint routing, matches no endpoint (file-like paths are
+// excluded from the SPA fallback), and the fallback authorization policy turns the miss into a
+// misleading 401 challenge — exactly how the node_modules fonts dropped by publish (see Api.csproj)
+// first surfaced in production.
+app.Use(static (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/assets") ||
+        context.Request.Path.StartsWithSegments("/_expo"))
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return Task.CompletedTask;
+    }
+    return next(context);
+});
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
