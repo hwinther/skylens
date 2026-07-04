@@ -7,3 +7,4 @@ export * from "./StatusStrip";
 export * from "./usePoseRefs";
 export * from "./useDemoPose";
 export * from "./useLiveFeed";
+export * from "./useObserverLocation";

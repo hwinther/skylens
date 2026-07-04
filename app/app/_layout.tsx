@@ -13,8 +13,8 @@ import * as WebBrowser from "expo-web-browser";
 import { hydrateTokens } from "@/auth/tokenStore";
 import { useAuthStore } from "@/state/authStore";
 import { useSettingsStore } from "@/state/settingsStore";
-import { getApiBaseUrl, getHomeLocation } from "@/api/config";
-import { useLiveFeed } from "@/components";
+import { getApiBaseUrl } from "@/api/config";
+import { useLiveFeed, useObserverLocation } from "@/components";
 
 // On web, the OAuth popup redirects back to /oauth inside this same single-page bundle;
 // this posts the auth response to the opener and dismisses the popup. No-op on native
@@ -26,12 +26,15 @@ export default function RootLayout() {
   const demoMode = useSettingsStore((s) => s.demoMode);
   const radiusKm = useSettingsStore((s) => s.radiusKm);
   const baseUrl = useMemo(() => getApiBaseUrl(), []);
-  const home = useMemo(() => getHomeLocation(), []);
+  // Baked home coords when present, else a one-shot device/browser geolocation fix. The
+  // container/preview web bundles bake no coordinates, so without the geolocation fallback the
+  // hub connection would stay connected-but-unsubscribed and no snapshot would ever arrive.
+  const observer = useObserverLocation(!demoMode);
 
   // App-wide live SignalR feed: populate the shared aircraft store here (not in the AR screen)
   // so every tab — AR and Map — sees the same 1 Hz data regardless of which mounts first. Demo
   // mode leaves this disabled; the AR screen drives the mock feed instead.
-  useLiveFeed({ enabled: !demoMode, baseUrl, observer: home, radiusKm });
+  useLiveFeed({ enabled: !demoMode, baseUrl, observer, radiusKm });
 
   useEffect(() => {
     (async () => {
