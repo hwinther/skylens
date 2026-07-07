@@ -94,6 +94,12 @@ export function ArOverlay({
 
   useEffect(() => {
     let raf = 0;
+    let lastRun = 0;
+    // Cap the overlay's heavy work (reprojecting N aircraft + declutter + the label-tree
+    // re-render) at ~20 fps. The rAF keeps firing at display rate, but doing all that 60x/s
+    // pins the JS thread the moment planes are present — starving touch handling and the pose
+    // loop (the "frozen, can't tap, planes stuck as arrows" symptom). 20 fps still tracks the sky.
+    const MIN_INTERVAL_MS = 1000 / 20;
     const config: ProjectionConfig = {
       hFovDeg: hFovRef.current,
       aspect: width / height,
@@ -101,6 +107,11 @@ export function ArOverlay({
     };
 
     const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const nowMs = Date.now();
+      if (nowMs - lastRun < MIN_INTERVAL_MS) return;
+      lastRun = nowMs;
+
       const pose = poseRef.current;
       const observer = positionRef.current;
       config.hFovDeg = hFovRef.current;
@@ -177,7 +188,6 @@ export function ArOverlay({
         setCardinals(marks);
       }
 
-      raf = requestAnimationFrame(tick);
     };
 
     raf = requestAnimationFrame(tick);
