@@ -5,7 +5,7 @@
 # for offline registration/type enrichment. Pure .NET runtime — multi-arch OK (no native binaries).
 
 # 1) Build the Expo web SPA -> /src/app/dist
-FROM node:24-bookworm-slim AS web
+FROM node:26-bookworm-slim AS web
 WORKDIR /src/app
 # Restore first for layer caching. .npmrc carries legacy-peer-deps=true and is load-bearing for `npm ci`.
 # --omit=dev: `expo export` only needs the prod tree (babel-preset-expo rides in via expo) — skipping
