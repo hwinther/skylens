@@ -16,7 +16,7 @@ WORKDIR /src/app
 COPY app/package.json app/package-lock.json app/.npmrc ./
 RUN npm ci --omit=dev --no-audit --no-fund
 COPY app/ ./
-# Version metadata + force-live are compiled into the public JS bundle. NEVER add EXPO_PUBLIC_HOME_LAT/LON
+# Version metadata + force-live are compiled into the public JS bundle. NEVER add EXPO_PUBLIC_HOME_LAT/LON/ALT
 # (secret home coordinates) and NO EXPO_PUBLIC_API_BASE_URL (the app resolves the gateway same-origin).
 ARG APP_VERSION=0.0.0-dev
 ARG GIT_SHA=unknown

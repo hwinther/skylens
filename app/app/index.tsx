@@ -88,7 +88,8 @@ export default function ArScreen() {
     // Seed the projection origin so the overlay can place aircraft before (or instead of) the
     // native GPS watch — on web the one-shot browser fix from useObserverLocation is all we get.
     // useLiveFeed sets the source.
-    if (observer) setObserverPosition({ lat: observer.lat, lon: observer.lon, alt: 0 });
+    if (observer)
+      setObserverPosition({ lat: observer.lat, lon: observer.lon, alt: observer.alt ?? 0 });
     if (!cameraPermission?.granted) void requestCameraPermission();
   }, [demoMode, observer, setObserverPosition, cameraPermission?.granted, requestCameraPermission]);
 
