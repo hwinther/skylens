@@ -35,6 +35,9 @@ yarn-error.*
 .env.*
 !.env.example
 
+# Google Play service account key for `eas submit` — never committed (see eas.json submit profile)
+google-play-service-account.json
+
 # typescript
 *.tsbuildinfo
 
