@@ -1,0 +1,104 @@
+name: "Build Android app (AAB)"
+
+# Self-hosted alternative to EAS Build: prebuild the Expo (CNG) project and run a signed Gradle
+# bundleRelease on a GitHub runner — no EAS cloud queue or per-build cap. Produces an AAB artifact,
+# and (opt-in) uploads it to the Play internal-testing track.
+#
+# Required repository secrets:
+#   GOOGLE_MAPS_API_KEY             — Maps SDK key (same value as app/.env.local / the EAS env var)
+#   ANDROID_UPLOAD_KEYSTORE_BASE64  — base64 of the upload keystore (export the EAS-managed one)
+#   ANDROID_KEYSTORE_PASSWORD       — keystore store password
+#   ANDROID_KEY_ALIAS               — key alias
+#   ANDROID_KEY_PASSWORD            — key password
+#   PLAY_SERVICE_ACCOUNT_JSON       — (upload only) Google Play service-account JSON
+#
+# The `uses:` below are on version tags for readability — pin them to full commit SHAs (with a
+# trailing "# vX" comment) before merging, to satisfy zizmor (e.g. run `pinact run`).
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload_to_play:
+        description: "Also upload the AAB to the Play internal-testing track (first upload must be manual)"
+        type: boolean
+        default: false
+  push:
+    tags:
+      - "app-v*" # mobile releases, kept separate from the backend's v* tags
+
+concurrency:
+  group: "${{ github.workflow }} @ ${{ github.ref }}"
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4 # pin to SHA
+
+      - name: Setup Node
+        uses: actions/setup-node@v4 # pin to SHA
+        with:
+          node-version: "24.x"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4 # pin to SHA
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Install dependencies
+        run: npm ci # app/.npmrc pins legacy-peer-deps=true
+
+      - name: Prebuild native Android project
+        env:
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          ANDROID_VERSION_CODE: ${{ github.run_number }} # monotonic per run — see app/app.config.js
+        run: npx expo prebuild -p android --no-install
+
+      - name: Decode upload keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+        run: echo "$KEYSTORE_BASE64" | base64 -d > "${{ runner.temp }}/upload.keystore"
+
+      - name: Build signed release bundle (AAB)
+        working-directory: app/android
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/upload.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:bundleRelease --no-daemon \
+            -Pandroid.injected.signing.store.file="$KEYSTORE_PATH" \
+            -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4 # pin to SHA
+        with:
+          name: skylens-release-aab
+          path: app/android/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+
+      - name: Upload to Play (internal testing)
+        if: ${{ inputs.upload_to_play }}
+        uses: r0adkll/upload-google-play@v1 # pin to SHA
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: no.wsh.skylens
+          releaseFiles: app/android/app/build/outputs/bundle/release/*.aab
+          track: internal
+          status: completed
