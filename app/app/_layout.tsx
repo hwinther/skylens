@@ -9,6 +9,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Tabs } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
 import { hydrateTokens } from "@/auth/tokenStore";
 import { useAuthStore } from "@/state/authStore";
@@ -55,10 +56,42 @@ export default function RootLayout() {
             tabBarInactiveTintColor: "#5c7a94",
           }}
         >
-          <Tabs.Screen name="index" options={{ title: "AR" }} />
-          <Tabs.Screen name="map" options={{ title: "Map" }} />
-          <Tabs.Screen name="list" options={{ title: "List" }} />
-          <Tabs.Screen name="settings" options={{ title: "Settings" }} />
+          <Tabs.Screen
+            name="index"
+            options={{
+              title: "AR",
+              tabBarIcon: ({ color, size, focused }) => (
+                <Ionicons name={focused ? "scan" : "scan-outline"} size={size} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="map"
+            options={{
+              title: "Map",
+              tabBarIcon: ({ color, size, focused }) => (
+                <Ionicons name={focused ? "map" : "map-outline"} size={size} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="list"
+            options={{
+              title: "List",
+              tabBarIcon: ({ color, size, focused }) => (
+                <Ionicons name={focused ? "list" : "list-outline"} size={size} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="settings"
+            options={{
+              title: "Settings",
+              tabBarIcon: ({ color, size, focused }) => (
+                <Ionicons name={focused ? "settings" : "settings-outline"} size={size} color={color} />
+              ),
+            }}
+          />
           <Tabs.Screen name="sign-in" options={{ href: null }} />
           <Tabs.Screen name="oauth" options={{ href: null }} />
         </Tabs>

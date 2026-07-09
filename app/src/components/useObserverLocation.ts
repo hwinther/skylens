@@ -28,7 +28,12 @@ export function useObserverLocation(enabled: boolean): HomeLocation | null {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (!alive || status !== "granted") return;
         const pos = await Location.getCurrentPositionAsync({});
-        if (alive) setFix({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+        if (alive)
+          setFix({
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+            ...(pos.coords.altitude != null ? { alt: pos.coords.altitude } : {}),
+          });
       } catch {
         // No geolocation (denied, unsupported, timeout): stay null. The hub subscription
         // just never happens, matching the previous behavior when no position was known.
