@@ -40,6 +40,10 @@ export function createAircraftHubConnection(config: HubFactoryConfig): HubConnec
       // Force WS: no negotiation fallback to SSE/long-poll on native.
       skipNegotiation: true,
       accessTokenFactory: () => getToken() ?? "",
+      // The handshake's User-Agent — which our CrowdSec edge gateway 403s as "okhttp/…" — is set
+      // natively via an okhttp interceptor (the withAndroidUserAgent config plugin). RN's
+      // WebSocketModule builds on OkHttpClientProvider.getOkHttpClient(), so the interceptor
+      // covers the WS upgrade too; @microsoft/signalr exposes no WebSocket option to do it here.
     })
     .withAutomaticReconnect({
       nextRetryDelayInMilliseconds: (ctx) =>
