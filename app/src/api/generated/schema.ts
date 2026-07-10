@@ -187,6 +187,12 @@ export interface components {
             /** Format: int64 */
             messageCount?: number;
             version?: string | null;
+            aisConnected?: boolean;
+            /** Format: int32 */
+            vesselCount?: number;
+            /** Format: double */
+            aisLastMessageAgeSeconds?: number | null;
+            aisStale?: boolean;
         };
         "Skylens.Api.Enrichment.AircraftMetadata": {
             hex: string | null;
