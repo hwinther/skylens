@@ -14,12 +14,18 @@ public static class HealthEndpoints
 {
     public static IEndpointRouteBuilder MapHealthEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/healthz", Ok<HealthResponse> (IngestStatus status, TimeProvider time) =>
+        app.MapGet("/healthz", Ok<HealthResponse> (IngestStatus status, VesselIngestStatus vesselStatus, TimeProvider time) =>
            {
                var now = time.GetUtcNow();
                var last = status.LastMessageAt;
                var ageSeconds = last is null ? (double?)null : (now - last.Value).TotalSeconds;
                var fresh = status.IsFresh(now);
+
+               // AIS rides the same MQTT connection, so it reuses the aircraft feed's connected flag. Its
+               // freshness is tracked separately (15-min threshold) and reported additively — it must NOT
+               // influence the top-level Status, which stays aircraft-only for probes/dashboards.
+               var aisLast = vesselStatus.LastMessageAt;
+               var aisAgeSeconds = aisLast is null ? (double?)null : (now - aisLast.Value).TotalSeconds;
 
                return TypedResults.Ok(new HealthResponse(
                    Status: fresh ? "healthy" : "degraded",
@@ -27,7 +33,11 @@ public static class HealthEndpoints
                    LastMessageAgeSeconds: ageSeconds,
                    AircraftCount: status.LastAircraftCount,
                    MessageCount: status.MessageCount,
-                   Version: ApiBuildMetadata.Version));
+                   Version: ApiBuildMetadata.Version,
+                   AisConnected: status.Connected,
+                   VesselCount: vesselStatus.LastVesselCount,
+                   AisLastMessageAgeSeconds: aisAgeSeconds,
+                   AisStale: !vesselStatus.IsFresh(now)));
            })
            .AllowAnonymous()
            .WithName("Healthz");
@@ -35,12 +45,20 @@ public static class HealthEndpoints
         return app;
     }
 
-    /// <summary>Health payload. <c>degraded</c> when the last MQTT message is older than 30 s (or none yet).</summary>
+    /// <summary>
+    ///     Health payload. Top-level <c>Status</c> is <c>degraded</c> when the last aircraft MQTT message
+    ///     is older than 30 s (or none yet) — unchanged, and deliberately independent of the AIS fields.
+    ///     The <c>Ais*</c> fields report the vessel feed additively (<c>AisStale</c> uses a 15-min threshold).
+    /// </summary>
     public sealed record HealthResponse(
         string Status,
         bool MqttConnected,
         double? LastMessageAgeSeconds,
         int AircraftCount,
         long MessageCount,
-        string Version);
+        string Version,
+        bool AisConnected,
+        int VesselCount,
+        double? AisLastMessageAgeSeconds,
+        bool AisStale);
 }

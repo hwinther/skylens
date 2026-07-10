@@ -139,6 +139,11 @@ builder.Services.AddSingleton<ViewerRegistry>();
 builder.Services.AddSingleton<AircraftStateStore>();
 builder.Services.AddHostedService(static sp => sp.GetRequiredService<AircraftStateStore>());
 
+// AIS vessel domain: a second state store fed from the same MQTT connection (ais/data topic).
+builder.Services.AddSingleton<VesselIngestStatus>();
+builder.Services.AddSingleton<VesselStateStore>();
+builder.Services.AddHostedService(static sp => sp.GetRequiredService<VesselStateStore>());
+
 // Dev/E2E: replay a captured aircraft.json through the real pipeline instead of a broker. Gated on
 // Development so production can never be fed fabricated aircraft (mirrors the DevAuth gate).
 var mqttConfig = configuration.GetSection(MqttOptions.SectionName).Get<MqttOptions>() ?? new MqttOptions();

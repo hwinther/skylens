@@ -23,8 +23,10 @@
 
   <ItemGroup>
     <!-- The dump1090 fixtures are read at runtime: aircraft-synthetic.json by Dump1090ParserTests,
-         aircraft.json (real capture) by Dump1090ParserRealCaptureTests. -->
+         aircraft.json (real capture) by Dump1090ParserRealCaptureTests. The AIS capture
+         (ais-capture.jsonl) is read by AisCatcherParserRealCaptureTests. -->
     <Content Include="fixtures/*.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="fixtures/*.jsonl" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

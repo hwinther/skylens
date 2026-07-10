@@ -35,6 +35,9 @@ public sealed class MqttOptions
     public string? Username { get; set; }
     public string? Password { get; set; }
 
+    /// <summary>AIS-catcher vessel feed topic, subscribed on the same connection. Empty = AIS ingest off.</summary>
+    public string AisTopic { get; set; } = "ais/data";
+
     /// <summary>
     ///     Dev/E2E only: swap the real broker for a transport that replays <see cref="ReplayFile" />
     ///     through the normal ingest pipeline at 1 Hz. Honored only in Development (see Program.cs).
@@ -44,6 +47,12 @@ public sealed class MqttOptions
 
     /// <summary>Path to a dump1090 <c>aircraft.json</c> replayed when <see cref="Replay" /> is true.</summary>
     public string ReplayFile { get; set; } = string.Empty;
+
+    /// <summary>Dev/E2E only: replay a captured AIS stream alongside <see cref="Replay" />. Wired in a later phase.</summary>
+    public bool AisReplay { get; set; }
+
+    /// <summary>Path to a captured <c>ais/data</c> capture replayed when <see cref="AisReplay" /> is true.</summary>
+    public string? AisReplayFile { get; set; }
 }
 
 /// <summary>

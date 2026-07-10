@@ -54,6 +54,34 @@ public sealed class SmokeTests
     }
 
     [Fact]
+    public async Task Healthz_includes_the_ais_fields_and_status_stays_aircraft_only()
+    {
+        // The AIS vertical extends the payload ADDITIVELY: the Ais* fields must be present on both the
+        // real-JwtBearer and DevAuth boots, and — critically — the top-level "status" must stay driven by
+        // the aircraft feed alone (no broker in-test ⇒ "degraded"), never influenced by the AIS fields.
+        foreach (var factory in new WebApplicationFactory<Program>[] { _factory, _authFactory })
+        {
+            using var client = factory.CreateClient();
+            using var resp = await client.GetAsync("/healthz", TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+
+            var body = await resp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+
+            Assert.Equal("degraded", root.GetProperty("status").GetString());
+            Assert.True(root.TryGetProperty("aisConnected", out var aisConnected));
+            Assert.Equal(JsonValueKind.False, aisConnected.ValueKind); // no broker reachable in-test
+            Assert.True(root.TryGetProperty("vesselCount", out var vesselCount));
+            Assert.Equal(0, vesselCount.GetInt32());
+            Assert.True(root.TryGetProperty("aisLastMessageAgeSeconds", out var aisAge));
+            Assert.Equal(JsonValueKind.Null, aisAge.ValueKind); // no AIS message has ever arrived
+            Assert.True(root.TryGetProperty("aisStale", out var aisStale));
+            Assert.True(aisStale.GetBoolean()); // never-seen feed is stale
+        }
+    }
+
+    [Fact]
     public async Task Root_is_anonymous_and_serves_the_spa_shell()
     {
         using var client = _factory.CreateClient();

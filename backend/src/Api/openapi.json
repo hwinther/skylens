@@ -410,6 +410,21 @@
           "version": {
             "type": "string",
             "nullable": true
+          },
+          "aisConnected": {
+            "type": "boolean"
+          },
+          "vesselCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "aisLastMessageAgeSeconds": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "aisStale": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false
