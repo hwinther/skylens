@@ -36,6 +36,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/client-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ClientLog"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/me": {
         parameters: {
             query?: never;
@@ -139,6 +155,18 @@ export interface components {
         "Skylens.Api.Endpoints.ApiEndpoints.AircraftDetail": {
             state?: components["schemas"]["Skylens.Api.State.AircraftDto"];
             metadata?: components["schemas"]["Skylens.Api.Enrichment.AircraftMetadata"];
+        };
+        "Skylens.Api.Endpoints.ApiEndpoints.ClientLogBatch": {
+            entries?: components["schemas"]["Skylens.Api.Endpoints.ApiEndpoints.ClientLogEntry"][] | null;
+        };
+        "Skylens.Api.Endpoints.ApiEndpoints.ClientLogEntry": {
+            method?: string | null;
+            endpoint?: string | null;
+            /** Format: int32 */
+            status?: number | null;
+            edgeMarkerPresent?: boolean;
+            userAgent?: string | null;
+            detail?: string | null;
         };
         "Skylens.Api.Endpoints.ApiEndpoints.MeResponse": {
             sub?: string | null;
@@ -244,6 +272,28 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Skylens.Api.Endpoints.ApiEndpoints.VersionResponse"];
                 };
+            };
+        };
+    };
+    ClientLog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Skylens.Api.Endpoints.ApiEndpoints.ClientLogBatch"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

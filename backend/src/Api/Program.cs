@@ -214,6 +214,22 @@ builder.Services.AddOpenApiDocumentation();
 
 var app = builder.Build();
 
+// Stamp every response with the backend build version. Its PRESENCE is what tells the client the
+// response actually came from Kestrel — the app's fetch wrapper treats "failed request + no
+// X-Skylens-Api" as "blocked at the edge" (e.g. CrowdSec 403'ing app-shaped traffic before it
+// reaches us) versus a real API/auth outcome. Registered first and via OnStarting so it lands on
+// every response — 401 challenges and static files included — regardless of what produced them.
+var apiVersionHeader = string.IsNullOrWhiteSpace(ApiBuildMetadata.Version) ? "dev" : ApiBuildMetadata.Version;
+app.Use((context, next) =>
+{
+    context.Response.OnStarting(() =>
+    {
+        context.Response.Headers["X-Skylens-Api"] = apiVersionHeader;
+        return Task.CompletedTask;
+    });
+    return next(context);
+});
+
 // OpenAPI (/openapi, /swagger) before auth so the docs stay anonymous.
 app.UseOpenApiDocumentation();
 

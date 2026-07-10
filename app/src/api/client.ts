@@ -7,6 +7,7 @@
  */
 
 import { getAccessTokenSync } from "@/auth/tokenStore";
+import { flushClientLog, reportClientFailure } from "./clientLog";
 import type {
   AircraftDetail,
   AircraftDto,
@@ -21,6 +22,8 @@ export class ApiError extends Error {
     public readonly status: number,
     message: string,
     public readonly body?: unknown,
+    /** True when the failure never reached the backend (no X-Skylens-Api marker) — killed at the edge. */
+    public readonly edgeBlocked: boolean = false,
   ) {
     super(message);
     this.name = "ApiError";
@@ -56,7 +59,21 @@ export class ApiClient {
     headers.set("Accept", "application/json");
     if (token) headers.set("Authorization", `Bearer ${token}`);
 
-    const res = await this.fetchImpl(`${this.baseUrl}${path}`, { ...init, headers });
+    const method = init?.method ?? "GET";
+
+    let res: Response;
+    try {
+      res = await this.fetchImpl(`${this.baseUrl}${path}`, { ...init, headers });
+    } catch (err) {
+      // No response at all (network drop / TLS reset — a dropped edge block looks like this too).
+      reportClientFailure({ method, endpoint: path, status: null, edgeMarkerPresent: false, detail: String(err) });
+      throw err;
+    }
+
+    // The X-Skylens-Api marker proves the response came from Kestrel; its absence on a failure means
+    // an edge gateway (CrowdSec) killed the request before it reached us.
+    const reachedBackend = res.headers.get("X-Skylens-Api") != null;
+
     if (!res.ok) {
       let body: unknown;
       try {
@@ -64,8 +81,23 @@ export class ApiClient {
       } catch {
         body = await res.text().catch(() => undefined);
       }
-      throw new ApiError(res.status, `${init?.method ?? "GET"} ${path} → ${res.status}`, body);
+      // Report incident-worthy failures (edge blocks + auth + server errors); skip routine 4xx like a
+      // /route/cached 404 that callers expect and swallow, to keep the backend log signal high.
+      if (!reachedBackend || res.status === 401 || res.status === 403 || res.status >= 500) {
+        reportClientFailure({
+          method,
+          endpoint: path,
+          status: res.status,
+          edgeMarkerPresent: reachedBackend,
+          detail: typeof body === "string" ? body.slice(0, 200) : undefined,
+        });
+      }
+      throw new ApiError(res.status, `${method} ${path} → ${res.status}`, body, !reachedBackend);
     }
+
+    // A success reached the backend → a good moment to flush any buffered failures (piggyback).
+    void flushClientLog(this.baseUrl, this.fetchImpl);
+
     if (res.status === 204) return undefined as T;
     return (await res.json()) as T;
   }

@@ -1,4 +1,5 @@
 import { ApiClient, ApiError } from "@/api/client";
+import { resetClientLog } from "@/api/clientLog";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -8,6 +9,9 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe("ApiClient", () => {
+  // Failures are buffered at module scope for /api/client-log; reset so cases don't leak into each other.
+  beforeEach(() => resetClientLog());
+
   it("injects the bearer token and Accept header", async () => {
     const calls: { url: string; headers: Headers }[] = [];
     const fetchImpl = (async (url: string, init?: RequestInit) => {
@@ -67,5 +71,22 @@ describe("ApiClient", () => {
     const client = new ApiClient({ baseUrl: "http://x", getToken: () => null, fetchImpl });
     await expect(client.me()).rejects.toBeInstanceOf(ApiError);
     await expect(client.me()).rejects.toMatchObject({ status: 401 });
+  });
+
+  it("flags a failure with no X-Skylens-Api marker as edge-blocked", async () => {
+    const fetchImpl = (async () =>
+      new Response(JSON.stringify({ error: "forbidden" }), { status: 403 })) as unknown as typeof fetch;
+    const client = new ApiClient({ baseUrl: "http://x", getToken: () => null, fetchImpl });
+    await expect(client.me()).rejects.toMatchObject({ status: 403, edgeBlocked: true });
+  });
+
+  it("treats a failure carrying the marker as a real API outcome, not edge-blocked", async () => {
+    const fetchImpl = (async () =>
+      new Response(JSON.stringify({ error: "forbidden" }), {
+        status: 403,
+        headers: { "X-Skylens-Api": "1.2.3" },
+      })) as unknown as typeof fetch;
+    const client = new ApiClient({ baseUrl: "http://x", getToken: () => null, fetchImpl });
+    await expect(client.me()).rejects.toMatchObject({ status: 403, edgeBlocked: false });
   });
 });
