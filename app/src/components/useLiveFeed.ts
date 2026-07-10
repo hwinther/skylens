@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { HubConnectionState, type HubConnection } from "@microsoft/signalr";
 import { createAircraftHubConnection, onSnapshot, onStatus, subscribe } from "@/api/signalr";
+import { flushClientLog } from "@/api/clientLog";
 import { useAircraftStore } from "@/state/aircraftStore";
 import { useAuthStore } from "@/state/authStore";
 
@@ -80,6 +81,8 @@ export function useLiveFeed({ enabled, baseUrl, observer, radiusKm }: UseLiveFee
     conn.onreconnected(() => {
       setConnection("connected");
       void subscribeNow();
+      // Hub connectivity is back — flush any client failures buffered during the outage.
+      void flushClientLog(baseUrl);
     });
     conn.onclose(() => setConnection("disconnected"));
 
@@ -92,6 +95,7 @@ export function useLiveFeed({ enabled, baseUrl, observer, radiusKm }: UseLiveFee
       .then(() => {
         if (cancelled) return;
         setConnection("connected");
+        void flushClientLog(baseUrl);
         return subscribeNow();
       })
       .catch((err: unknown) => {

@@ -46,6 +46,29 @@
         }
       }
     },
+    "/api/client-log": {
+      "post": {
+        "tags": [
+          "Skylens.Api, Version=0.0.0.1, Culture=neutral, PublicKeyToken=null"
+        ],
+        "operationId": "ClientLog",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Skylens.Api.Endpoints.ApiEndpoints.ClientLogBatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
     "/api/me": {
       "get": {
         "tags": [
@@ -279,6 +302,49 @@
           },
           "metadata": {
             "$ref": "#/components/schemas/Skylens.Api.Enrichment.AircraftMetadata"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Skylens.Api.Endpoints.ApiEndpoints.ClientLogBatch": {
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Skylens.Api.Endpoints.ApiEndpoints.ClientLogEntry"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Skylens.Api.Endpoints.ApiEndpoints.ClientLogEntry": {
+        "type": "object",
+        "properties": {
+          "method": {
+            "type": "string",
+            "nullable": true
+          },
+          "endpoint": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "edgeMarkerPresent": {
+            "type": "boolean"
+          },
+          "userAgent": {
+            "type": "string",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
           }
         },
         "additionalProperties": false

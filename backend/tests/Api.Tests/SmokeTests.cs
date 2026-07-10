@@ -162,6 +162,39 @@ public sealed class SmokeTests
         Assert.Equal(JsonValueKind.String, sha.ValueKind);
     }
 
+    [Fact]
+    public async Task Every_response_carries_the_X_Skylens_Api_marker_including_on_401()
+    {
+        using var client = _factory.CreateClient();
+
+        // The marker's PRESENCE is how the app distinguishes "reached the backend" from "killed at the
+        // edge (CrowdSec) before Kestrel". It must land on anonymous 200s AND auth 401s alike.
+        using var ok = await client.GetAsync("/healthz", TestContext.Current.CancellationToken);
+        using var unauthorized = await client.GetAsync("/api/me", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, unauthorized.StatusCode);
+        foreach (var resp in new[] { ok, unauthorized })
+        {
+            Assert.True(resp.Headers.Contains("X-Skylens-Api"), "X-Skylens-Api header is missing");
+            Assert.False(string.IsNullOrEmpty(resp.Headers.GetValues("X-Skylens-Api").First()));
+        }
+    }
+
+    [Fact]
+    public async Task Client_log_accepts_an_anonymous_post()
+    {
+        using var client = _factory.CreateClient();
+
+        // Anonymous by design: it must capture failures that happen without a token (auth / edge blocks).
+        using var content = new StringContent(
+            """{"entries":[{"method":"GET","endpoint":"/api/aircraft","status":403,"edgeMarkerPresent":false,"userAgent":"Skylens/0.1.0","detail":"blocked"}]}""",
+            System.Text.Encoding.UTF8,
+            "application/json");
+        using var resp = await client.PostAsync("/api/client-log", content, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NoContent, resp.StatusCode);
+    }
+
     public sealed class SkylensFactory : WebApplicationFactory<Program>
     {
         protected override IHost CreateHost(IHostBuilder builder)

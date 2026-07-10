@@ -26,6 +26,25 @@ public static class ApiEndpoints
                                                          Sha: ApiBuildMetadata.Sha)))
            .WithName("Version");
 
+        // POST /api/client-log — the app posts summaries of its OWN failed requests so client-side
+        // failures land in the backend logs (→ OTLP → Loki → Grafana). AllowAnonymous is the whole
+        // point: it must capture failures that happen without a token (auth failures, edge blocks).
+        // Bounded (MaxEntries) and rate-limited by the group's per-IP "global" bucket so an anonymous
+        // endpoint can't be used to flood logs.
+        api.MapPost("/client-log",
+                    (ClientLogBatch batch, ILoggerFactory loggerFactory) =>
+                    {
+                        var log = loggerFactory.CreateLogger("Skylens.Api.ClientLog");
+                        foreach (var e in (batch.Entries ?? []).Take(ClientLogBatch.MaxEntries))
+                            log.LogWarning(
+                                "client-reported failure: {Method} {Endpoint} status={Status} edgeMarker={EdgeMarker} ua={ClientUserAgent} detail={Detail}",
+                                Truncate(e.Method, 8), Truncate(e.Endpoint, 200), e.Status,
+                                e.EdgeMarkerPresent, Truncate(e.UserAgent, 120), Truncate(e.Detail, 500));
+                        return TypedResults.NoContent();
+                    })
+           .AllowAnonymous()
+           .WithName("ClientLog");
+
         // GET /api/me — echo the caller's identity claims.
         api.MapGet("/me", (ClaimsPrincipal user) => TypedResults.Ok(new MeResponse(
                                                                         Sub: user.Sub(),
@@ -158,4 +177,17 @@ public static class ApiEndpoints
     public sealed record AircraftDetail(AircraftDto? State, AircraftMetadata? Metadata);
 
     public sealed record VersionResponse(string Version, string Sha);
+
+    private static string Truncate(string? value, int max) =>
+        string.IsNullOrEmpty(value) ? "" : value.Length <= max ? value : value[..max];
+
+    /// <summary>One client-reported request failure (a summary the app sends, not the payload).</summary>
+    public sealed record ClientLogEntry(
+        string? Method, string? Endpoint, int? Status, bool EdgeMarkerPresent, string? UserAgent, string? Detail);
+
+    /// <summary>A batch of client failures flushed together; capped server-side at <see cref="MaxEntries" />.</summary>
+    public sealed record ClientLogBatch(ClientLogEntry[]? Entries)
+    {
+        public const int MaxEntries = 50;
+    }
 }
