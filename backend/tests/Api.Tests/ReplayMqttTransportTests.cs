@@ -113,11 +113,11 @@ public sealed class ReplayMqttTransportTests
 
         // Both loops publish their first record immediately on connect (no timer advance needed). Await
         // the real events with a generous safety timeout rather than sleeping a fixed amount.
-        var aircraftMessage = await aircraft.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        var aisMessage = await ais.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var aircraftMessage = await aircraft.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        var aisMessage = await ais.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         // Aircraft replay is unchanged: the whole file is published byte-for-byte.
-        Assert.Equal(await File.ReadAllBytesAsync(FixturePath("aircraft.json")), aircraftMessage.Payload.ToArray());
+        Assert.Equal(await File.ReadAllBytesAsync(FixturePath("aircraft.json"), TestContext.Current.CancellationToken), aircraftMessage.Payload.ToArray());
 
         // AIS payload is a single, non-blank, well-formed record — not a blank separator line.
         var aisText = Encoding.UTF8.GetString(aisMessage.Payload.Span);
