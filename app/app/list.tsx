@@ -1,17 +1,20 @@
 /**
- * List view: a tabular readout of the current traffic — type icon, callsign, distance + bearing from
- * you, flight level and ground speed — sorted nearest-first. Same 1 Hz store as AR/Map; tap opens the
- * detail sheet. Cross-platform (no map deps).
+ * List view: a tabular readout of the current traffic — type icon, callsign/name, distance + bearing
+ * from you, and two trailing figures (aircraft: flight level + ground speed; ships: SOG + COG) —
+ * merged into one nearest-first list. Same 1 Hz / 5 s stores as AR/Map. Tapping an aircraft opens the
+ * detail sheet; ships are read-only for now (no vessel detail sheet yet). Cross-platform (no map deps).
  */
 
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useAircraftList } from "@/state/aircraftStore";
+import { useVesselList } from "@/state/vesselStore";
 import { useSettingsStore } from "@/state/settingsStore";
 import { DetailSheet } from "@/components";
 import { iconForCategory } from "@/components/aircraftIcon";
+import { iconForVessel } from "@/components/vesselIcon";
 import { compass8, relativePosition } from "@/components/webmap/relative";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl, getHomeLocation } from "@/api/config";
@@ -19,7 +22,10 @@ import { DEMO_HOME } from "@/mock/mockFeed";
 
 export default function ListScreen() {
   const aircraft = useAircraftList();
+  const vessels = useVesselList();
   const demoMode = useSettingsStore((s) => s.demoMode);
+  const showShips = useSettingsStore((s) => s.showShips);
+  const showAton = useSettingsStore((s) => s.showAton);
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
   const observer = useMemo(
@@ -27,39 +33,72 @@ export default function ListScreen() {
     [demoMode],
   );
 
-  const rows = useMemo(
-    () =>
-      aircraft
-        .filter((a) => a.lat != null && a.lon != null)
-        .map((a) => ({ a, ...relativePosition(observer, a.lat as number, a.lon as number) }))
-        .sort((x, y) => x.distanceKm - y.distanceKm),
-    [aircraft, observer],
-  );
+  // Aircraft and (toggle-permitted) vessels merged into one list, sorted nearest-first. A per-row
+  // kind discriminates the render — aircraft carry FL/GS, ships carry SOG/COG and their flag.
+  const rows = useMemo(() => {
+    const acRows = aircraft
+      .filter((a) => a.lat != null && a.lon != null)
+      .map((a) => ({
+        kind: "aircraft" as const,
+        key: `ac-${a.hex}`,
+        a,
+        ...relativePosition(observer, a.lat as number, a.lon as number),
+      }));
+    const shipRows = vessels
+      .filter((v) => v.lat != null && v.lon != null && (v.kind === "aton" ? showAton : showShips))
+      .map((v) => ({
+        kind: "vessel" as const,
+        key: `ship-${v.mmsi}`,
+        v,
+        icon: iconForVessel(v),
+        ...relativePosition(observer, v.lat as number, v.lon as number),
+      }));
+    return [...acRows, ...shipRows].sort((x, y) => x.distanceKm - y.distanceKm);
+  }, [aircraft, vessels, observer, showShips, showAton]);
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <Text testID="list-count" style={styles.heading}>
-        Aircraft ({rows.length})
+        Traffic ({rows.length})
       </Text>
       <ScrollView testID="list-scroll">
-        {rows.map(({ a, distanceKm, bearingDeg }) => (
-          <Pressable
-            key={a.hex}
-            testID={`list-ac-${a.hex}`}
-            onPress={() => setSelectedHex(a.hex)}
-            style={styles.row}
-          >
-            <MaterialCommunityIcons name={iconForCategory(a.cat)} size={18} color="#78C8FF" />
-            <Text style={styles.callsign} numberOfLines={1}>
-              {a.flight?.trim() || a.hex.toUpperCase()}
-            </Text>
-            <Text style={styles.meta}>
-              {distanceKm.toFixed(1)} km {compass8(bearingDeg)}
-            </Text>
-            <Text style={styles.meta}>{a.fl != null ? `FL${String(a.fl).padStart(3, "0")}` : "—"}</Text>
-            <Text style={styles.meta}>{a.gs != null ? `${Math.round(a.gs)} kt` : "—"}</Text>
-          </Pressable>
-        ))}
+        {rows.map((row) =>
+          row.kind === "aircraft" ? (
+            <Pressable
+              key={row.key}
+              testID={`list-ac-${row.a.hex}`}
+              onPress={() => setSelectedHex(row.a.hex)}
+              style={styles.row}
+            >
+              <MaterialCommunityIcons name={iconForCategory(row.a.cat)} size={18} color="#78C8FF" />
+              <Text style={styles.callsign} numberOfLines={1}>
+                {row.a.flight?.trim() || row.a.hex.toUpperCase()}
+              </Text>
+              <Text style={styles.meta}>
+                {row.distanceKm.toFixed(1)} km {compass8(row.bearingDeg)}
+              </Text>
+              <Text style={styles.meta}>
+                {row.a.fl != null ? `FL${String(row.a.fl).padStart(3, "0")}` : "—"}
+              </Text>
+              <Text style={styles.meta}>{row.a.gs != null ? `${Math.round(row.a.gs)} kt` : "—"}</Text>
+            </Pressable>
+          ) : (
+            <View key={row.key} testID={`list-ship-${row.v.mmsi}`} style={styles.row}>
+              <MaterialCommunityIcons name={row.icon.name} size={18} color={row.icon.color} />
+              <View style={styles.marineLabel}>
+                <Text style={styles.shipName} numberOfLines={1}>
+                  {row.v.name?.trim() || row.v.mmsi}
+                </Text>
+                {row.v.flag ? <Text style={styles.flag}>{row.v.flag}</Text> : null}
+              </View>
+              <Text style={styles.meta}>
+                {row.distanceKm.toFixed(1)} km {compass8(row.bearingDeg)}
+              </Text>
+              <Text style={styles.meta}>{row.v.sog != null ? `${Math.round(row.v.sog)} kn` : "—"}</Text>
+              <Text style={styles.meta}>{row.v.cog != null ? `${Math.round(row.v.cog)}°` : "—"}</Text>
+            </View>
+          ),
+        )}
       </ScrollView>
       <DetailSheet hex={selectedHex} client={client} onClose={() => setSelectedHex(null)} />
     </SafeAreaView>
@@ -79,5 +118,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   callsign: { color: "#EAF6FF", fontSize: 14, fontWeight: "600", flex: 1 },
+  marineLabel: { flex: 1, flexDirection: "row", alignItems: "center", gap: 6 },
+  shipName: { color: "#EAF6FF", fontSize: 14, fontWeight: "600", flexShrink: 1 },
+  flag: { color: "#9FC7E0", fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
   meta: { color: "#9FC7E0", fontSize: 12, minWidth: 74, textAlign: "right" },
 });

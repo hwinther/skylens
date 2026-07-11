@@ -11,9 +11,10 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { HubConnectionState, type HubConnection } from "@microsoft/signalr";
-import { createAircraftHubConnection, onSnapshot, onStatus, subscribe } from "@/api/signalr";
+import { createAircraftHubConnection, onSnapshot, onStatus, onVessels, subscribe } from "@/api/signalr";
 import { flushClientLog } from "@/api/clientLog";
 import { useAircraftStore } from "@/state/aircraftStore";
+import { useVesselStore } from "@/state/vesselStore";
 import { useAuthStore } from "@/state/authStore";
 
 export interface LiveObserver {
@@ -36,6 +37,9 @@ export function useLiveFeed({ enabled, baseUrl, observer, radiusKm }: UseLiveFee
   const setSnapshot = useAircraftStore((s) => s.setSnapshot);
   const setConnection = useAircraftStore((s) => s.setConnection);
   const setSource = useAircraftStore((s) => s.setSource);
+  // Vessels ride this same connection (the "vessels" message) but live in their own store.
+  const setVessels = useVesselStore((s) => s.setSnapshot);
+  const clearVessels = useVesselStore((s) => s.clear);
   // In production the hub requires a bearer (RequireAuthorization), so an anonymous connect 401s
   // at the WS handshake. accessTokenFactory reads the token store at connect time, but a FAILED
   // start is never retried — so sign-in/out must tear the connection down and reconnect. Keyed on
@@ -73,10 +77,14 @@ export function useLiveFeed({ enabled, baseUrl, observer, radiusKm }: UseLiveFee
     const conn = createAircraftHubConnection({ baseUrl });
     connRef.current = conn;
     const offSnapshot = onSnapshot(conn, (aircraft) => setSnapshot(aircraft));
+    const offVessels = onVessels(conn, (vessels) => setVessels(vessels));
     // A "status" frame means the server has no aircraft for us this tick (own feed empty and
-    // away-mode unavailable) — clear the list so stale aircraft don't linger, and it silences
-    // SignalR's "no client method 'status'" warning.
-    const offStatus = onStatus(conn, () => setSnapshot([]));
+    // away-mode unavailable) — clear both lists so stale aircraft/ships don't linger, and it
+    // silences SignalR's "no client method 'status'" warning.
+    const offStatus = onStatus(conn, () => {
+      setSnapshot([]);
+      clearVessels();
+    });
     conn.onreconnecting(() => setConnection("reconnecting"));
     conn.onreconnected(() => {
       setConnection("connected");
@@ -84,7 +92,10 @@ export function useLiveFeed({ enabled, baseUrl, observer, radiusKm }: UseLiveFee
       // Hub connectivity is back — flush any client failures buffered during the outage.
       void flushClientLog(baseUrl);
     });
-    conn.onclose(() => setConnection("disconnected"));
+    conn.onclose(() => {
+      setConnection("disconnected");
+      clearVessels();
+    });
 
     let cancelled = false;
     setConnection("connecting");
@@ -107,12 +118,24 @@ export function useLiveFeed({ enabled, baseUrl, observer, radiusKm }: UseLiveFee
     return () => {
       cancelled = true;
       offSnapshot();
+      offVessels();
       offStatus();
+      clearVessels();
       connRef.current = null;
       setConnection("disconnected");
       void conn.stop();
     };
-  }, [enabled, baseUrl, authenticated, setSnapshot, setConnection, setSource, subscribeNow]);
+  }, [
+    enabled,
+    baseUrl,
+    authenticated,
+    setSnapshot,
+    setVessels,
+    clearVessels,
+    setConnection,
+    setSource,
+    subscribeNow,
+  ]);
 
   // Re-subscribe when the observer position or radius changes (hub throttles to 1/10 s).
   useEffect(() => {

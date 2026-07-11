@@ -4,6 +4,7 @@ export * from "./ArOverlay";
 export * from "./DetailSheet";
 export * from "./CompassCalibration";
 export * from "./StatusStrip";
+export * from "./VesselLabel";
 export * from "./usePoseRefs";
 export * from "./useDemoPose";
 export * from "./useLiveFeed";

@@ -58,6 +58,9 @@ COPY --from=aircraftdb /out/aircraft.csv.gz /app/data/aircraft.csv.gz
 # Public ADS-B capture replayed by Mqtt__Replay + Mqtt__ReplayFile in preview/e2e envs (never in prod;
 # replay is gated on Development). ADS-B is broadcast data, so committing/baking the capture is fine.
 COPY backend/tests/Api.Tests/fixtures/aircraft.json /app/fixtures/aircraft.json
+# Public AIS capture replayed by Mqtt__AisReplay + Mqtt__AisReplayFile alongside the aircraft feed.
+# AIS is broadcast data too, so baking the capture is fine (JSONL: one record per line, blank-separated).
+COPY backend/tests/Api.Tests/fixtures/ais-capture.jsonl /app/fixtures/ais.jsonl
 
 ENV ASPNETCORE_URLS=http://0.0.0.0:8080 \
     DOTNET_RUNNING_IN_CONTAINER=true

@@ -21,10 +21,16 @@ interface SettingsState {
   radiusKm: number;
   /** Demo mode: replay recorded feed + drag-to-look instead of camera/sensors. */
   demoMode: boolean;
+  /** Show AIS ships on the map/radar/list. */
+  showShips: boolean;
+  /** Show AIS aids to navigation (lighthouses, beacons, buoys). */
+  showAton: boolean;
   setAzimuthTrim: (deg: number) => void;
   setHFov: (deg: number) => void;
   setRadiusKm: (km: number) => void;
   setDemoMode: (on: boolean) => void;
+  setShowShips: (on: boolean) => void;
+  setShowAton: (on: boolean) => void;
 }
 
 // Opt-in override so the web build / Playwright E2E can boot straight into live mode (which talks to
@@ -65,10 +71,14 @@ export const useSettingsStore = create<SettingsState>()(
       hFovDeg: DEFAULT_HFOV_DEG,
       radiusKm: 60,
       demoMode: !forceLive,
+      showShips: true,
+      showAton: true,
       setAzimuthTrim: (azimuthTrimDeg) => set({ azimuthTrimDeg }),
       setHFov: (hFovDeg) => set({ hFovDeg }),
       setRadiusKm: (radiusKm) => set({ radiusKm }),
       setDemoMode: (demoMode) => set({ demoMode }),
+      setShowShips: (showShips) => set({ showShips }),
+      setShowAton: (showAton) => set({ showAton }),
     }),
     {
       name: "skylens.settings.v1",

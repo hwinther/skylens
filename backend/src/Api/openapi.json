@@ -290,6 +290,95 @@
           }
         }
       }
+    },
+    "/api/vessels": {
+      "get": {
+        "tags": [
+          "Skylens.Api, Version=0.0.0.1, Culture=neutral, PublicKeyToken=null"
+        ],
+        "operationId": "VesselList",
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          {
+            "name": "radiusKm",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Skylens.Api.State.VesselDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/vessels/{mmsi}": {
+      "get": {
+        "tags": [
+          "Skylens.Api, Version=0.0.0.1, Culture=neutral, PublicKeyToken=null"
+        ],
+        "operationId": "VesselDetail",
+        "parameters": [
+          {
+            "name": "mmsi",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Skylens.Api.Endpoints.ApiEndpoints.VesselDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -380,6 +469,18 @@
           "sha": {
             "type": "string",
             "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Skylens.Api.Endpoints.ApiEndpoints.VesselDetail": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/Skylens.Api.State.VesselDto"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/Skylens.Api.Enrichment.VesselMetadata"
           }
         },
         "additionalProperties": false
@@ -495,6 +596,73 @@
         },
         "additionalProperties": false
       },
+      "Skylens.Api.Enrichment.VesselMetadata": {
+        "required": [
+          "mmsi"
+        ],
+        "type": "object",
+        "properties": {
+          "mmsi": {
+            "type": "string",
+            "nullable": true
+          },
+          "flag": {
+            "type": "string",
+            "nullable": true
+          },
+          "callSign": {
+            "type": "string",
+            "nullable": true
+          },
+          "imo": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "destination": {
+            "type": "string",
+            "nullable": true
+          },
+          "eta": {
+            "type": "string",
+            "nullable": true
+          },
+          "draught": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "shipTypeText": {
+            "type": "string",
+            "nullable": true
+          },
+          "dimBow": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "dimStern": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "dimPort": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "dimStarboard": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "source": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "Skylens.Api.State.AircraftDto": {
         "required": [
           "hex"
@@ -551,6 +719,81 @@
           },
           "cat": {
             "type": "string",
+            "nullable": true
+          },
+          "src": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Skylens.Api.State.VesselDto": {
+        "required": [
+          "kind",
+          "mmsi"
+        ],
+        "type": "object",
+        "properties": {
+          "mmsi": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "kind": {
+            "type": "string",
+            "nullable": true
+          },
+          "lat": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "lon": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "sog": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "cog": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "hdg": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "shipType": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "navStatus": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "aidType": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "flag": {
+            "type": "string",
+            "nullable": true
+          },
+          "seen": {
+            "type": "number",
+            "format": "double",
             "nullable": true
           },
           "src": {

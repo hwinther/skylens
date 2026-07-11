@@ -31,12 +31,15 @@ import {
   useAircraftList,
   useAircraftStore,
 } from "@/state/aircraftStore";
+import { useVesselList, useVesselStore } from "@/state/vesselStore";
 import { useSettingsStore } from "@/state/settingsStore";
 
 export default function ArScreen() {
   const demoMode = useSettingsStore((s) => s.demoMode);
   const hFovDeg = useSettingsStore((s) => s.hFovDeg);
   const trimDeg = useSettingsStore((s) => s.azimuthTrimDeg);
+  const showShips = useSettingsStore((s) => s.showShips);
+  const showAton = useSettingsStore((s) => s.showAton);
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
@@ -48,6 +51,8 @@ export default function ArScreen() {
 
   const aircraft = useAircraftList();
   const snapshotAt = useAircraftStore((s) => s.lastSnapshotAt);
+  const vessels = useVesselList();
+  const vesselsSnapshotAt = useVesselStore((s) => s.lastSnapshotAt);
   const connection = useAircraftStore((s) => s.connection);
   const source = useAircraftStore((s) => s.source);
   const setSnapshot = useAircraftStore((s) => s.setSnapshot);
@@ -97,6 +102,10 @@ export default function ArScreen() {
     <ArOverlay
       aircraft={aircraft}
       snapshotAt={snapshotAt}
+      vessels={vessels}
+      vesselsSnapshotAt={vesselsSnapshotAt}
+      showShips={showShips}
+      showAton={showAton}
       poseRef={poseRef}
       positionRef={live.positionRef}
       hFovDeg={hFovDeg}

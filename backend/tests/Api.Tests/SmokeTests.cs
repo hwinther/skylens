@@ -172,6 +172,53 @@ public sealed class SmokeTests
     }
 
     [Fact]
+    public async Task Api_vessels_requires_authentication()
+    {
+        using var client = _factory.CreateClient();
+
+        using var resp = await client.GetAsync("/api/vessels", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task Api_vessel_detail_requires_authentication()
+    {
+        using var client = _factory.CreateClient();
+
+        using var resp = await client.GetAsync("/api/vessels/257249000", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task Api_vessels_returns_empty_list_when_authenticated_and_no_feed()
+    {
+        using var client = _authFactory.CreateClient();
+
+        // No broker in-test, so the vessel store is empty — the endpoint must still return a 200 with a
+        // JSON array (empty), not a 404/500.
+        using var resp = await client.GetAsync("/api/vessels", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        using var doc = JsonDocument.Parse(body);
+        Assert.Equal(JsonValueKind.Array, doc.RootElement.ValueKind);
+        Assert.Equal(0, doc.RootElement.GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Api_vessel_detail_returns_404_for_unknown_mmsi()
+    {
+        using var client = _authFactory.CreateClient();
+
+        // An MMSI the store has never seen yields no state (and thus no derived metadata) → 404.
+        using var resp = await client.GetAsync("/api/vessels/000000000", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+    }
+
+    [Fact]
     public async Task Api_version_returns_shape_when_authenticated()
     {
         using var client = _authFactory.CreateClient();

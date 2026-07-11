@@ -9,14 +9,17 @@ import { useEffect, useMemo, useRef } from "react";
 import L from "leaflet";
 import { MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import type { AircraftDto } from "@/api/types";
+import type { AircraftDto, VesselDto } from "@/api/types";
 import { iconForCategory } from "@/components/aircraftIcon";
+import { iconForVessel } from "@/components/vesselIcon";
 import type { Observer } from "./relative";
 
 export interface LeafletMapProps {
   aircraft: AircraftDto[];
   observer: Observer;
   onSelect: (hex: string) => void;
+  /** AIS vessels to plot alongside aircraft; already filtered to the visible kinds by the caller. */
+  vessels?: VesselDto[];
 }
 
 // Reach the icon-font statics (not in the public types) so Leaflet's raw-HTML markers render the same
@@ -31,6 +34,24 @@ function aircraftIcon(cat: string | null | undefined): L.DivIcon {
   return L.divIcon({
     className: "",
     html: `<span style="font-family:'${iconFont}';font-size:20px;line-height:20px;color:#78C8FF;text-shadow:0 0 3px #000">${glyph}</span>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+  });
+}
+
+/**
+ * Marker for a vessel: its class glyph in the maritime colour iconForVessel picks. Ships are
+ * rotated to course-over-ground (heading fallback); AtoNs stay upright. Same raw-HTML divIcon path
+ * as the aircraft marker so both render from the MCI icon font.
+ */
+function vesselMarkerIcon(v: VesselDto): L.DivIcon {
+  const { name, color } = iconForVessel(v);
+  const code = glyphMap[name];
+  const glyph = code != null ? String.fromCodePoint(code) : "";
+  const rot = v.kind === "ship" ? (v.cog ?? v.hdg ?? 0) : 0;
+  return L.divIcon({
+    className: "",
+    html: `<span style="font-family:'${iconFont}';font-size:20px;line-height:20px;color:${color};text-shadow:0 0 3px #000;display:inline-block;transform:rotate(${rot}deg)">${glyph}</span>`,
     iconSize: [20, 20],
     iconAnchor: [10, 10],
   });
@@ -55,8 +76,9 @@ function FitBounds({ points }: { points: [number, number][] }) {
   return null;
 }
 
-export function LeafletMap({ aircraft, observer, onSelect }: LeafletMapProps) {
+export function LeafletMap({ aircraft, observer, onSelect, vessels = [] }: LeafletMapProps) {
   const positioned = aircraft.filter((a) => a.lat != null && a.lon != null);
+  const positionedVessels = vessels.filter((v) => v.lat != null && v.lon != null);
   const points = useMemo<[number, number][]>(
     () => [
       [observer.lat, observer.lon],
@@ -79,6 +101,15 @@ export function LeafletMap({ aircraft, observer, onSelect }: LeafletMapProps) {
           position={[a.lat as number, a.lon as number]}
           icon={aircraftIcon(a.cat)}
           eventHandlers={{ click: () => onSelect(a.hex) }}
+        />
+      ))}
+      {/* Vessels: non-interactive (no detail sheet yet); a title gives the name/mmsi on hover. */}
+      {positionedVessels.map((v) => (
+        <Marker
+          key={v.mmsi}
+          position={[v.lat as number, v.lon as number]}
+          icon={vesselMarkerIcon(v)}
+          title={v.name?.trim() || v.mmsi}
         />
       ))}
       <FitBounds points={points} />

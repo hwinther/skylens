@@ -18,7 +18,7 @@ import {
   LogLevel,
 } from "@microsoft/signalr";
 import { getAccessTokenSync } from "@/auth/tokenStore";
-import type { AircraftDto } from "./types";
+import type { AircraftDto, VesselDto } from "./types";
 
 export interface HubFactoryConfig {
   /** Base URL of the backend, e.g. "https://skylens.wsh.no". */
@@ -85,6 +85,20 @@ export function onStatus(
 ): () => void {
   connection.on("status", handler);
   return () => connection.off("status", handler);
+}
+
+/**
+ * Register the vessel handler; returns an unsubscribe. The server pushes "vessels" (a slim
+ * VesselDto[], capped at the 300 nearest) on the SAME /hubs/aircraft connection every 5 s — an
+ * empty array clears the ships. Registering it also silences SignalR's "no client method 'vessels'"
+ * warning.
+ */
+export function onVessels(
+  connection: HubConnection,
+  handler: (vessels: VesselDto[]) => void,
+): () => void {
+  connection.on("vessels", handler);
+  return () => connection.off("vessels", handler);
 }
 
 /** Send a subscription request to the hub (server throttles to 1/10 s). */
