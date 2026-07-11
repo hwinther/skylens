@@ -27,10 +27,14 @@ export default function SettingsScreen() {
     hFovDeg,
     radiusKm,
     demoMode,
+    showShips,
+    showAton,
     setAzimuthTrim,
     setHFov,
     setRadiusKm,
     setDemoMode,
+    setShowShips,
+    setShowAton,
   } = useSettingsStore();
   const status = useAuthStore((s) => s.status);
   const mockMode = useAuthStore((s) => s.mockMode);
@@ -122,6 +126,15 @@ export default function SettingsScreen() {
             max={400}
             onChange={setRadiusKm}
           />
+        </Section>
+
+        <Section title="Ships">
+          <Row label="Show ships">
+            <Switch value={showShips} onValueChange={setShowShips} />
+          </Row>
+          <Row label="Show aids to navigation">
+            <Switch value={showAton} onValueChange={setShowAton} />
+          </Row>
         </Section>
 
         <Section title="Demo">

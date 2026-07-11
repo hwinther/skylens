@@ -4,3 +4,4 @@ export * from "./orientation";
 export * from "./projection";
 export * from "./smoothing";
 export * from "./declutter";
+export * from "./surfaceBand";

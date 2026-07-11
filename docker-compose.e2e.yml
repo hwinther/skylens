@@ -23,6 +23,9 @@ services:
       Auth__Disabled: "true"
       Mqtt__Replay: "true"
       Mqtt__ReplayFile: /app/fixtures/aircraft.json
+      # AIS vessel feed replayed on ais/data from the baked JSONL capture (same Development gate).
+      Mqtt__AisReplay: "true"
+      Mqtt__AisReplayFile: /app/fixtures/ais.jsonl
       # MqttIngestService returns early when Mqtt:Host is empty even in replay mode; any non-empty
       # placeholder keeps the ingest loop alive (no broker named "replay" is ever contacted).
       Mqtt__Host: replay

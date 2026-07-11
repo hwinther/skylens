@@ -9,10 +9,12 @@ import { StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import MapView, { Marker } from "react-native-maps";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import type { AircraftDto } from "@/api/types";
+import type { AircraftDto, VesselDto } from "@/api/types";
 import { useAircraftList } from "@/state/aircraftStore";
+import { useVesselList } from "@/state/vesselStore";
 import { useSettingsStore } from "@/state/settingsStore";
 import { DetailSheet, AircraftRadar } from "@/components";
+import { iconForVessel } from "@/components/vesselIcon";
 import { MapViewToggle, type MapView as MapViewMode } from "@/components/webmap/MapViewToggle";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl, getHomeLocation } from "@/api/config";
@@ -54,9 +56,41 @@ function AircraftMarker({
   );
 }
 
+/**
+ * One vessel as its class icon. Ships are rotated flat to their course-over-ground (heading as a
+ * fallback) so the icon points where they're steaming; AtoNs are stationary and drawn upright. Same
+ * tracksViewChanges freeze as AircraftMarker so 1 Hz × N ships don't re-rasterise. Non-tappable for
+ * now (there is no vessel detail sheet yet) — the tap just shows the native title/speed callout.
+ */
+function VesselMarker({ vessel: v }: { vessel: VesselDto }) {
+  const [tracksViewChanges, setTracksViewChanges] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setTracksViewChanges(false), 800);
+    return () => clearTimeout(t);
+  }, []);
+  const { name, color } = iconForVessel(v);
+  const isShip = v.kind === "ship";
+  return (
+    <Marker
+      coordinate={{ latitude: v.lat as number, longitude: v.lon as number }}
+      title={v.name?.trim() || v.mmsi}
+      description={v.sog != null ? `${Math.round(v.sog)} kn` : undefined}
+      anchor={{ x: 0.5, y: 0.5 }}
+      flat
+      rotation={isShip ? (v.cog ?? v.hdg ?? 0) : 0}
+      tracksViewChanges={tracksViewChanges}
+    >
+      <MaterialCommunityIcons name={name} size={22} color={color} />
+    </Marker>
+  );
+}
+
 export default function MapScreen() {
   const aircraft = useAircraftList();
+  const vessels = useVesselList();
   const demoMode = useSettingsStore((s) => s.demoMode);
+  const showShips = useSettingsStore((s) => s.showShips);
+  const showAton = useSettingsStore((s) => s.showAton);
   const [view, setView] = useState<MapViewMode>("radar");
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
@@ -65,13 +99,22 @@ export default function MapScreen() {
     [demoMode],
   );
   const positioned = aircraft.filter((a) => a.lat != null && a.lon != null);
+  // Vessels the toggles allow, positioned only — ships gated by showShips, AtoNs by showAton.
+  const positionedVessels = vessels.filter(
+    (v) => v.lat != null && v.lon != null && (v.kind === "aton" ? showAton : showShips),
+  );
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <MapViewToggle view={view} onChange={setView} count={positioned.length} />
       <View style={styles.body}>
         {view === "radar" ? (
-          <AircraftRadar aircraft={positioned} observer={observer} onSelect={setSelectedHex} />
+          <AircraftRadar
+            aircraft={positioned}
+            vessels={positionedVessels}
+            observer={observer}
+            onSelect={setSelectedHex}
+          />
         ) : (
           <MapView
             style={StyleSheet.absoluteFill}
@@ -85,6 +128,9 @@ export default function MapScreen() {
             />
             {positioned.map((a) => (
               <AircraftMarker key={a.hex} aircraft={a} onSelect={setSelectedHex} />
+            ))}
+            {positionedVessels.map((v) => (
+              <VesselMarker key={v.mmsi} vessel={v} />
             ))}
           </MapView>
         )}

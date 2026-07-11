@@ -148,6 +148,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/vessels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["VesselList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vessels/{mmsi}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["VesselDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -177,6 +209,10 @@ export interface components {
             version?: string | null;
             sha?: string | null;
         };
+        "Skylens.Api.Endpoints.ApiEndpoints.VesselDetail": {
+            state?: components["schemas"]["Skylens.Api.State.VesselDto"];
+            metadata?: components["schemas"]["Skylens.Api.Enrichment.VesselMetadata"];
+        };
         "Skylens.Api.Endpoints.HealthEndpoints.HealthResponse": {
             status?: string | null;
             mqttConnected?: boolean;
@@ -187,6 +223,12 @@ export interface components {
             /** Format: int64 */
             messageCount?: number;
             version?: string | null;
+            aisConnected?: boolean;
+            /** Format: int32 */
+            vesselCount?: number;
+            /** Format: double */
+            aisLastMessageAgeSeconds?: number | null;
+            aisStale?: boolean;
         };
         "Skylens.Api.Enrichment.AircraftMetadata": {
             hex: string | null;
@@ -202,6 +244,27 @@ export interface components {
             originName?: string | null;
             destinationIcao?: string | null;
             destinationName?: string | null;
+            source?: string | null;
+        };
+        "Skylens.Api.Enrichment.VesselMetadata": {
+            mmsi: string | null;
+            flag?: string | null;
+            callSign?: string | null;
+            /** Format: int64 */
+            imo?: number | null;
+            destination?: string | null;
+            eta?: string | null;
+            /** Format: double */
+            draught?: number | null;
+            shipTypeText?: string | null;
+            /** Format: int32 */
+            dimBow?: number | null;
+            /** Format: int32 */
+            dimStern?: number | null;
+            /** Format: int32 */
+            dimPort?: number | null;
+            /** Format: int32 */
+            dimStarboard?: number | null;
             source?: string | null;
         };
         "Skylens.Api.State.AircraftDto": {
@@ -224,6 +287,31 @@ export interface components {
             /** Format: double */
             seen?: number | null;
             cat?: string | null;
+            src?: string | null;
+        };
+        "Skylens.Api.State.VesselDto": {
+            mmsi: string | null;
+            name?: string | null;
+            kind: string | null;
+            /** Format: double */
+            lat?: number | null;
+            /** Format: double */
+            lon?: number | null;
+            /** Format: double */
+            sog?: number | null;
+            /** Format: double */
+            cog?: number | null;
+            /** Format: double */
+            hdg?: number | null;
+            /** Format: int32 */
+            shipType?: number | null;
+            /** Format: int32 */
+            navStatus?: number | null;
+            /** Format: int32 */
+            aidType?: number | null;
+            flag?: string | null;
+            /** Format: double */
+            seen?: number | null;
             src?: string | null;
         };
     };
@@ -456,6 +544,60 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Skylens.Api.State.AircraftDto"][];
                 };
+            };
+        };
+    };
+    VesselList: {
+        parameters: {
+            query?: {
+                lat?: number;
+                lon?: number;
+                radiusKm?: number;
+                kind?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Skylens.Api.State.VesselDto"][];
+                };
+            };
+        };
+    };
+    VesselDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mmsi: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Skylens.Api.Endpoints.ApiEndpoints.VesselDetail"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -35,6 +35,9 @@ public sealed class MqttOptions
     public string? Username { get; set; }
     public string? Password { get; set; }
 
+    /// <summary>AIS-catcher vessel feed topic, subscribed on the same connection. Empty = AIS ingest off.</summary>
+    public string AisTopic { get; set; } = "ais/data";
+
     /// <summary>
     ///     Dev/E2E only: swap the real broker for a transport that replays <see cref="ReplayFile" />
     ///     through the normal ingest pipeline at 1 Hz. Honored only in Development (see Program.cs).
@@ -44,6 +47,12 @@ public sealed class MqttOptions
 
     /// <summary>Path to a dump1090 <c>aircraft.json</c> replayed when <see cref="Replay" /> is true.</summary>
     public string ReplayFile { get; set; } = string.Empty;
+
+    /// <summary>Dev/E2E only: replay a captured AIS stream alongside <see cref="Replay" />. Wired in a later phase.</summary>
+    public bool AisReplay { get; set; }
+
+    /// <summary>Path to a captured <c>ais/data</c> capture replayed when <see cref="AisReplay" /> is true.</summary>
+    public string? AisReplayFile { get; set; }
 }
 
 /// <summary>
@@ -116,4 +125,30 @@ public sealed class AircraftDbOptions
     public const string SectionName = "AircraftDb";
 
     public string Path { get; set; } = "/app/data/aircraft.csv.gz";
+}
+
+/// <summary>
+///     BarentsWatch Live AIS — official Norwegian AIS (NLOD-licensed, free). OAuth2 client-credentials
+///     (scope "ais") against <see cref="TokenEndpoint" />; a daily <see cref="DailyBudget" /> fails closed.
+///     Supplies away-mode vessel coverage in Norwegian waters and static/voyage enrichment for
+///     <c>/api/vessels/{mmsi}</c>. Excludes fishing &lt;15 m and leisure &lt;45 m by license. Credentials
+///     come from env/secrets (<c>BARENTSWATCH__CLIENTID</c> / <c>BARENTSWATCH__CLIENTSECRET</c>), never
+///     committed. <see cref="Configured" /> gates every upstream call.
+/// </summary>
+public sealed class BarentsWatchOptions
+{
+    public const string SectionName = "BarentsWatch";
+
+    public string? ClientId { get; set; }
+    public string? ClientSecret { get; set; }
+
+    /// <summary>OAuth2 token endpoint (client-credentials grant, scope "ais").</summary>
+    public string TokenEndpoint { get; set; } = "https://id.barentswatch.no/connect/token";
+
+    /// <summary>Live AIS API base (latest/combined snapshot + per-MMSI filter live here).</summary>
+    public string BaseUrl { get; set; } = "https://live.ais.barentswatch.no";
+
+    public int DailyBudget { get; set; } = 2000;
+
+    public bool Configured => !string.IsNullOrEmpty(ClientId) && !string.IsNullOrEmpty(ClientSecret);
 }

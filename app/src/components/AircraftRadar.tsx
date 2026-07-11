@@ -7,14 +7,17 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import type { AircraftDto } from "@/api/types";
+import type { AircraftDto, VesselDto } from "@/api/types";
 import { iconForCategory } from "./aircraftIcon";
+import { iconForVessel } from "./vesselIcon";
 import { relativePosition, type Observer } from "./webmap/relative";
 
 export interface AircraftRadarProps {
   aircraft: AircraftDto[];
   observer: Observer;
   onSelect: (hex: string) => void;
+  /** AIS vessels to plot alongside aircraft; already filtered to the visible kinds by the caller. */
+  vessels?: VesselDto[];
 }
 
 /** Round a range up to a tidy 1 / 2 / 5 × 10ⁿ value for the outer ring. */
@@ -28,7 +31,7 @@ function niceMax(km: number): number {
 
 const RINGS = [1 / 3, 2 / 3, 1];
 
-export function AircraftRadar({ aircraft, observer, onSelect }: AircraftRadarProps) {
+export function AircraftRadar({ aircraft, observer, onSelect, vessels = [] }: AircraftRadarProps) {
   const [size, setSize] = useState(0);
   const onLayout = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -38,7 +41,16 @@ export function AircraftRadar({ aircraft, observer, onSelect }: AircraftRadarPro
   const rel = aircraft
     .filter((a) => a.lat != null && a.lon != null)
     .map((a) => ({ a, ...relativePosition(observer, a.lat!, a.lon!) }));
-  const maxRange = niceMax(rel.reduce((m, r) => Math.max(m, r.distanceKm), 0));
+  const vesselRel = vessels
+    .filter((v) => v.lat != null && v.lon != null)
+    .map((v) => ({ v, ...relativePosition(observer, v.lat!, v.lon!) }));
+  // Range scaled to the farthest thing on screen — aircraft or ship — so nothing clips the ring.
+  const maxRange = niceMax(
+    Math.max(
+      rel.reduce((m, r) => Math.max(m, r.distanceKm), 0),
+      vesselRel.reduce((m, r) => Math.max(m, r.distanceKm), 0),
+    ),
+  );
 
   const cx = size / 2;
   const cy = size / 2;
@@ -88,6 +100,20 @@ export function AircraftRadar({ aircraft, observer, onSelect }: AircraftRadarPro
               >
                 <MaterialCommunityIcons name={iconForCategory(a.cat)} size={18} color="rgba(120, 200, 255, 0.95)" />
               </Pressable>
+            );
+          })}
+
+          {/* Vessels: non-interactive blips (no detail sheet yet) in their per-class maritime colour. */}
+          {vesselRel.map(({ v, distanceKm, bearingDeg }) => {
+            const rr = Math.min(distanceKm / maxRange, 1) * R;
+            const rad = (bearingDeg * Math.PI) / 180;
+            const x = cx + rr * Math.sin(rad);
+            const y = cy - rr * Math.cos(rad);
+            const { name, color } = iconForVessel(v);
+            return (
+              <View key={v.mmsi} testID={`map-ship-${v.mmsi}`} style={[styles.blip, { left: x - 12, top: y - 12 }]}>
+                <MaterialCommunityIcons name={name} size={16} color={color} />
+              </View>
             );
           })}
         </View>

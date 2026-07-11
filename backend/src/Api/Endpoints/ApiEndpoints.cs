@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Skylens.Api.Broadcast;
 using Skylens.Api.Enrichment;
 using Skylens.Api.Extensions;
+using Skylens.Api.Ingest;
 using Skylens.Api.State;
 
 namespace Skylens.Api.Endpoints;
@@ -160,7 +161,96 @@ public static class ApiEndpoints
            .RequireRateLimiting("enrichment")
            .WithName("Area");
 
+        // GET /api/vessels[?lat=&lon=&radiusKm=&kind=] — current AIS picture, optionally radius-filtered
+        // and/or restricted to a kind ("ship"/"aton", case-insensitive). Uses the group's "global" limit.
+        api.MapGet("/vessels",
+                   Ok<IReadOnlyList<VesselDto>> (VesselStateStore store, TimeProvider time,
+                                                 double? lat, double? lon, double? radiusKm, string? kind) =>
+                   {
+                       var now = time.GetUtcNow();
+                       var all = store.Snapshot();
+                       IEnumerable<VesselState> filtered = all;
+
+                       if (lat is { } la && lon is { } lo)
+                       {
+                           var r = Math.Clamp(radiusKm ?? 300, 1, 500);
+                           filtered = filtered.Where(v => v.HasPosition &&
+                                                          Geo.DistanceKm(la, lo, v.Lat!.Value, v.Lon!.Value) <= r);
+                       }
+
+                       // Only "ship"/"aton" filter; any other value is ignored (returns the unfiltered kinds).
+                       if (kind is { Length: > 0 } &&
+                           (string.Equals(kind, "ship", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(kind, "aton", StringComparison.OrdinalIgnoreCase)))
+                       {
+                           var wantAton = string.Equals(kind, "aton", StringComparison.OrdinalIgnoreCase);
+                           filtered = filtered.Where(v => (v.Kind == VesselKind.Aton) == wantAton);
+                       }
+
+                       var dtos = filtered.Select(v => VesselDto.FromState(v, now)).ToArray();
+                       return TypedResults.Ok<IReadOnlyList<VesselDto>>(dtos);
+                   })
+           .WithName("VesselList");
+
+        // GET /api/vessels/{mmsi} — live AIS state (if tracked) + resolved static metadata. The live feed's
+        // own static/voyage data wins; BarentsWatch fills the gaps (and covers away-mode vessels we don't
+        // track locally at all). BarentsWatch is only queried when the local feed hasn't supplied static
+        // data yet — mirroring how /api/aircraft/{hex} only falls back to OpenSky on an offline-DB miss —
+        // so a fully-tracked vessel spends no upstream budget. Both halves absent → 404. Stays on the
+        // group's "global" rate limit like /api/aircraft/{hex} (its OpenSky fallback isn't on "enrichment").
+        api.MapGet("/vessels/{mmsi}",
+                   async Task<Results<Ok<VesselDetail>, NotFound>> (
+                       string mmsi,
+                       VesselStateStore store,
+                       BarentsWatchClient barentsWatch,
+                       TimeProvider time,
+                       CancellationToken ct) =>
+                   {
+                       store.TryGet(mmsi, out var state);
+                       var local = state is null ? null : VesselMetadata.FromState(state);
+
+                       var upstream = HasStaticData(local) ? null : await barentsWatch.LookupAsync(mmsi, ct);
+                       var metadata = MergeVesselMetadata(local, upstream);
+
+                       if (state is null && metadata is null)
+                           return TypedResults.NotFound();
+
+                       var dto = state is null ? null : VesselDto.FromState(state, time.GetUtcNow());
+                       return TypedResults.Ok(new VesselDetail(dto, metadata));
+                   })
+           .WithName("VesselDetail");
+
         return app;
+    }
+
+    /// <summary>True when the local feed already carries static/voyage data (so no upstream lookup helps).</summary>
+    internal static bool HasStaticData(VesselMetadata? m) =>
+        m is not null &&
+        (m.CallSign is not null || m.Imo is not null || m.Destination is not null ||
+         m.Eta is not null || m.Draught is not null || m.DimBow is not null);
+
+    /// <summary>Field-merge two metadata halves: the local (state-derived) value wins, upstream fills nulls.</summary>
+    internal static VesselMetadata? MergeVesselMetadata(VesselMetadata? local, VesselMetadata? upstream)
+    {
+        if (local is null)
+            return upstream;
+        if (upstream is null)
+            return local;
+
+        return local with
+        {
+            Flag = local.Flag ?? upstream.Flag,
+            CallSign = local.CallSign ?? upstream.CallSign,
+            Imo = local.Imo ?? upstream.Imo,
+            Destination = local.Destination ?? upstream.Destination,
+            Eta = local.Eta ?? upstream.Eta,
+            Draught = local.Draught ?? upstream.Draught,
+            ShipTypeText = local.ShipTypeText ?? upstream.ShipTypeText,
+            DimBow = local.DimBow ?? upstream.DimBow,
+            DimStern = local.DimStern ?? upstream.DimStern,
+            DimPort = local.DimPort ?? upstream.DimPort,
+            DimStarboard = local.DimStarboard ?? upstream.DimStarboard,
+        };
     }
 
     private static IDisposable? BeginAuditScope(ILoggerFactory loggerFactory, string action, ClaimsPrincipal user) =>
@@ -175,6 +265,8 @@ public static class ApiEndpoints
     public sealed record MeResponse(string? Sub, string? PreferredUsername, string[] Groups);
 
     public sealed record AircraftDetail(AircraftDto? State, AircraftMetadata? Metadata);
+
+    public sealed record VesselDetail(VesselDto? State, VesselMetadata? Metadata);
 
     public sealed record VersionResponse(string Version, string Sha);
 

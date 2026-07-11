@@ -30,6 +30,7 @@ builder.Services.AddOptions<OpenSkyOptions>().Bind(configuration.GetSection(Open
 builder.Services.AddOptions<AdsbxOptions>().Bind(configuration.GetSection(AdsbxOptions.SectionName));
 builder.Services.AddOptions<AeroApiOptions>().Bind(configuration.GetSection(AeroApiOptions.SectionName));
 builder.Services.AddOptions<AircraftDbOptions>().Bind(configuration.GetSection(AircraftDbOptions.SectionName));
+builder.Services.AddOptions<BarentsWatchOptions>().Bind(configuration.GetSection(BarentsWatchOptions.SectionName));
 builder.Services.AddOptions<CorsOptions>().Bind(configuration.GetSection(CorsOptions.SectionName));
 
 var oidcConfig = configuration.GetSection(OidcOptions.SectionName).Get<OidcOptions>() ?? new OidcOptions();
@@ -139,6 +140,13 @@ builder.Services.AddSingleton<ViewerRegistry>();
 builder.Services.AddSingleton<AircraftStateStore>();
 builder.Services.AddHostedService(static sp => sp.GetRequiredService<AircraftStateStore>());
 
+// AIS vessel domain: a second state store fed from the same MQTT connection (ais/data topic).
+builder.Services.AddSingleton<VesselIngestStatus>();
+builder.Services.AddSingleton<VesselStateStore>();
+builder.Services.AddHostedService(static sp => sp.GetRequiredService<VesselStateStore>());
+// Vessel away-mode is served by the BarentsWatch client (registered in the Enrichment section below); an
+// unconfigured client fails closed to an empty list + reason, exactly like the ADSBx aircraft source.
+
 // Dev/E2E: replay a captured aircraft.json through the real pipeline instead of a broker. Gated on
 // Development so production can never be fed fabricated aircraft (mirrors the DevAuth gate).
 var mqttConfig = configuration.GetSection(MqttOptions.SectionName).Get<MqttOptions>() ?? new MqttOptions();
@@ -148,6 +156,8 @@ else
     builder.Services.AddSingleton<IMqttTransport, MqttNetTransport>();
 builder.Services.AddHostedService<MqttIngestService>();
 builder.Services.AddHostedService<SnapshotBroadcaster>();
+// Parallel push loop for the AIS vertical; emits only "vessels" frames on the same hub.
+builder.Services.AddHostedService<VesselBroadcaster>();
 
 // -- Enrichment --------------------------------------------------------------------------------
 builder.Services.AddMemoryCache();
@@ -166,15 +176,23 @@ builder.Services.AddKeyedSingleton("aeroapi", static (sp, _) =>
     UpstreamBudget.Daily(
         sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AeroApiOptions>>().Value.DailyBudget,
         sp.GetRequiredService<TimeProvider>()));
+// BarentsWatch (vessel away-mode + detail enrichment): daily budget, shared across every client instance.
+builder.Services.AddKeyedSingleton("barentswatch", static (sp, _) =>
+    UpstreamBudget.Daily(
+        sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<BarentsWatchOptions>>().Value.DailyBudget,
+        sp.GetRequiredService<TimeProvider>()));
 
 builder.Services.AddHttpClient<OpenSkyMetadataClient>();
 builder.Services.AddHttpClient<AdsbxClient>();
 builder.Services.AddHttpClient<AeroApiClient>();
+builder.Services.AddHttpClient<BarentsWatchClient>();
 builder.Services.AddSingleton<MetadataService>();
 
 // The away-mode source the broadcaster consumes is the ADSBx client. HttpClient-typed clients are
 // registered transient, so resolve the same instance the DI container builds for AdsbxClient.
 builder.Services.AddSingleton<IAwayModeSource>(static sp => sp.GetRequiredService<AdsbxClient>());
+// Vessel away-mode is the BarentsWatch client (same transient-typed-client resolve pattern as ADSBx).
+builder.Services.AddSingleton<IVesselAwayModeSource>(static sp => sp.GetRequiredService<BarentsWatchClient>());
 
 // -- Observability -----------------------------------------------------------------------------
 const string serviceName = "Skylens.Api";

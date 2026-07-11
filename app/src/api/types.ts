@@ -19,6 +19,18 @@ export type AircraftMetadata = Schemas["Skylens.Api.Enrichment.AircraftMetadata"
 /** GET /api/aircraft/{hex} — live state (if tracked) + resolved metadata; either half may be null. */
 export type AircraftDetail = Schemas["Skylens.Api.Endpoints.ApiEndpoints.AircraftDetail"];
 
+/** Slim vessel DTO (SignalR "vessels" message + GET /api/vessels). `mmsi`/`kind` are always present. */
+export type VesselDto = Omit<
+  Schemas["Skylens.Api.State.VesselDto"],
+  "mmsi" | "kind"
+> & { mmsi: string; kind: string };
+
+/** Static vessel metadata (derived from AIS state; Phase 5 will enrich via BarentsWatch). */
+export type VesselMetadata = Schemas["Skylens.Api.Enrichment.VesselMetadata"];
+
+/** GET /api/vessels/{mmsi} — live state (if tracked) + derived metadata; either half may be null. */
+export type VesselDetail = Schemas["Skylens.Api.Endpoints.ApiEndpoints.VesselDetail"];
+
 /** GET /api/aircraft/{hex}/route — AeroAPI route by callsign. */
 export type RouteResponse = Schemas["Skylens.Api.Enrichment.FlightRoute"];
 

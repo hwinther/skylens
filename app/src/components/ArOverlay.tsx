@@ -10,21 +10,34 @@ import { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import {
   declutter,
+  deadReckonVessel,
   lookAngles,
   project,
+  surfaceBandOffset,
+  VESSEL_DISTANCE_CAP_KM,
+  VESSEL_RENDER_CAP,
   type CameraPose,
   type GeoPoint,
   type ProjectionConfig,
   type ScreenLabel,
 } from "@/ar";
-import type { AircraftDto } from "@/api/types";
+import type { AircraftDto, VesselDto } from "@/api/types";
 import { AircraftLabel } from "./AircraftLabel";
+import { VesselLabel } from "./VesselLabel";
 import { deadReckon } from "@/ar/smoothing";
 
 export interface ArOverlayProps {
   aircraft: AircraftDto[];
   /** Epoch ms the aircraft snapshot was received (for dead-reckoning age). */
   snapshotAt: number;
+  /** AIS vessels (ships + AtoN) for the horizon surface band. */
+  vessels?: VesselDto[];
+  /** Epoch ms the vessel snapshot was received (for ship dead-reckoning age). */
+  vesselsSnapshotAt?: number;
+  /** Draw ships in the surface band. */
+  showShips?: boolean;
+  /** Draw aids-to-navigation (lighthouses, beacons, buoys) in the surface band. */
+  showAton?: boolean;
   poseRef: React.MutableRefObject<CameraPose>;
   positionRef: React.MutableRefObject<GeoPoint | null>;
   hFovDeg: number;
@@ -47,6 +60,27 @@ interface RenderArrow {
   bearingDeg: number;
 }
 
+interface RenderVessel {
+  vessel: VesselDto;
+  x: number;
+  y: number;
+  anchorY: number;
+  rangeKm: number;
+}
+
+interface ClusterMark {
+  x: number;
+  y: number;
+  count: number;
+}
+
+// Stable empty references so a frame with no vessels bails out of a re-render instead of swapping in
+// a fresh [] every ~50 ms.
+const NO_VESSELS: RenderVessel[] = [];
+const NO_CLUSTERS: ClusterMark[] = [];
+// Stable default for the vessels prop so an omitted prop doesn't re-run the ref-sync effect.
+const NO_VESSELS_INPUT: VesselDto[] = [];
+
 interface CardinalMark {
   label: string;
   x: number;
@@ -64,6 +98,10 @@ const CARDINALS: { label: string; az: number; primary: boolean }[] = [
 export function ArOverlay({
   aircraft,
   snapshotAt,
+  vessels = NO_VESSELS_INPUT,
+  vesselsSnapshotAt = 0,
+  showShips = false,
+  showAton = false,
   poseRef,
   positionRef,
   hFovDeg,
@@ -74,6 +112,8 @@ export function ArOverlay({
   const [labels, setLabels] = useState<RenderLabel[]>([]);
   const [arrows, setArrows] = useState<RenderArrow[]>([]);
   const [clusters, setClusters] = useState<{ x: number; y: number; count: number }[]>([]);
+  const [vesselLabels, setVesselLabels] = useState<RenderVessel[]>(NO_VESSELS);
+  const [vesselClusters, setVesselClusters] = useState<ClusterMark[]>(NO_CLUSTERS);
   // Screen y (px) of the elevation-0 horizon at the current pose; null when not shown.
   const [horizonY, setHorizonY] = useState<number | null>(null);
   // Cardinal-point hints (N/E/S/W) that are within the horizontal FOV this frame.
@@ -85,12 +125,20 @@ export function ArOverlay({
   const snapshotAtRef = useRef(snapshotAt);
   const hFovRef = useRef(hFovDeg);
   const showHorizonRef = useRef(showHorizon);
+  const vesselsRef = useRef(vessels);
+  const vesselsSnapshotAtRef = useRef(vesselsSnapshotAt);
+  const showShipsRef = useRef(showShips);
+  const showAtonRef = useRef(showAton);
   useEffect(() => {
     aircraftRef.current = aircraft;
     snapshotAtRef.current = snapshotAt;
     hFovRef.current = hFovDeg;
     showHorizonRef.current = showHorizon;
-  }, [aircraft, snapshotAt, hFovDeg, showHorizon]);
+    vesselsRef.current = vessels;
+    vesselsSnapshotAtRef.current = vesselsSnapshotAt;
+    showShipsRef.current = showShips;
+    showAtonRef.current = showAton;
+  }, [aircraft, snapshotAt, hFovDeg, showHorizon, vessels, vesselsSnapshotAt, showShips, showAton]);
 
   useEffect(() => {
     let raf = 0;
@@ -171,6 +219,64 @@ export function ArOverlay({
       setArrows(nextArrows);
       setClusters(chips.map((c) => ({ x: c.x, y: c.y, count: c.count })));
 
+      // --- Surface band: ships + AtoN pinned to the horizon at their true bearing ---
+      // A vessel's real elevation is a jittery near-zero angle, so we ignore it: project the point
+      // { azimuth, elevation: 0 } (on the horizon) and push it down by a distance-scaled offset.
+      // Nearest-first, distance-capped, hard-capped, and decluttered in a SEPARATE pass so aircraft
+      // label placement is completely untouched. Off-screen vessels get no edge arrow — the band is
+      // dense and side arrows would just be horizon noise (aircraft keep theirs).
+      if (observer && (showShipsRef.current || showAtonRef.current)) {
+        const vAgeS = Math.max(0, (Date.now() - vesselsSnapshotAtRef.current) / 1000);
+        const cand: { v: VesselDto; azimuth: number; distKm: number }[] = [];
+        for (const v of vesselsRef.current) {
+          if (v.lat == null || v.lon == null) continue;
+          const isAton = v.kind === "aton";
+          if (isAton ? !showAtonRef.current : !showShipsRef.current) continue;
+          // Ships dead-reckon along cog/sog between 5 s snapshots; AtoN are fixed and never do.
+          const pos = isAton
+            ? { lat: v.lat, lon: v.lon }
+            : deadReckonVessel({ lat: v.lat, lon: v.lon, sog: v.sog, cog: v.cog }, vAgeS);
+          const a = lookAngles(observer, { lat: pos.lat, lon: pos.lon, alt: 0 });
+          const distKm = a.slantRange / 1000;
+          if (distKm > VESSEL_DISTANCE_CAP_KM) continue;
+          cand.push({ v, azimuth: a.azimuth, distKm });
+        }
+        // Nearest-first, then hard-cap before the (O(n²)) projection + declutter work.
+        cand.sort((p, q) => p.distKm - q.distKm);
+        const capped = cand.length > VESSEL_RENDER_CAP ? cand.slice(0, VESSEL_RENDER_CAP) : cand;
+
+        const vScreenLabels: ScreenLabel[] = [];
+        const vRender: RenderVessel[] = [];
+        for (const c of capped) {
+          const proj = project({ azimuth: c.azimuth, elevation: 0 }, pose, config);
+          if (!proj.onScreen) continue;
+          const px = (proj.xNdc * width) / 2 + width / 2;
+          const horizonPy = height / 2 - (proj.yNdc * height) / 2;
+          const py = horizonPy + surfaceBandOffset(c.distKm);
+          vScreenLabels.push({ id: c.v.mmsi, x: px, y: py, priority: 1 / Math.max(c.distKm, 0.1) });
+          vRender.push({ vessel: c.v, x: px, y: py, anchorY: py, rangeKm: c.distKm });
+        }
+
+        if (vRender.length === 0) {
+          setVesselLabels(NO_VESSELS);
+          setVesselClusters(NO_CLUSTERS);
+        } else {
+          const { placed: vPlaced, clusters: vChips } = declutter(vScreenLabels);
+          const vById = new Map(vPlaced.map((p) => [p.id, p]));
+          const vDecluttered = vRender
+            .filter((l) => vById.has(l.vessel.mmsi))
+            .map((l) => {
+              const p = vById.get(l.vessel.mmsi)!;
+              return { ...l, y: p.y, anchorY: p.anchorY };
+            });
+          setVesselLabels(vDecluttered);
+          setVesselClusters(vChips.map((c) => ({ x: c.x, y: c.y, count: c.count })));
+        }
+      } else {
+        setVesselLabels(NO_VESSELS);
+        setVesselClusters(NO_CLUSTERS);
+      }
+
       // Synthetic horizon + compass. Pose-only (no observer needed), so it orients you even
       // before a GPS fix. Cardinal points sit on the horizon (elevation 0) at their azimuth,
       // and are shown only while inside the horizontal FOV.
@@ -220,6 +326,21 @@ export function ArOverlay({
           ))}
         </>
       )}
+      {vesselLabels.map((v) => (
+        <VesselLabel
+          key={v.vessel.mmsi}
+          vessel={v.vessel}
+          x={v.x}
+          y={v.y}
+          anchorY={v.anchorY}
+          rangeKm={v.rangeKm}
+        />
+      ))}
+      {vesselClusters.map((c, i) => (
+        <View key={`vcl${i}`} style={[styles.vesselCluster, { left: c.x, top: c.y }]}>
+          <Text style={styles.vesselClusterText}>+{c.count}</Text>
+        </View>
+      ))}
       {labels.map((l) => (
         <AircraftLabel
           key={l.aircraft.hex}
@@ -305,6 +426,17 @@ const styles = StyleSheet.create({
     transform: [{ translateX: -12 }, { translateY: -10 }],
   },
   clusterText: { color: "#1a1a1a", fontSize: 11, fontWeight: "700" },
+  // Marine-tinted "+N" chip for vessels collapsed by the band declutter; non-interactive.
+  vesselCluster: {
+    position: "absolute",
+    backgroundColor: "rgba(63, 201, 176, 0.85)",
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    transform: [{ translateX: -12 }, { translateY: -10 }],
+    pointerEvents: "none",
+  },
+  vesselClusterText: { color: "#062026", fontSize: 11, fontWeight: "700" },
   arrow: { position: "absolute", width: 24, height: 24, alignItems: "center", justifyContent: "center", pointerEvents: "none" },
   arrowText: { color: "rgba(120, 200, 255, 0.9)", fontSize: 18 },
 });
