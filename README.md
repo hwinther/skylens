@@ -68,3 +68,8 @@ Releases are tag-driven: run the **Create tag and release** workflow (or push a 
 **Publish container to GHCR** workflow builds and pushes `ghcr.io/hwinther/skylens/api`, from which
 Flux deploys the running gateway. There is no APK signing in CI — the Android app is sideloaded first,
 with Google Play internal testing later.
+
+## Attribution
+
+Orbital data courtesy of [CelesTrak](https://celestrak.org/). Satellite transmitter data from the
+[SatNOGS DB](https://db.satnogs.org/) (CC BY-SA). AIS/ADS-B from local receivers.

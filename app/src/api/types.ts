@@ -55,3 +55,35 @@ export type HealthResponse = Omit<
   Schemas["Skylens.Api.Endpoints.HealthEndpoints.HealthResponse"],
   "version"
 > & { version: string };
+
+/**
+ * The verbatim CelesTrak OMM (Orbit Mean-Elements Message) element set — UPPERCASE keys BY DESIGN, so
+ * it feeds straight into satellite.js `json2satrec` to build the SGP4 propagator. Aliased directly (the
+ * numeric SGP4 inputs are already non-nullable in the generated schema).
+ */
+export type SatelliteOmm = Schemas["Skylens.Api.Enrichment.OmmElements"];
+
+/** One SatNOGS transmitter for a satellite (frequencies in Hz; `alive` + `status` mark active downlinks). */
+export type SatelliteTransmitter = Schemas["Skylens.Api.Enrichment.SatelliteTransmitterDto"];
+
+/**
+ * A satellite in view (GET /api/satellites list item + detail): identity, group, an optional SatNOGS
+ * downlink summary, and the raw OMM elements. `noradId`/`name`/`group`/`omm` are always present —
+ * tightened like the vessel DTO's identity fields (the .NET generator marks them optional, an NRT quirk).
+ */
+export type SatelliteDto = Omit<
+  Schemas["Skylens.Api.Enrichment.SatelliteDto"],
+  "noradId" | "name" | "group" | "omm"
+> & { noradId: number; name: string; group: string; omm: SatelliteOmm };
+
+/** GET /api/satellites — snapshot fetch time + age + every satellite currently in the TLE snapshot. */
+export type SatelliteListResponse = Omit<
+  Schemas["Skylens.Api.Endpoints.ApiEndpoints.SatelliteListResponse"],
+  "fetchedAtUtc" | "tleAgeSeconds" | "satellites"
+> & { fetchedAtUtc: string; tleAgeSeconds: number; satellites: SatelliteDto[] };
+
+/** GET /api/satellites/{noradId} — one satellite + its full transmitter list (possibly empty). */
+export type SatelliteDetail = Omit<
+  Schemas["Skylens.Api.Endpoints.ApiEndpoints.SatelliteDetail"],
+  "satellite" | "transmitters"
+> & { satellite: SatelliteDto; transmitters: SatelliteTransmitter[] };

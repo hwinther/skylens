@@ -11,6 +11,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 import * as SecureStore from "expo-secure-store";
 import { DEFAULT_HFOV_DEG } from "@/ar/projection";
+import { DEFAULT_ELEVATION_MASK_DEG } from "@/ar/satellites";
 
 interface SettingsState {
   /** Manual azimuth trim in degrees, applied on top of declination. */
@@ -25,12 +26,27 @@ interface SettingsState {
   showShips: boolean;
   /** Show AIS aids to navigation (lighthouses, beacons, buoys). */
   showAton: boolean;
+  /** Draw the orbital (satellite) pass in the AR overlay. */
+  showSatellites: boolean;
+  /** Include the crewed "stations" + "amateur" satellite groups. */
+  satAmateurStations: boolean;
+  /** Include the "weather" satellite group. */
+  satWeather: boolean;
+  /** Include the "gnss" satellite group (dense nav constellations). */
+  satGnss: boolean;
+  /** Elevation mask (deg): satellites lower than this above the horizon are hidden. */
+  satElevationMaskDeg: number;
   setAzimuthTrim: (deg: number) => void;
   setHFov: (deg: number) => void;
   setRadiusKm: (km: number) => void;
   setDemoMode: (on: boolean) => void;
   setShowShips: (on: boolean) => void;
   setShowAton: (on: boolean) => void;
+  setShowSatellites: (on: boolean) => void;
+  setSatAmateurStations: (on: boolean) => void;
+  setSatWeather: (on: boolean) => void;
+  setSatGnss: (on: boolean) => void;
+  setSatElevationMaskDeg: (deg: number) => void;
 }
 
 // Opt-in override so the web build / Playwright E2E can boot straight into live mode (which talks to
@@ -73,12 +89,22 @@ export const useSettingsStore = create<SettingsState>()(
       demoMode: !forceLive,
       showShips: true,
       showAton: true,
+      showSatellites: true,
+      satAmateurStations: true,
+      satWeather: true,
+      satGnss: true,
+      satElevationMaskDeg: DEFAULT_ELEVATION_MASK_DEG,
       setAzimuthTrim: (azimuthTrimDeg) => set({ azimuthTrimDeg }),
       setHFov: (hFovDeg) => set({ hFovDeg }),
       setRadiusKm: (radiusKm) => set({ radiusKm }),
       setDemoMode: (demoMode) => set({ demoMode }),
       setShowShips: (showShips) => set({ showShips }),
       setShowAton: (showAton) => set({ showAton }),
+      setShowSatellites: (showSatellites) => set({ showSatellites }),
+      setSatAmateurStations: (satAmateurStations) => set({ satAmateurStations }),
+      setSatWeather: (satWeather) => set({ satWeather }),
+      setSatGnss: (satGnss) => set({ satGnss }),
+      setSatElevationMaskDeg: (satElevationMaskDeg) => set({ satElevationMaskDeg }),
     }),
     {
       name: "skylens.settings.v1",

@@ -180,6 +180,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/satellites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SatelliteList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/satellites/{noradId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SatelliteDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -205,6 +237,17 @@ export interface components {
             preferredUsername?: string | null;
             groups?: string[] | null;
         };
+        "Skylens.Api.Endpoints.ApiEndpoints.SatelliteDetail": {
+            satellite?: components["schemas"]["Skylens.Api.Enrichment.SatelliteDto"];
+            transmitters?: components["schemas"]["Skylens.Api.Enrichment.SatelliteTransmitterDto"][] | null;
+        };
+        "Skylens.Api.Endpoints.ApiEndpoints.SatelliteListResponse": {
+            /** Format: date-time */
+            fetchedAtUtc?: string;
+            /** Format: double */
+            tleAgeSeconds?: number;
+            satellites?: components["schemas"]["Skylens.Api.Enrichment.SatelliteDto"][] | null;
+        };
         "Skylens.Api.Endpoints.ApiEndpoints.VersionResponse": {
             version?: string | null;
             sha?: string | null;
@@ -229,6 +272,11 @@ export interface components {
             /** Format: double */
             aisLastMessageAgeSeconds?: number | null;
             aisStale?: boolean;
+            /** Format: int32 */
+            satelliteCount?: number;
+            /** Format: double */
+            tleAgeSeconds?: number | null;
+            tleStale?: boolean;
         };
         "Skylens.Api.Enrichment.AircraftMetadata": {
             hex: string | null;
@@ -245,6 +293,63 @@ export interface components {
             destinationIcao?: string | null;
             destinationName?: string | null;
             source?: string | null;
+        };
+        "Skylens.Api.Enrichment.OmmElements": {
+            OBJECT_NAME?: string | null;
+            OBJECT_ID?: string | null;
+            EPOCH?: string | null;
+            /** Format: double */
+            MEAN_MOTION?: number;
+            /** Format: double */
+            ECCENTRICITY?: number;
+            /** Format: double */
+            INCLINATION?: number;
+            /** Format: double */
+            RA_OF_ASC_NODE?: number;
+            /** Format: double */
+            ARG_OF_PERICENTER?: number;
+            /** Format: double */
+            MEAN_ANOMALY?: number;
+            /** Format: int32 */
+            EPHEMERIS_TYPE?: number;
+            CLASSIFICATION_TYPE?: string | null;
+            /** Format: int32 */
+            NORAD_CAT_ID?: number;
+            /** Format: int32 */
+            ELEMENT_SET_NO?: number;
+            /** Format: int32 */
+            REV_AT_EPOCH?: number;
+            /** Format: double */
+            BSTAR?: number;
+            /** Format: double */
+            MEAN_MOTION_DOT?: number;
+            /** Format: double */
+            MEAN_MOTION_DDOT?: number;
+        };
+        "Skylens.Api.Enrichment.SatelliteDto": {
+            /** Format: int32 */
+            noradId?: number;
+            name?: string | null;
+            group?: string | null;
+            freqSummary?: string | null;
+            omm?: components["schemas"]["Skylens.Api.Enrichment.OmmElements"];
+        };
+        "Skylens.Api.Enrichment.SatelliteTransmitterDto": {
+            description?: string | null;
+            type?: string | null;
+            /** Format: int64 */
+            downlinkLowHz?: number | null;
+            /** Format: int64 */
+            downlinkHighHz?: number | null;
+            /** Format: int64 */
+            uplinkLowHz?: number | null;
+            /** Format: int64 */
+            uplinkHighHz?: number | null;
+            mode?: string | null;
+            /** Format: double */
+            baud?: number | null;
+            status?: string | null;
+            alive?: boolean;
         };
         "Skylens.Api.Enrichment.VesselMetadata": {
             mmsi: string | null;
@@ -590,6 +695,55 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Skylens.Api.Endpoints.ApiEndpoints.VesselDetail"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SatelliteList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Skylens.Api.Endpoints.ApiEndpoints.SatelliteListResponse"];
+                };
+            };
+        };
+    };
+    SatelliteDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                noradId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Skylens.Api.Endpoints.ApiEndpoints.SatelliteDetail"];
                 };
             };
             /** @description Not Found */

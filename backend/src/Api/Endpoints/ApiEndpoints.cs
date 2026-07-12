@@ -220,6 +220,66 @@ public static class ApiEndpoints
                    })
            .WithName("VesselDetail");
 
+        // GET /api/satellites — every satellite in the current CelesTrak TLE snapshot (orbital elements for
+        // client-side SGP4) plus an optional SatNOGS downlink summary. Cold start: the FIRST call triggers
+        // CelesTrak's synchronous fetch; if that has never produced a snapshot the endpoint fails soft with a
+        // 503 + reason (mirrors /api/area surfacing its LastReason). SatNOGS is fail-soft — an unavailable
+        // transmitter DB just leaves FreqSummary null. Stays on the group's "global" rate limit: no
+        // per-request upstream spend beyond the shared cached snapshots, same reasoning as /api/aircraft/{hex}.
+        api.MapGet("/satellites",
+                   async Task<Results<Ok<SatelliteListResponse>, ProblemHttpResult>> (
+                       CelestrakTleService tle,
+                       SatNogsClient satNogs,
+                       TimeProvider time,
+                       CancellationToken ct) =>
+                   {
+                       var snap = await tle.GetAsync(ct);
+                       if (snap is null)
+                           return TypedResults.Problem(
+                               detail: tle.LastReason ?? "tle-unavailable",
+                               statusCode: StatusCodes.Status503ServiceUnavailable);
+
+                       // Fail-soft: an unavailable SatNOGS DB just leaves every FreqSummary null.
+                       await satNogs.GetAsync(ct);
+
+                       var satellites = snap.Records
+                                            .Select(r => new SatelliteDto(
+                                                        r.Omm.NoradCatId, r.Omm.ObjectName, r.AppGroup,
+                                                        satNogs.FreqSummary(r.Omm.NoradCatId), r.Omm))
+                                            .ToArray();
+
+                       var ageSeconds = (time.GetUtcNow() - snap.FetchedAt).TotalSeconds;
+                       return TypedResults.Ok(new SatelliteListResponse(snap.FetchedAt, ageSeconds, satellites));
+                   })
+           .WithName("SatelliteList");
+
+        // GET /api/satellites/{noradId} — one satellite's elements + its full SatNOGS transmitter list. 404
+        // when the id isn't in the current snapshot (or nothing has been fetched yet). An empty transmitter
+        // list is fine. Same "global" limit / no extra upstream spend as the list endpoint.
+        api.MapGet("/satellites/{noradId:int}",
+                   async Task<Results<Ok<SatelliteDetail>, NotFound>> (
+                       int noradId,
+                       CelestrakTleService tle,
+                       SatNogsClient satNogs,
+                       CancellationToken ct) =>
+                   {
+                       var snap = await tle.GetAsync(ct);
+                       var record = snap?.Records.FirstOrDefault(r => r.Omm.NoradCatId == noradId);
+                       if (record is null)
+                           return TypedResults.NotFound();
+
+                       var byNorad = await satNogs.GetAsync(ct);
+                       var transmitters = byNorad.TryGetValue(noradId, out var t)
+                           ? t
+                           : (IReadOnlyList<SatelliteTransmitterDto>)[];
+
+                       var dto = new SatelliteDto(
+                           record.Omm.NoradCatId, record.Omm.ObjectName, record.AppGroup,
+                           satNogs.FreqSummary(noradId), record.Omm);
+                       return TypedResults.Ok(new SatelliteDetail(dto, transmitters));
+                   })
+           .WithName("SatelliteDetail");
+
         return app;
     }
 
@@ -267,6 +327,17 @@ public static class ApiEndpoints
     public sealed record AircraftDetail(AircraftDto? State, AircraftMetadata? Metadata);
 
     public sealed record VesselDetail(VesselDto? State, VesselMetadata? Metadata);
+
+    /// <summary>
+    ///     GET /api/satellites — the whole current snapshot: when CelesTrak last built it,
+    ///     how old it is now (<see cref="TleAgeSeconds" />, for the client to age-fade propagated
+    ///     positions), and every satellite mapped to a <see cref="SatelliteDto" />.
+    /// </summary>
+    public sealed record SatelliteListResponse(
+        DateTimeOffset FetchedAtUtc, double TleAgeSeconds, IReadOnlyList<SatelliteDto> Satellites);
+
+    /// <summary>GET /api/satellites/{noradId} — one satellite plus its full SatNOGS transmitter list.</summary>
+    public sealed record SatelliteDetail(SatelliteDto Satellite, IReadOnlyList<SatelliteTransmitterDto> Transmitters);
 
     public sealed record VersionResponse(string Version, string Sha);
 

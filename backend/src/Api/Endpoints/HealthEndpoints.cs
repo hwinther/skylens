@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Skylens.Api.Enrichment;
 using Skylens.Api.Extensions;
 using Skylens.Api.State;
 
@@ -14,7 +15,8 @@ public static class HealthEndpoints
 {
     public static IEndpointRouteBuilder MapHealthEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/healthz", Ok<HealthResponse> (IngestStatus status, VesselIngestStatus vesselStatus, TimeProvider time) =>
+        app.MapGet("/healthz", Ok<HealthResponse> (IngestStatus status, VesselIngestStatus vesselStatus,
+                                                   CelestrakTleService tle, TimeProvider time) =>
            {
                var now = time.GetUtcNow();
                var last = status.LastMessageAt;
@@ -27,6 +29,13 @@ public static class HealthEndpoints
                var aisLast = vesselStatus.LastMessageAt;
                var aisAgeSeconds = aisLast is null ? (double?)null : (now - aisLast.Value).TotalSeconds;
 
+               // Satellite TLE freshness, reported additively like the AIS fields (never influences Status).
+               // Read the already-fetched snapshot's metadata ONLY — a probe must never trigger CelesTrak's
+               // lazy fetch (it stays cheap and offline-safe). Pre-fetch: count 0, age null, stale=true.
+               var tleFetchedAt = tle.FetchedAt;
+               var tleAgeSeconds = tleFetchedAt is null ? (double?)null : (now - tleFetchedAt.Value).TotalSeconds;
+               var tleStale = tleAgeSeconds is null || tleAgeSeconds > TleStaleThreshold.TotalSeconds;
+
                return TypedResults.Ok(new HealthResponse(
                    Status: fresh ? "healthy" : "degraded",
                    MqttConnected: status.Connected,
@@ -37,7 +46,10 @@ public static class HealthEndpoints
                    AisConnected: status.Connected,
                    VesselCount: vesselStatus.LastVesselCount,
                    AisLastMessageAgeSeconds: aisAgeSeconds,
-                   AisStale: !vesselStatus.IsFresh(now)));
+                   AisStale: !vesselStatus.IsFresh(now),
+                   SatelliteCount: tle.Count,
+                   TleAgeSeconds: tleAgeSeconds,
+                   TleStale: tleStale));
            })
            .AllowAnonymous()
            .WithName("Healthz");
@@ -45,10 +57,15 @@ public static class HealthEndpoints
         return app;
     }
 
+    /// <summary>TLE elements older than this (or never fetched) are reported stale on healthz.</summary>
+    private static readonly TimeSpan TleStaleThreshold = TimeSpan.FromHours(12);
+
     /// <summary>
     ///     Health payload. Top-level <c>Status</c> is <c>degraded</c> when the last aircraft MQTT message
-    ///     is older than 30 s (or none yet) — unchanged, and deliberately independent of the AIS fields.
-    ///     The <c>Ais*</c> fields report the vessel feed additively (<c>AisStale</c> uses a 15-min threshold).
+    ///     is older than 30 s (or none yet) — unchanged, and deliberately independent of the AIS and
+    ///     satellite fields. The <c>Ais*</c> fields report the vessel feed additively (<c>AisStale</c> uses a
+    ///     15-min threshold); the <c>Satellite*</c>/<c>Tle*</c> fields report CelesTrak freshness additively
+    ///     (<c>TleStale</c> uses a 12-hour threshold and is true before the first fetch).
     /// </summary>
     public sealed record HealthResponse(
         string Status,
@@ -60,5 +77,8 @@ public static class HealthEndpoints
         bool AisConnected,
         int VesselCount,
         double? AisLastMessageAgeSeconds,
-        bool AisStale);
+        bool AisStale,
+        int SatelliteCount,
+        double? TleAgeSeconds,
+        bool TleStale);
 }

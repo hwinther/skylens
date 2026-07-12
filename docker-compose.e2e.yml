@@ -26,6 +26,10 @@ services:
       # AIS vessel feed replayed on ais/data from the baked JSONL capture (same Development gate).
       Mqtt__AisReplay: "true"
       Mqtt__AisReplayFile: /app/fixtures/ais.jsonl
+      # Satellites served from the baked fixtures instead of CelesTrak/SatNOGS — same Development gate,
+      # so no outbound orbital/transmitter fetch ever happens in the e2e stack.
+      Satellites__TleFile: /app/fixtures/tle.json
+      Satellites__TransmittersFile: /app/fixtures/transmitters.json
       # MqttIngestService returns early when Mqtt:Host is empty even in replay mode; any non-empty
       # placeholder keeps the ingest loop alive (no broker named "replay" is ever contacted).
       Mqtt__Host: replay

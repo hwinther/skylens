@@ -1,0 +1,202 @@
+/**
+ * Satellite data + propagation hook for the AR overlay.
+ *
+ * Splits the work by cadence, mirroring the app-wide rule that heavy math never rides the pose loop:
+ *  - SLOW (fetch): pull the CelesTrak OMM snapshot from the backend once, refetch every 6 h and on
+ *    app re-activation, and back off 5 min on failure (401/503 included — we fail soft to empty).
+ *    buildSatrecs (json2satrec × N) runs ONCE per payload, memoised.
+ *  - 1 Hz (propagate): a setInterval re-runs SGP4 + the ECI→ECF→look-angle transforms for every
+ *    satellite and selects the visible set. SGP4 is FAR too heavy for the 60 Hz rAF overlay, so it is
+ *    confined here; the overlay only re-projects the precomputed azimuth/elevation each frame.
+ *
+ * Frequently-changing inputs (observer, groups, mask) are mirrored into refs so the 1 Hz interval
+ * starts once and reads fresh values without restarting — the same discipline usePoseRefs/ArOverlay
+ * use. The interval only runs while enabled, an observer is known, and satrecs are built.
+ */
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AppState, Platform } from "react-native";
+import type { ApiClient } from "@/api/client";
+import type { SatelliteDto } from "@/api/types";
+import {
+  buildSatrecs,
+  propagateAll,
+  selectVisible,
+  type Observer,
+  type SatelliteView,
+  type SatGroup,
+  type SatrecEntry,
+} from "@/ar";
+
+const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+const RETRY_BACKOFF_MS = 5 * 60 * 1000;
+const PROPAGATE_INTERVAL_MS = 1000;
+
+export type SatelliteStatus = "ok" | "loading" | "unavailable";
+
+export interface UseSatellitesOptions {
+  /** Typed API client (same instance the screen builds for the detail sheet). */
+  client: ApiClient;
+  /** Observer position for propagation; null until a GPS/demo fix is known. */
+  observer: Observer | null;
+  /** Master toggle (= showSatellites). When false the hook idles and reports "unavailable". */
+  enabled: boolean;
+  /** Enabled satellite groups; a satellite in a disabled group is filtered out. */
+  groups: Set<SatGroup>;
+  /** Elevation mask in degrees — satellites lower than this above the horizon are hidden. */
+  elevationMaskDeg: number;
+  /** Injectable timers for tests (mirrors startMockFeed). Default to the globals. */
+  setIntervalImpl?: typeof setInterval;
+  clearIntervalImpl?: typeof clearInterval;
+  /** Injectable clock for deterministic tests. Defaults to the wall clock. */
+  now?: () => Date;
+}
+
+export interface UseSatellitesResult {
+  /** The visible, group-filtered, priority-capped satellites at the last 1 Hz tick. */
+  visible: SatelliteView[];
+  /** Same set keyed by NORAD id (for the Phase 5 detail sheet lookup). */
+  byNoradId: Map<number, SatelliteView>;
+  /** Age of the backend TLE snapshot in seconds, or null before the first successful fetch. */
+  tleAgeSeconds: number | null;
+  status: SatelliteStatus;
+}
+
+interface Payload {
+  sats: SatelliteDto[];
+  tleAgeSeconds: number;
+}
+
+interface PropagatedResult {
+  visible: SatelliteView[];
+  byNoradId: Map<number, SatelliteView>;
+}
+
+// Stable empty singletons so an idle/empty hook returns the same references frame to frame.
+const NO_VIEWS: SatelliteView[] = [];
+const EMPTY_BY_ID: Map<number, SatelliteView> = new Map();
+const EMPTY_RESULT: PropagatedResult = { visible: NO_VIEWS, byNoradId: EMPTY_BY_ID };
+const defaultNow = () => new Date();
+
+export function useSatellites(options: UseSatellitesOptions): UseSatellitesResult {
+  const {
+    client,
+    observer,
+    enabled,
+    groups,
+    elevationMaskDeg,
+    setIntervalImpl,
+    clearIntervalImpl,
+    now = defaultNow,
+  } = options;
+
+  const [payload, setPayload] = useState<Payload | null>(null);
+  const [fetchState, setFetchState] = useState<SatelliteStatus>("loading");
+  const [result, setResult] = useState<PropagatedResult>(EMPTY_RESULT);
+
+  // --- SLOW: fetch the OMM snapshot; refetch on 6 h timer / app re-activation; back off on failure ---
+  // All state updates live in the async .then/.catch (never synchronously in the effect body) so this
+  // stays clear of react-hooks/set-state-in-effect; "loading" is the initial fetchState. When
+  // disabled we simply idle — the derived `status`/`visible` below mask any stale payload to empty.
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    let refetchTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const load = () => {
+      client
+        .satellites()
+        .then((res) => {
+          if (cancelled) return;
+          setPayload({ sats: res.satellites ?? [], tleAgeSeconds: res.tleAgeSeconds ?? 0 });
+          setFetchState("ok");
+          refetchTimer = setTimeout(load, SIX_HOURS_MS);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          // Fail soft (incl. 401 signed-out / 503 no-snapshot-yet): drop to empty and retry later.
+          setPayload(null);
+          setFetchState("unavailable");
+          refetchTimer = setTimeout(load, RETRY_BACKOFF_MS);
+        });
+    };
+
+    load();
+
+    // Refetch when the app returns to the foreground — native uses RN AppState; web uses the page
+    // Visibility API (RN AppState has no lifecycle there). Both are no-op safe under jest/node.
+    let removeActivation: (() => void) | undefined;
+    if (Platform.OS === "web") {
+      if (typeof document !== "undefined") {
+        const onVisible = () => {
+          if (document.visibilityState === "visible") load();
+        };
+        document.addEventListener("visibilitychange", onVisible);
+        removeActivation = () => document.removeEventListener("visibilitychange", onVisible);
+      }
+    } else {
+      const sub = AppState.addEventListener("change", (state) => {
+        if (state === "active") load();
+      });
+      removeActivation = () => sub.remove();
+    }
+
+    return () => {
+      cancelled = true;
+      if (refetchTimer) clearTimeout(refetchTimer);
+      removeActivation?.();
+    };
+  }, [enabled, client]);
+
+  // buildSatrecs (json2satrec × N) is the expensive part — run it once per fetched payload only.
+  const entries = useMemo<SatrecEntry[]>(
+    () => (payload ? buildSatrecs(payload.sats) : []),
+    [payload],
+  );
+
+  // Mirror fast-changing inputs into refs so the 1 Hz interval reads fresh values without restarting.
+  const observerRef = useRef(observer);
+  const groupsRef = useRef(groups);
+  const maskRef = useRef(elevationMaskDeg);
+  const entriesRef = useRef(entries);
+  const nowRef = useRef(now);
+  useEffect(() => {
+    observerRef.current = observer;
+    groupsRef.current = groups;
+    maskRef.current = elevationMaskDeg;
+    entriesRef.current = entries;
+    nowRef.current = now;
+  }, [observer, groups, elevationMaskDeg, entries, now]);
+
+  // --- 1 Hz: propagate + select. Restarts only when the run-gate crosses on/off, not every render. ---
+  // setState happens only inside `tick` (a called function, not the effect body) — again clear of the
+  // set-state-in-effect rule; when the gate is off the derived return below masks to empty.
+  const shouldRun = enabled && observer != null && entries.length > 0;
+  useEffect(() => {
+    if (!shouldRun) return;
+    const setIntervalFn = setIntervalImpl ?? setInterval;
+    const clearIntervalFn = clearIntervalImpl ?? clearInterval;
+
+    const tick = () => {
+      const obs = observerRef.current;
+      if (!obs) return;
+      const views = propagateAll(entriesRef.current, obs, nowRef.current());
+      const visible = selectVisible(views, maskRef.current, groupsRef.current);
+      setResult({ visible, byNoradId: new Map(visible.map((v) => [v.noradId, v])) });
+    };
+
+    tick(); // immediate first placement
+    const timer = setIntervalFn(tick, PROPAGATE_INTERVAL_MS);
+    return () => clearIntervalFn(timer);
+  }, [shouldRun, setIntervalImpl, clearIntervalImpl]);
+
+  // Mask the last propagated set to empty whenever the gate is off (disabled / no observer / no
+  // satrecs) so a stale set never lingers on screen. "ok" is implied by having a payload; otherwise
+  // fetchState distinguishes first-load "loading" from a failed "unavailable".
+  return {
+    visible: shouldRun ? result.visible : NO_VIEWS,
+    byNoradId: shouldRun ? result.byNoradId : EMPTY_BY_ID,
+    tleAgeSeconds: payload?.tleAgeSeconds ?? null,
+    status: !enabled ? "unavailable" : payload ? "ok" : fetchState,
+  };
+}

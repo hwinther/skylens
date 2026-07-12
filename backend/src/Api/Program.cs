@@ -31,6 +31,7 @@ builder.Services.AddOptions<AdsbxOptions>().Bind(configuration.GetSection(AdsbxO
 builder.Services.AddOptions<AeroApiOptions>().Bind(configuration.GetSection(AeroApiOptions.SectionName));
 builder.Services.AddOptions<AircraftDbOptions>().Bind(configuration.GetSection(AircraftDbOptions.SectionName));
 builder.Services.AddOptions<BarentsWatchOptions>().Bind(configuration.GetSection(BarentsWatchOptions.SectionName));
+builder.Services.AddOptions<SatellitesOptions>().Bind(configuration.GetSection(SatellitesOptions.SectionName));
 builder.Services.AddOptions<CorsOptions>().Bind(configuration.GetSection(CorsOptions.SectionName));
 
 var oidcConfig = configuration.GetSection(OidcOptions.SectionName).Get<OidcOptions>() ?? new OidcOptions();
@@ -181,12 +182,38 @@ builder.Services.AddKeyedSingleton("barentswatch", static (sp, _) =>
     UpstreamBudget.Daily(
         sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<BarentsWatchOptions>>().Value.DailyBudget,
         sp.GetRequiredService<TimeProvider>()));
+// Satellites vertical: CelesTrak TLE + SatNOGS transmitters, each with its own key-less daily budget.
+builder.Services.AddKeyedSingleton("celestrak", static (sp, _) =>
+    UpstreamBudget.Daily(
+        sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<SatellitesOptions>>().Value.CelestrakDailyBudget,
+        sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddKeyedSingleton("satnogs", static (sp, _) =>
+    UpstreamBudget.Daily(
+        sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<SatellitesOptions>>().Value.SatNogsDailyBudget,
+        sp.GetRequiredService<TimeProvider>()));
 
 builder.Services.AddHttpClient<OpenSkyMetadataClient>();
 builder.Services.AddHttpClient<AdsbxClient>();
 builder.Services.AddHttpClient<AeroApiClient>();
 builder.Services.AddHttpClient<BarentsWatchClient>();
 builder.Services.AddSingleton<MetadataService>();
+
+// CelesTrak + SatNOGS are polite public APIs, so identify ourselves and cap the timeout. These are
+// NAMED clients (not typed) because the two satellite services are process-wide singletons that hold
+// a shared snapshot — a typed client would register the service transient and lose that state.
+var satUserAgent = $"skylens/{(string.IsNullOrWhiteSpace(ApiBuildMetadata.Version) ? "dev" : ApiBuildMetadata.Version)}";
+builder.Services.AddHttpClient("celestrak", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd(satUserAgent);
+});
+builder.Services.AddHttpClient("satnogs", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd(satUserAgent);
+});
+builder.Services.AddSingleton<CelestrakTleService>();
+builder.Services.AddSingleton<SatNogsClient>();
 
 // The away-mode source the broadcaster consumes is the ADSBx client. HttpClient-typed clients are
 // registered transient, so resolve the same instance the DI container builds for AdsbxClient.

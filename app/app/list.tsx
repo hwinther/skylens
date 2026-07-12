@@ -12,13 +12,17 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useAircraftList } from "@/state/aircraftStore";
 import { useVesselList } from "@/state/vesselStore";
 import { useSettingsStore } from "@/state/settingsStore";
-import { DetailSheet } from "@/components";
+import { DetailSheet, SatelliteDetailSheet, useSatellites } from "@/components";
 import { iconForCategory } from "@/components/aircraftIcon";
 import { iconForVessel } from "@/components/vesselIcon";
 import { compass8, relativePosition } from "@/components/webmap/relative";
+import { satGroupsFromSettings } from "@/ar";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl, getHomeLocation } from "@/api/config";
 import { DEMO_HOME } from "@/mock/mockFeed";
+
+// Violet family — matches SatelliteLabel / the detail sheet; sets satellites apart from aircraft/ships.
+const SAT_VIOLET = "#C792EA";
 
 export default function ListScreen() {
   const aircraft = useAircraftList();
@@ -26,11 +30,43 @@ export default function ListScreen() {
   const demoMode = useSettingsStore((s) => s.demoMode);
   const showShips = useSettingsStore((s) => s.showShips);
   const showAton = useSettingsStore((s) => s.showAton);
+  const showSatellites = useSettingsStore((s) => s.showSatellites);
+  const satAmateurStations = useSettingsStore((s) => s.satAmateurStations);
+  const satWeather = useSettingsStore((s) => s.satWeather);
+  const satGnss = useSettingsStore((s) => s.satGnss);
+  const satElevationMaskDeg = useSettingsStore((s) => s.satElevationMaskDeg);
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
+  const [selectedNoradId, setSelectedNoradId] = useState<number | null>(null);
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
   const observer = useMemo(
     () => (demoMode ? DEMO_HOME : (getHomeLocation() ?? DEMO_HOME)),
     [demoMode],
+  );
+
+  // Same satellite source the AR screen uses — independent of the ADS-B hub, so it runs in demo and
+  // live alike, gated only on the toggle. Groups/mask come from the shared settings derivation.
+  const satGroups = useMemo(
+    () =>
+      satGroupsFromSettings({
+        amateurStations: satAmateurStations,
+        weather: satWeather,
+        gnss: satGnss,
+      }),
+    [satAmateurStations, satWeather, satGnss],
+  );
+  const { visible: satellites, byNoradId } = useSatellites({
+    client,
+    observer,
+    enabled: showSatellites,
+    groups: satGroups,
+    elevationMaskDeg: satElevationMaskDeg,
+  });
+
+  // Overhead list: satellites are overhead, not distance-sorted traffic — a separate section, ordered
+  // highest-in-the-sky first (the hook returns group-priority order, so re-sort by elevation here).
+  const overhead = useMemo(
+    () => [...satellites].sort((a, b) => b.elevationDeg - a.elevationDeg),
+    [satellites],
   );
 
   // Aircraft and (toggle-permitted) vessels merged into one list, sorted nearest-first. A per-row
@@ -99,8 +135,45 @@ export default function ListScreen() {
             </View>
           ),
         )}
+
+        {showSatellites && (
+          <>
+            <Text testID="list-sat-count" style={styles.heading}>
+              Overhead ({overhead.length})
+            </Text>
+            {overhead.map((s) => (
+              <Pressable
+                key={`sat-${s.noradId}`}
+                testID={`list-sat-${s.noradId}`}
+                onPress={() => setSelectedNoradId(s.noradId)}
+                style={styles.row}
+              >
+                <MaterialCommunityIcons name="satellite-variant" size={18} color={SAT_VIOLET} />
+                <Text style={styles.callsign} numberOfLines={1}>
+                  {s.name.trim() || String(s.noradId)}
+                </Text>
+                <Text style={styles.meta}>
+                  {Math.round(s.elevationDeg)}° {compass8(s.azimuthDeg)}
+                </Text>
+                <Text style={styles.meta}>{s.rangeKm.toFixed(0)} km</Text>
+                {s.freqSummary ? (
+                  <Text style={styles.satFreq} numberOfLines={1}>
+                    {s.freqSummary}
+                  </Text>
+                ) : (
+                  <Text style={styles.meta}>—</Text>
+                )}
+              </Pressable>
+            ))}
+          </>
+        )}
       </ScrollView>
       <DetailSheet hex={selectedHex} client={client} onClose={() => setSelectedHex(null)} />
+      <SatelliteDetailSheet
+        noradId={selectedNoradId}
+        view={selectedNoradId != null ? byNoradId.get(selectedNoradId) : undefined}
+        onClose={() => setSelectedNoradId(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -122,4 +195,5 @@ const styles = StyleSheet.create({
   shipName: { color: "#EAF6FF", fontSize: 14, fontWeight: "600", flexShrink: 1 },
   flag: { color: "#9FC7E0", fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
   meta: { color: "#9FC7E0", fontSize: 12, minWidth: 74, textAlign: "right" },
+  satFreq: { color: "#C3A9E0", fontSize: 12, minWidth: 74, textAlign: "right" },
 });

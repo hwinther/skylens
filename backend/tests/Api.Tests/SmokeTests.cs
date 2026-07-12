@@ -192,6 +192,135 @@ public sealed class SmokeTests
     }
 
     [Fact]
+    public async Task Api_satellites_requires_authentication()
+    {
+        using var client = _factory.CreateClient();
+
+        using var resp = await client.GetAsync("/api/satellites", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task Api_satellite_detail_requires_authentication()
+    {
+        using var client = _factory.CreateClient();
+
+        using var resp = await client.GetAsync("/api/satellites/25544", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task Api_satellites_returns_the_fixture_snapshot_when_authenticated()
+    {
+        using var client = _authFactory.CreateClient();
+
+        // DevAuthFactory runs in Development, so the Satellites:TleFile / TransmittersFile fixtures load
+        // (no network). The snapshot dedupes ISS across stations+amateur → 21 distinct satellites.
+        using var resp = await client.GetAsync("/api/satellites", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+
+        Assert.True(root.TryGetProperty("fetchedAtUtc", out _));
+        Assert.True(root.TryGetProperty("tleAgeSeconds", out _));
+        var satellites = root.GetProperty("satellites");
+        Assert.Equal(JsonValueKind.Array, satellites.ValueKind);
+        Assert.True(satellites.GetArrayLength() > 15, "expected the fixture's >15 satellites");
+
+        // ISS (25544) must be present, deduped to the higher-precedence "stations" group, and carry a
+        // non-null SatNOGS downlink summary joined from the transmitters fixture.
+        JsonElement iss = default;
+        var found = false;
+        foreach (var sat in satellites.EnumerateArray())
+        {
+            if (sat.GetProperty("noradId").GetInt32() == 25544)
+            {
+                iss = sat;
+                found = true;
+                break;
+            }
+        }
+
+        Assert.True(found, "ISS (25544) missing from the satellite list");
+        Assert.Equal("stations", iss.GetProperty("group").GetString());
+        Assert.Equal(JsonValueKind.String, iss.GetProperty("freqSummary").ValueKind);
+        Assert.False(string.IsNullOrEmpty(iss.GetProperty("freqSummary").GetString()));
+
+        // The raw OMM elements round-trip with their VERBATIM uppercase CelesTrak keys (the client feeds
+        // them straight into satellite.js json2satrec).
+        var omm = iss.GetProperty("omm");
+        Assert.Equal(25544, omm.GetProperty("NORAD_CAT_ID").GetInt32());
+        Assert.True(omm.TryGetProperty("OBJECT_NAME", out _));
+        Assert.True(omm.TryGetProperty("MEAN_MOTION", out _));
+    }
+
+    [Fact]
+    public async Task Api_satellite_detail_returns_transmitters_for_the_iss()
+    {
+        using var client = _authFactory.CreateClient();
+
+        using var resp = await client.GetAsync("/api/satellites/25544", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+
+        Assert.Equal(25544, root.GetProperty("satellite").GetProperty("noradId").GetInt32());
+        var transmitters = root.GetProperty("transmitters");
+        Assert.Equal(JsonValueKind.Array, transmitters.ValueKind);
+        Assert.True(transmitters.GetArrayLength() > 0, "ISS should have transmitters in the fixture");
+    }
+
+    [Fact]
+    public async Task Api_satellite_detail_returns_404_for_unknown_norad_id()
+    {
+        using var client = _authFactory.CreateClient();
+
+        // A NORAD id the snapshot has never seen → 404 (same shape as an unknown aircraft hex / MMSI).
+        using var resp = await client.GetAsync("/api/satellites/99999999", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task Healthz_includes_the_satellite_fields_on_both_factories_without_triggering_a_fetch()
+    {
+        // The satellite vertical extends healthz ADDITIVELY. On SkylensFactory (Testing env, no fixtures,
+        // no fetch) the fields must reflect a never-fetched snapshot — count 0 / age null / stale true —
+        // and, critically, reading them on healthz must NOT trigger the lazy CelesTrak fetch (a probe stays
+        // cheap and offline-safe). The DevAuth boot must also carry the three fields.
+        foreach (var factory in new WebApplicationFactory<Program>[] { _factory, _authFactory })
+        {
+            using var client = factory.CreateClient();
+            using var resp = await client.GetAsync("/healthz", TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+
+            var body = await resp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+
+            Assert.True(root.TryGetProperty("satelliteCount", out var satelliteCount));
+            Assert.True(root.TryGetProperty("tleAgeSeconds", out _));
+            Assert.True(root.TryGetProperty("tleStale", out var tleStale));
+
+            // SkylensFactory never loads fixtures and healthz never fetches, so it always reports the
+            // never-fetched shape. (DevAuth may have fetched via an earlier /api/satellites test, so only
+            // the SkylensFactory invariants are asserted precisely here.)
+            if (ReferenceEquals(factory, _factory))
+            {
+                Assert.Equal(0, satelliteCount.GetInt32());
+                Assert.Equal(JsonValueKind.Null, root.GetProperty("tleAgeSeconds").ValueKind);
+                Assert.True(tleStale.GetBoolean());
+            }
+        }
+    }
+
+    [Fact]
     public async Task Api_vessels_returns_empty_list_when_authenticated_and_no_feed()
     {
         using var client = _authFactory.CreateClient();

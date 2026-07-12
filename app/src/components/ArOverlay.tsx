@@ -11,6 +11,7 @@ import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import {
   declutter,
   deadReckonVessel,
+  GROUP_PRIORITY,
   lookAngles,
   project,
   surfaceBandOffset,
@@ -19,11 +20,13 @@ import {
   type CameraPose,
   type GeoPoint,
   type ProjectionConfig,
+  type SatelliteView,
   type ScreenLabel,
 } from "@/ar";
 import type { AircraftDto, VesselDto } from "@/api/types";
 import { AircraftLabel } from "./AircraftLabel";
 import { VesselLabel } from "./VesselLabel";
+import { SatelliteLabel } from "./SatelliteLabel";
 import { deadReckon } from "@/ar/smoothing";
 
 export interface ArOverlayProps {
@@ -38,10 +41,16 @@ export interface ArOverlayProps {
   showShips?: boolean;
   /** Draw aids-to-navigation (lighthouses, beacons, buoys) in the surface band. */
   showAton?: boolean;
+  /** Satellites already reduced to observer-relative az/el at 1 Hz (SGP4 runs in useSatellites, never here). */
+  satellites?: SatelliteView[];
+  /** Draw the orbital (satellite) pass. */
+  showSatellites?: boolean;
   poseRef: React.MutableRefObject<CameraPose>;
   positionRef: React.MutableRefObject<GeoPoint | null>;
   hFovDeg: number;
   onSelect: (hex: string) => void;
+  /** Tap handler for a satellite label (opens the Phase 5 detail sheet). */
+  onSelectSatellite?: (noradId: number) => void;
   /** Draw synthetic orientation aids — horizon, ground plane, and cardinal (N/E/S/W) hints —
    *  when there's no camera feed to orient against. */
   showHorizon?: boolean;
@@ -68,6 +77,13 @@ interface RenderVessel {
   rangeKm: number;
 }
 
+interface RenderSatellite {
+  satellite: SatelliteView;
+  x: number;
+  y: number;
+  anchorY: number;
+}
+
 interface ClusterMark {
   x: number;
   y: number;
@@ -78,8 +94,12 @@ interface ClusterMark {
 // a fresh [] every ~50 ms.
 const NO_VESSELS: RenderVessel[] = [];
 const NO_CLUSTERS: ClusterMark[] = [];
-// Stable default for the vessels prop so an omitted prop doesn't re-run the ref-sync effect.
+const NO_SATELLITES: RenderSatellite[] = [];
+// Stable defaults for the optional list props so an omitted prop doesn't re-run the ref-sync effect.
 const NO_VESSELS_INPUT: VesselDto[] = [];
+const NO_SATELLITES_INPUT: SatelliteView[] = [];
+// Stable no-op so an omitted onSelectSatellite doesn't allocate a new callback (and re-memo labels) each render.
+const noopSelectSatellite = (_noradId: number) => {};
 
 interface CardinalMark {
   label: string;
@@ -102,10 +122,13 @@ export function ArOverlay({
   vesselsSnapshotAt = 0,
   showShips = false,
   showAton = false,
+  satellites = NO_SATELLITES_INPUT,
+  showSatellites = false,
   poseRef,
   positionRef,
   hFovDeg,
   onSelect,
+  onSelectSatellite,
   showHorizon = false,
 }: ArOverlayProps) {
   const { width, height } = useWindowDimensions();
@@ -114,6 +137,8 @@ export function ArOverlay({
   const [clusters, setClusters] = useState<{ x: number; y: number; count: number }[]>([]);
   const [vesselLabels, setVesselLabels] = useState<RenderVessel[]>(NO_VESSELS);
   const [vesselClusters, setVesselClusters] = useState<ClusterMark[]>(NO_CLUSTERS);
+  const [satLabels, setSatLabels] = useState<RenderSatellite[]>(NO_SATELLITES);
+  const [satClusters, setSatClusters] = useState<ClusterMark[]>(NO_CLUSTERS);
   // Screen y (px) of the elevation-0 horizon at the current pose; null when not shown.
   const [horizonY, setHorizonY] = useState<number | null>(null);
   // Cardinal-point hints (N/E/S/W) that are within the horizontal FOV this frame.
@@ -129,6 +154,8 @@ export function ArOverlay({
   const vesselsSnapshotAtRef = useRef(vesselsSnapshotAt);
   const showShipsRef = useRef(showShips);
   const showAtonRef = useRef(showAton);
+  const satellitesRef = useRef(satellites);
+  const showSatellitesRef = useRef(showSatellites);
   useEffect(() => {
     aircraftRef.current = aircraft;
     snapshotAtRef.current = snapshotAt;
@@ -138,7 +165,9 @@ export function ArOverlay({
     vesselsSnapshotAtRef.current = vesselsSnapshotAt;
     showShipsRef.current = showShips;
     showAtonRef.current = showAton;
-  }, [aircraft, snapshotAt, hFovDeg, showHorizon, vessels, vesselsSnapshotAt, showShips, showAton]);
+    satellitesRef.current = satellites;
+    showSatellitesRef.current = showSatellites;
+  }, [aircraft, snapshotAt, hFovDeg, showHorizon, vessels, vesselsSnapshotAt, showShips, showAton, satellites, showSatellites]);
 
   useEffect(() => {
     let raf = 0;
@@ -277,6 +306,47 @@ export function ArOverlay({
         setVesselClusters(NO_CLUSTERS);
       }
 
+      // --- Orbital pass: satellites at their precomputed az/el ---
+      // No lookAngles and no dead-reckon here: useSatellites already ran SGP4 + the look-angle
+      // transforms at 1 Hz, so we only re-project the fixed az/el through the current pose (a little
+      // stepping between 1 Hz updates is acceptable for something this far away). Own declutter pass
+      // so aircraft/vessel placement is untouched; priority keeps stations above GNSS, then higher
+      // elevation. No edge arrows — off-screen satellites simply don't draw.
+      if (showSatellitesRef.current && satellitesRef.current.length) {
+        const sScreenLabels: ScreenLabel[] = [];
+        const sRender: RenderSatellite[] = [];
+        for (const s of satellitesRef.current) {
+          const proj = project({ azimuth: s.azimuthDeg, elevation: s.elevationDeg }, pose, config);
+          if (!proj.onScreen) continue;
+          const px = (proj.xNdc * width) / 2 + width / 2;
+          const py = height / 2 - (proj.yNdc * height) / 2;
+          // Higher priority = keeps its un-pushed spot: stations first (−GROUP_PRIORITY), then the
+          // higher-in-the-sky within a group as the tiebreak.
+          const priority = -(GROUP_PRIORITY[s.group] ?? 99) * 1000 + s.elevationDeg;
+          sScreenLabels.push({ id: String(s.noradId), x: px, y: py, priority });
+          sRender.push({ satellite: s, x: px, y: py, anchorY: py });
+        }
+
+        if (sRender.length === 0) {
+          setSatLabels(NO_SATELLITES);
+          setSatClusters(NO_CLUSTERS);
+        } else {
+          const { placed: sPlaced, clusters: sChips } = declutter(sScreenLabels);
+          const sById = new Map(sPlaced.map((p) => [p.id, p]));
+          const sDecluttered = sRender
+            .filter((l) => sById.has(String(l.satellite.noradId)))
+            .map((l) => {
+              const p = sById.get(String(l.satellite.noradId))!;
+              return { ...l, y: p.y, anchorY: p.anchorY };
+            });
+          setSatLabels(sDecluttered);
+          setSatClusters(sChips.map((c) => ({ x: c.x, y: c.y, count: c.count })));
+        }
+      } else {
+        setSatLabels(NO_SATELLITES);
+        setSatClusters(NO_CLUSTERS);
+      }
+
       // Synthetic horizon + compass. Pose-only (no observer needed), so it orients you even
       // before a GPS fix. Cardinal points sit on the horizon (elevation 0) at their azimuth,
       // and are shown only while inside the horizontal FOV.
@@ -339,6 +409,21 @@ export function ArOverlay({
       {vesselClusters.map((c, i) => (
         <View key={`vcl${i}`} style={[styles.vesselCluster, { left: c.x, top: c.y }]}>
           <Text style={styles.vesselClusterText}>+{c.count}</Text>
+        </View>
+      ))}
+      {satLabels.map((s) => (
+        <SatelliteLabel
+          key={s.satellite.noradId}
+          satellite={s.satellite}
+          x={s.x}
+          y={s.y}
+          anchorY={s.anchorY}
+          onPress={onSelectSatellite ?? noopSelectSatellite}
+        />
+      ))}
+      {satClusters.map((c, i) => (
+        <View key={`scl${i}`} style={[styles.satCluster, { left: c.x, top: c.y }]}>
+          <Text style={styles.satClusterText}>+{c.count}</Text>
         </View>
       ))}
       {labels.map((l) => (
@@ -437,6 +522,17 @@ const styles = StyleSheet.create({
     pointerEvents: "none",
   },
   vesselClusterText: { color: "#062026", fontSize: 11, fontWeight: "700" },
+  // Violet "+N" chip for satellites collapsed by the orbital-pass declutter; non-interactive.
+  satCluster: {
+    position: "absolute",
+    backgroundColor: "rgba(199, 146, 234, 0.85)",
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    transform: [{ translateX: -12 }, { translateY: -10 }],
+    pointerEvents: "none",
+  },
+  satClusterText: { color: "#1a0f26", fontSize: 11, fontWeight: "700" },
   arrow: { position: "absolute", width: 24, height: 24, alignItems: "center", justifyContent: "center", pointerEvents: "none" },
   arrowText: { color: "rgba(120, 200, 255, 0.9)", fontSize: 18 },
 });

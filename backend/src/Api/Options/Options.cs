@@ -128,6 +128,46 @@ public sealed class AircraftDbOptions
 }
 
 /// <summary>
+///     "Satellites in line-of-sight": TLE orbital elements from CelesTrak (OMM/GP JSON) plus
+///     transmitter frequencies from the SatNOGS DB. Both are free, key-less public APIs, so the only
+///     protection is a daily call budget that fails closed. <see cref="Groups" /> is the comma-separated
+///     list of CelesTrak GP groups to pull; only these seven names actually exist upstream
+///     (noaa / glonass-operational do NOT — they 200 with a plain-text error body). CelesTrak also
+///     flipped its default response format to CSV in 2026, so every request appends <c>FORMAT=JSON</c>.
+///     <see cref="TleFile" />/<see cref="TransmittersFile" /> are Development-only fixtures that replace
+///     the network entirely (ignored with a warning outside Development).
+/// </summary>
+public sealed class SatellitesOptions
+{
+    public const string SectionName = "Satellites";
+
+    /// <summary>Comma-separated CelesTrak GP group names. Only these seven exist upstream.</summary>
+    public string Groups { get; set; } = "amateur,stations,weather,gps-ops,galileo,glo-ops,beidou";
+
+    /// <summary>CelesTrak GP endpoint; the group + <c>FORMAT=JSON</c> are appended per request.</summary>
+    public string CelestrakBaseUrl { get; set; } = "https://celestrak.org/NORAD/elements/gp.php";
+
+    /// <summary>One budget unit per group request; fails closed for the rest of the UTC day.</summary>
+    public int CelestrakDailyBudget { get; set; } = 120;
+
+    /// <summary>SatNOGS DB base; the bulk <c>/api/transmitters/</c> pull lives here.</summary>
+    public string SatNogsBaseUrl { get; set; } = "https://db.satnogs.org";
+
+    /// <summary>One budget unit per transmitters page request (the bulk pull is a single page).</summary>
+    public int SatNogsDailyBudget { get; set; } = 60;
+
+    /// <summary>Dev-only: load OMM records from this file instead of CelesTrak (never network).</summary>
+    public string? TleFile { get; set; }
+
+    /// <summary>Dev-only: load SatNOGS transmitters from this file instead of the API (never network).</summary>
+    public string? TransmittersFile { get; set; }
+
+    /// <summary>Split + trimmed CelesTrak group names.</summary>
+    public string[] ParsedGroups() =>
+        Groups.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+}
+
+/// <summary>
 ///     BarentsWatch Live AIS — official Norwegian AIS (NLOD-licensed, free). OAuth2 client-credentials
 ///     (scope "ais") against <see cref="TokenEndpoint" />; a daily <see cref="DailyBudget" /> fails closed.
 ///     Supplies away-mode vessel coverage in Norwegian waters and static/voyage enrichment for

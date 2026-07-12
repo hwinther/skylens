@@ -61,6 +61,11 @@ COPY backend/tests/Api.Tests/fixtures/aircraft.json /app/fixtures/aircraft.json
 # Public AIS capture replayed by Mqtt__AisReplay + Mqtt__AisReplayFile alongside the aircraft feed.
 # AIS is broadcast data too, so baking the capture is fine (JSONL: one record per line, blank-separated).
 COPY backend/tests/Api.Tests/fixtures/ais-capture.jsonl /app/fixtures/ais.jsonl
+# Satellite fixtures for the Development-gated Satellites__TleFile / Satellites__TransmittersFile short-
+# circuit (preview/e2e only — never contacted in prod). Public orbital data (CelesTrak) + transmitter
+# data (SatNOGS DB, CC BY-SA), so baking them for previews/e2e is fine.
+COPY backend/tests/Api.Tests/fixtures/tle.json /app/fixtures/tle.json
+COPY backend/tests/Api.Tests/fixtures/transmitters.json /app/fixtures/transmitters.json
 
 ENV ASPNETCORE_URLS=http://0.0.0.0:8080 \
     DOTNET_RUNNING_IN_CONTAINER=true

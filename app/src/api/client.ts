@@ -14,6 +14,8 @@ import type {
   HealthResponse,
   MeResponse,
   RouteResponse,
+  SatelliteDetail,
+  SatelliteListResponse,
   VersionResponse,
 } from "./types";
 
@@ -151,5 +153,18 @@ export class ApiClient {
   /** Away-mode area query (ADSBx via the backend). */
   area(lat: number, lon: number, radiusKm: number): Promise<AircraftDto[]> {
     return this.request<AircraftDto[]>(`/api/area?lat=${lat}&lon=${lon}&radiusKm=${radiusKm}`);
+  }
+
+  /**
+   * GET /api/satellites — every satellite in the current CelesTrak TLE snapshot (orbital elements for
+   * client-side SGP4) plus optional SatNOGS downlink summaries. 503 (ApiError) before the first snapshot.
+   */
+  satellites(): Promise<SatelliteListResponse> {
+    return this.request<SatelliteListResponse>("/api/satellites");
+  }
+
+  /** GET /api/satellites/{noradId} — one satellite's elements + its full SatNOGS transmitter list. */
+  satelliteDetail(noradId: number): Promise<SatelliteDetail> {
+    return this.request<SatelliteDetail>(`/api/satellites/${noradId}`);
   }
 }

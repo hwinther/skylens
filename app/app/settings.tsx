@@ -29,12 +29,22 @@ export default function SettingsScreen() {
     demoMode,
     showShips,
     showAton,
+    showSatellites,
+    satAmateurStations,
+    satWeather,
+    satGnss,
+    satElevationMaskDeg,
     setAzimuthTrim,
     setHFov,
     setRadiusKm,
     setDemoMode,
     setShowShips,
     setShowAton,
+    setShowSatellites,
+    setSatAmateurStations,
+    setSatWeather,
+    setSatGnss,
+    setSatElevationMaskDeg,
   } = useSettingsStore();
   const status = useAuthStore((s) => s.status);
   const mockMode = useAuthStore((s) => s.mockMode);
@@ -135,6 +145,34 @@ export default function SettingsScreen() {
           <Row label="Show aids to navigation">
             <Switch value={showAton} onValueChange={setShowAton} />
           </Row>
+        </Section>
+
+        <Section title="Satellites">
+          <Row label="Show satellites">
+            <Switch
+              testID="settings-show-satellites"
+              value={showSatellites}
+              onValueChange={setShowSatellites}
+            />
+          </Row>
+          <Row label="Amateur + stations">
+            <Switch value={satAmateurStations} onValueChange={setSatAmateurStations} />
+          </Row>
+          <Row label="Weather">
+            <Switch value={satWeather} onValueChange={setSatWeather} />
+          </Row>
+          <Row label="GNSS">
+            <Switch value={satGnss} onValueChange={setSatGnss} />
+          </Row>
+          <Stepper
+            label="Elevation mask"
+            value={satElevationMaskDeg}
+            unit="°"
+            step={1}
+            min={0}
+            max={15}
+            onChange={setSatElevationMaskDeg}
+          />
         </Section>
 
         <Section title="Demo">

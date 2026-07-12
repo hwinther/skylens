@@ -19,11 +19,14 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import {
   ArOverlay,
   DetailSheet,
+  SatelliteDetailSheet,
   StatusStrip,
   useDemoPose,
   useObserverLocation,
   usePoseRefs,
+  useSatellites,
 } from "@/components";
+import { satGroupsFromSettings } from "@/ar";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
 import { startMockFeed, DEMO_HOME } from "@/mock/mockFeed";
@@ -40,9 +43,17 @@ export default function ArScreen() {
   const trimDeg = useSettingsStore((s) => s.azimuthTrimDeg);
   const showShips = useSettingsStore((s) => s.showShips);
   const showAton = useSettingsStore((s) => s.showAton);
+  const showSatellites = useSettingsStore((s) => s.showSatellites);
+  const satAmateurStations = useSettingsStore((s) => s.satAmateurStations);
+  const satWeather = useSettingsStore((s) => s.satWeather);
+  const satGnss = useSettingsStore((s) => s.satGnss);
+  const satElevationMaskDeg = useSettingsStore((s) => s.satElevationMaskDeg);
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
+  // Selected satellite for the Phase 5 detail sheet. Captured now so the overlay's tap wiring is
+  // complete; the sheet itself mounts in Phase 5 (see the placeholder near <DetailSheet/> below).
+  const [selectedNoradId, setSelectedNoradId] = useState<number | null>(null);
 
   const baseUrl = useMemo(() => getApiBaseUrl(), []);
   // Live-mode observer: baked home coords, else a one-shot device/browser geolocation fix
@@ -60,6 +71,28 @@ export default function ArScreen() {
   const setConnection = useAircraftStore((s) => s.setConnection);
 
   const client = useMemo(() => new ApiClient({ baseUrl }), [baseUrl]);
+
+  // Enabled satellite groups, derived from the three settings toggles (shared with the List screen).
+  const satGroups = useMemo(
+    () =>
+      satGroupsFromSettings({
+        amateurStations: satAmateurStations,
+        weather: satWeather,
+        gnss: satGnss,
+      }),
+    [satAmateurStations, satWeather, satGnss],
+  );
+
+  // Satellites render in BOTH demo and live mode (they're independent of the ADS-B hub), so the hook
+  // is gated only on the showSatellites toggle. Observer is the demo home in demo mode, else the
+  // live GPS/browser fix.
+  const satHook = useSatellites({
+    client,
+    observer: demoMode ? DEMO_HOME : observer,
+    enabled: showSatellites,
+    groups: satGroups,
+    elevationMaskDeg: satElevationMaskDeg,
+  });
 
   // Live sensor pose (only active when not in demo mode).
   const live = usePoseRefs({ trimDeg, enabled: !demoMode });
@@ -106,10 +139,13 @@ export default function ArScreen() {
       vesselsSnapshotAt={vesselsSnapshotAt}
       showShips={showShips}
       showAton={showAton}
+      satellites={satHook.visible}
+      showSatellites={showSatellites}
       poseRef={poseRef}
       positionRef={live.positionRef}
       hFovDeg={hFovDeg}
       onSelect={setSelectedHex}
+      onSelectSatellite={setSelectedNoradId}
       // No camera feed (web, or native without permission) → draw a synthetic horizon.
       showHorizon={!demoMode && !cameraPermission?.granted}
     />
@@ -151,6 +187,11 @@ export default function ArScreen() {
       </SafeAreaView>
 
       <DetailSheet hex={selectedHex} client={client} onClose={() => setSelectedHex(null)} />
+      <SatelliteDetailSheet
+        noradId={selectedNoradId}
+        view={selectedNoradId != null ? satHook.byNoradId.get(selectedNoradId) : undefined}
+        onClose={() => setSelectedNoradId(null)}
+      />
     </View>
   );
 }
