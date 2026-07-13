@@ -19,7 +19,9 @@ import {
   VESSEL_DISTANCE_CAP_KM,
   VESSEL_RENDER_CAP,
   type CameraPose,
+  type EclipticPoint,
   type GeoPoint,
+  type PlanetView,
   type ProjectionConfig,
   type SatelliteView,
   type ScreenLabel,
@@ -28,6 +30,7 @@ import type { AircraftDto, VesselDto } from "@/api/types";
 import { AircraftLabel } from "./AircraftLabel";
 import { VesselLabel } from "./VesselLabel";
 import { SatelliteLabel } from "./SatelliteLabel";
+import { PlanetLabel } from "./PlanetLabel";
 import { deadReckon } from "@/ar/smoothing";
 
 export interface ArOverlayProps {
@@ -48,6 +51,16 @@ export interface ArOverlayProps {
   satellitesSampledAt?: number;
   /** Draw the orbital (satellite) pass. */
   showSatellites?: boolean;
+  /** Solar-System bodies reduced to observer-relative az/el (computed at 30 s in usePlanets). */
+  planets?: PlanetView[];
+  /** Draw the planets sky pass (Sun, Moon, Mercury–Neptune). */
+  showPlanets?: boolean;
+  /** Sampled ecliptic arc (observer-relative az/el) for the faint sky line. */
+  ecliptic?: EclipticPoint[];
+  /** Draw the faint ecliptic line across the sky. */
+  showEcliptic?: boolean;
+  /** Tap handler for a planet label (opens the planet detail sheet). */
+  onSelectPlanet?: (body: string) => void;
   poseRef: React.MutableRefObject<CameraPose>;
   positionRef: React.MutableRefObject<GeoPoint | null>;
   hFovDeg: number;
@@ -87,6 +100,13 @@ interface RenderSatellite {
   anchorY: number;
 }
 
+interface RenderPlanet {
+  planet: PlanetView;
+  x: number;
+  y: number;
+  anchorY: number;
+}
+
 interface ClusterMark {
   x: number;
   y: number;
@@ -98,11 +118,16 @@ interface ClusterMark {
 const NO_VESSELS: RenderVessel[] = [];
 const NO_CLUSTERS: ClusterMark[] = [];
 const NO_SATELLITES: RenderSatellite[] = [];
+const NO_PLANETS: RenderPlanet[] = [];
+const NO_ECLIPTIC_MARKS: { x: number; y: number }[] = [];
 // Stable defaults for the optional list props so an omitted prop doesn't re-run the ref-sync effect.
 const NO_VESSELS_INPUT: VesselDto[] = [];
 const NO_SATELLITES_INPUT: SatelliteView[] = [];
-// Stable no-op so an omitted onSelectSatellite doesn't allocate a new callback (and re-memo labels) each render.
+const NO_PLANETS_INPUT: PlanetView[] = [];
+const NO_ECLIPTIC_INPUT: EclipticPoint[] = [];
+// Stable no-ops so an omitted select handler doesn't allocate a new callback (and re-memo labels) each render.
 const noopSelectSatellite = (_noradId: number) => {};
+const noopSelectPlanet = (_body: string) => {};
 
 interface CardinalMark {
   label: string;
@@ -128,6 +153,11 @@ export function ArOverlay({
   satellites = NO_SATELLITES_INPUT,
   satellitesSampledAt = 0,
   showSatellites = false,
+  planets = NO_PLANETS_INPUT,
+  showPlanets = false,
+  ecliptic = NO_ECLIPTIC_INPUT,
+  showEcliptic = false,
+  onSelectPlanet,
   poseRef,
   positionRef,
   hFovDeg,
@@ -143,6 +173,9 @@ export function ArOverlay({
   const [vesselClusters, setVesselClusters] = useState<ClusterMark[]>(NO_CLUSTERS);
   const [satLabels, setSatLabels] = useState<RenderSatellite[]>(NO_SATELLITES);
   const [satClusters, setSatClusters] = useState<ClusterMark[]>(NO_CLUSTERS);
+  const [planetLabels, setPlanetLabels] = useState<RenderPlanet[]>(NO_PLANETS);
+  const [planetClusters, setPlanetClusters] = useState<ClusterMark[]>(NO_CLUSTERS);
+  const [eclipticMarks, setEclipticMarks] = useState<{ x: number; y: number }[]>(NO_ECLIPTIC_MARKS);
   // Screen y (px) of the elevation-0 horizon at the current pose; null when not shown.
   const [horizonY, setHorizonY] = useState<number | null>(null);
   // Cardinal-point hints (N/E/S/W) that are within the horizontal FOV this frame.
@@ -161,6 +194,10 @@ export function ArOverlay({
   const satellitesRef = useRef(satellites);
   const satellitesSampledAtRef = useRef(satellitesSampledAt);
   const showSatellitesRef = useRef(showSatellites);
+  const planetsRef = useRef(planets);
+  const showPlanetsRef = useRef(showPlanets);
+  const eclipticRef = useRef(ecliptic);
+  const showEclipticRef = useRef(showEcliptic);
   useEffect(() => {
     aircraftRef.current = aircraft;
     snapshotAtRef.current = snapshotAt;
@@ -173,7 +210,11 @@ export function ArOverlay({
     satellitesRef.current = satellites;
     satellitesSampledAtRef.current = satellitesSampledAt;
     showSatellitesRef.current = showSatellites;
-  }, [aircraft, snapshotAt, hFovDeg, showHorizon, vessels, vesselsSnapshotAt, showShips, showAton, satellites, satellitesSampledAt, showSatellites]);
+    planetsRef.current = planets;
+    showPlanetsRef.current = showPlanets;
+    eclipticRef.current = ecliptic;
+    showEclipticRef.current = showEcliptic;
+  }, [aircraft, snapshotAt, hFovDeg, showHorizon, vessels, vesselsSnapshotAt, showShips, showAton, satellites, satellitesSampledAt, showSatellites, planets, showPlanets, ecliptic, showEcliptic]);
 
   useEffect(() => {
     let raf = 0;
@@ -356,6 +397,53 @@ export function ArOverlay({
         setSatClusters(NO_CLUSTERS);
       }
 
+      // --- Sky pass: Solar-System bodies at their computed az/el (usePlanets recomputes at 30 s) ---
+      // Real elevation, projected like satellites (not the vessel horizon band). Own declutter pass so
+      // aircraft/vessel/satellite placement is untouched; brighter (lower-magnitude) bodies keep the spot.
+      if (showPlanetsRef.current && planetsRef.current.length) {
+        const pScreenLabels: ScreenLabel[] = [];
+        const pRender: RenderPlanet[] = [];
+        for (const p of planetsRef.current) {
+          const proj = project({ azimuth: p.azimuthDeg, elevation: p.elevationDeg }, pose, config);
+          if (!proj.onScreen) continue;
+          const px = (proj.xNdc * width) / 2 + width / 2;
+          const py = height / 2 - (proj.yNdc * height) / 2;
+          pScreenLabels.push({ id: p.body, x: px, y: py, priority: -(p.magnitude ?? 10) });
+          pRender.push({ planet: p, x: px, y: py, anchorY: py });
+        }
+        if (pRender.length === 0) {
+          setPlanetLabels(NO_PLANETS);
+          setPlanetClusters(NO_CLUSTERS);
+        } else {
+          const { placed: pPlaced, clusters: pChips } = declutter(pScreenLabels);
+          const pById = new Map(pPlaced.map((pl) => [pl.id, pl]));
+          const pDecluttered = pRender
+            .filter((l) => pById.has(l.planet.body))
+            .map((l) => {
+              const pl = pById.get(l.planet.body)!;
+              return { ...l, y: pl.y, anchorY: pl.anchorY };
+            });
+          setPlanetLabels(pDecluttered);
+          setPlanetClusters(pChips.map((c) => ({ x: c.x, y: c.y, count: c.count })));
+        }
+      } else {
+        setPlanetLabels(NO_PLANETS);
+        setPlanetClusters(NO_CLUSTERS);
+      }
+
+      // --- Ecliptic arc: the faint great-circle the planets ride, as on-screen dots ---
+      if (showEclipticRef.current && eclipticRef.current.length) {
+        const marks: { x: number; y: number }[] = [];
+        for (const e of eclipticRef.current) {
+          const proj = project({ azimuth: e.azimuthDeg, elevation: e.elevationDeg }, pose, config);
+          if (!proj.onScreen) continue;
+          marks.push({ x: (proj.xNdc * width) / 2 + width / 2, y: height / 2 - (proj.yNdc * height) / 2 });
+        }
+        setEclipticMarks(marks.length ? marks : NO_ECLIPTIC_MARKS);
+      } else {
+        setEclipticMarks(NO_ECLIPTIC_MARKS);
+      }
+
       // Synthetic horizon + compass. Pose-only (no observer needed), so it orients you even
       // before a GPS fix. Cardinal points sit on the horizon (elevation 0) at their azimuth,
       // and are shown only while inside the horizontal FOV.
@@ -433,6 +521,24 @@ export function ArOverlay({
       {satClusters.map((c, i) => (
         <View key={`scl${i}`} style={[styles.satCluster, { left: c.x, top: c.y }]}>
           <Text style={styles.satClusterText}>+{c.count}</Text>
+        </View>
+      ))}
+      {eclipticMarks.map((m, i) => (
+        <View key={`ecl${i}`} style={[styles.eclipticDot, { left: m.x - 1.5, top: m.y - 1.5 }]} />
+      ))}
+      {planetLabels.map((p) => (
+        <PlanetLabel
+          key={p.planet.body}
+          planet={p.planet}
+          x={p.x}
+          y={p.y}
+          anchorY={p.anchorY}
+          onPress={onSelectPlanet ?? noopSelectPlanet}
+        />
+      ))}
+      {planetClusters.map((c, i) => (
+        <View key={`pcl${i}`} style={[styles.planetCluster, { left: c.x, top: c.y }]}>
+          <Text style={styles.planetClusterText}>+{c.count}</Text>
         </View>
       ))}
       {labels.map((l) => (
@@ -542,6 +648,25 @@ const styles = StyleSheet.create({
     pointerEvents: "none",
   },
   satClusterText: { color: "#1a0f26", fontSize: 11, fontWeight: "700" },
+  planetCluster: {
+    position: "absolute",
+    backgroundColor: "rgba(255, 207, 92, 0.9)",
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    transform: [{ translateX: -12 }, { translateY: -10 }],
+    pointerEvents: "none",
+  },
+  planetClusterText: { color: "#241a05", fontSize: 11, fontWeight: "700" },
+  // Faint gold dot marking a sampled point on the ecliptic arc.
+  eclipticDot: {
+    position: "absolute",
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: "rgba(255, 207, 92, 0.4)",
+    pointerEvents: "none",
+  },
   arrow: { position: "absolute", width: 24, height: 24, alignItems: "center", justifyContent: "center", pointerEvents: "none" },
   arrowText: { color: "rgba(120, 200, 255, 0.9)", fontSize: 18 },
 });

@@ -38,6 +38,10 @@ interface SettingsState {
   satGnss: boolean;
   /** Elevation mask (deg): satellites lower than this above the horizon are hidden. */
   satElevationMaskDeg: number;
+  /** Draw the Solar-System bodies (Sun, Moon, planets) in the AR sky pass + Sky list. */
+  showPlanets: boolean;
+  /** Draw the faint ecliptic arc across the AR sky (the Sun's path / the plane the planets hug). */
+  showEcliptic: boolean;
   /** Draw fishing-regulation zones (cod boundaries / forbidden / zero areas) on the geographic map. */
   showFishingZones: boolean;
   /** Draw reported lost/ghost fishing-gear points on the geographic map. */
@@ -54,6 +58,8 @@ interface SettingsState {
   setSatWeather: (on: boolean) => void;
   setSatGnss: (on: boolean) => void;
   setSatElevationMaskDeg: (deg: number) => void;
+  setShowPlanets: (on: boolean) => void;
+  setShowEcliptic: (on: boolean) => void;
   setShowFishingZones: (on: boolean) => void;
   setShowLostGear: (on: boolean) => void;
 }
@@ -104,6 +110,10 @@ export const useSettingsStore = create<SettingsState>()(
       satWeather: true,
       satGnss: true,
       satElevationMaskDeg: DEFAULT_ELEVATION_MASK_DEG,
+      // Sun/Moon/planets are on by default (a free, always-available sky layer); the ecliptic arc is a
+      // subtler power-user overlay, so it stays opt-in.
+      showPlanets: true,
+      showEcliptic: false,
       // Fishing overlays are opt-in — they only make sense over the fjord/coast map view, so default off.
       showFishingZones: false,
       showLostGear: false,
@@ -121,6 +131,8 @@ export const useSettingsStore = create<SettingsState>()(
       setSatElevationMaskDeg: (satElevationMaskDeg) => set({ satElevationMaskDeg }),
       setShowFishingZones: (showFishingZones) => set({ showFishingZones }),
       setShowLostGear: (showLostGear) => set({ showLostGear }),
+      setShowPlanets: (showPlanets) => set({ showPlanets }),
+      setShowEcliptic: (showEcliptic) => set({ showEcliptic }),
     }),
     {
       name: "skylens.settings.v1",
