@@ -14,6 +14,12 @@ import { iconForCategory } from "@/components/aircraftIcon";
 import { iconForVessel } from "@/components/vesselIcon";
 import { lineLatLngs, pointLatLng, polygonRings, type GeoGeometry, type LatLngTuple } from "./geojson";
 import {
+  aircraftCourseVector,
+  vesselCourseVector,
+  AIRCRAFT_COURSE_COLOR,
+  SHIP_COURSE_COLOR,
+} from "./course";
+import {
   LOST_GEAR_COLOR,
   LOST_GEAR_GLYPH,
   lostGearDescription,
@@ -45,6 +51,8 @@ export interface LeafletMapProps {
   trackKey?: number | null;
   /** Clear the current track (clear chip + tapping the sub-point marker). */
   onClearTrack?: () => void;
+  /** Draw a short predicted-track (course/heading) leader ahead of moving aircraft & ships. */
+  showCourseVectors?: boolean;
 }
 
 // Violet family — matches the satellite label / list / detail sheet, distinct from aircraft blue,
@@ -225,6 +233,7 @@ export function LeafletMap({
   trackName = null,
   trackKey = null,
   onClearTrack,
+  showCourseVectors = false,
 }: LeafletMapProps) {
   const positioned = aircraft.filter((a) => a.lat != null && a.lon != null);
   const positionedVessels = vessels.filter((v) => v.lat != null && v.lon != null);
@@ -267,6 +276,29 @@ export function LeafletMap({
           eventHandlers={{ click: () => onSelectVessel?.(v.mmsi) }}
         />
       ))}
+      {/* Course leaders: dashed, drawn before the solid violet track so the track stays on top. */}
+      {showCourseVectors &&
+        positioned.map((a) => {
+          const v = aircraftCourseVector(a);
+          return v ? (
+            <Polyline
+              key={`ac-course-${a.hex}`}
+              positions={v}
+              pathOptions={{ color: AIRCRAFT_COURSE_COLOR, weight: 2, opacity: 0.8, dashArray: "6 4" }}
+            />
+          ) : null;
+        })}
+      {showCourseVectors &&
+        positionedVessels.map((ves) => {
+          const v = vesselCourseVector(ves);
+          return v ? (
+            <Polyline
+              key={`ship-course-${ves.mmsi}`}
+              positions={v}
+              pathOptions={{ color: SHIP_COURSE_COLOR, weight: 2, opacity: 0.8, dashArray: "6 4" }}
+            />
+          ) : null;
+        })}
       {/* Satellite ground track: one violet polyline per antimeridian-split segment, over the traffic. */}
       {trackSegments.map((seg, i) => (
         <Polyline

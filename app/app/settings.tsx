@@ -29,6 +29,7 @@ export default function SettingsScreen() {
     demoMode,
     showShips,
     showAton,
+    showCourseVectors,
     showSatellites,
     satAmateurStations,
     satWeather,
@@ -44,6 +45,7 @@ export default function SettingsScreen() {
     setDemoMode,
     setShowShips,
     setShowAton,
+    setShowCourseVectors,
     setShowSatellites,
     setSatAmateurStations,
     setSatWeather,
@@ -153,6 +155,17 @@ export default function SettingsScreen() {
           <Row label="Show aids to navigation">
             <Switch value={showAton} onValueChange={setShowAton} />
           </Row>
+          <Row label="Course vectors">
+            <Switch
+              testID="settings-show-course-vectors"
+              value={showCourseVectors}
+              onValueChange={setShowCourseVectors}
+            />
+          </Row>
+          <Text style={styles.hint}>
+            Draw a short predicted-track leader ahead of each moving aircraft (2 min) and ship (15
+            min).
+          </Text>
         </Section>
 
         <Section title="Fishing">

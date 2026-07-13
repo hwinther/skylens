@@ -28,6 +28,8 @@ interface SettingsState {
   showShips: boolean;
   /** Show AIS aids to navigation (lighthouses, beacons, buoys). */
   showAton: boolean;
+  /** Draw a short predicted-track (course/heading) leader ahead of moving aircraft & ships. */
+  showCourseVectors: boolean;
   /** Draw the orbital (satellite) pass in the AR overlay. */
   showSatellites: boolean;
   /** Include the crewed "stations" + "amateur" satellite groups. */
@@ -53,6 +55,7 @@ interface SettingsState {
   setDemoMode: (on: boolean) => void;
   setShowShips: (on: boolean) => void;
   setShowAton: (on: boolean) => void;
+  setShowCourseVectors: (on: boolean) => void;
   setShowSatellites: (on: boolean) => void;
   setSatAmateurStations: (on: boolean) => void;
   setSatWeather: (on: boolean) => void;
@@ -105,6 +108,7 @@ export const useSettingsStore = create<SettingsState>()(
       demoMode: !forceLive,
       showShips: true,
       showAton: true,
+      showCourseVectors: true,
       showSatellites: true,
       satAmateurStations: true,
       satWeather: true,
@@ -124,6 +128,7 @@ export const useSettingsStore = create<SettingsState>()(
       setDemoMode: (demoMode) => set({ demoMode }),
       setShowShips: (showShips) => set({ showShips }),
       setShowAton: (showAton) => set({ showAton }),
+      setShowCourseVectors: (showCourseVectors) => set({ showCourseVectors }),
       setShowSatellites: (showSatellites) => set({ showSatellites }),
       setSatAmateurStations: (satAmateurStations) => set({ satAmateurStations }),
       setSatWeather: (satWeather) => set({ satWeather }),

@@ -16,6 +16,14 @@ import { iconForCategory } from "./aircraftIcon";
 import { iconForVessel } from "./vesselIcon";
 import { isAutoRange, zoomIn, zoomOut } from "./radarRange";
 import { relativePosition, type Observer } from "./webmap/relative";
+import {
+  leadDistanceKm,
+  AIRCRAFT_LEAD_SECONDS,
+  SHIP_LEAD_SECONDS,
+  AIRCRAFT_COURSE_COLOR,
+  SHIP_COURSE_COLOR,
+  MIN_COURSE_SPEED_KN,
+} from "./webmap/course";
 
 export interface AircraftRadarProps {
   aircraft: AircraftDto[];
@@ -29,6 +37,49 @@ export interface AircraftRadarProps {
   rangeKm?: number;
   /** Called with the new range when the user zooms; omit to hide the zoom control (read-only radar). */
   onRangeChange?: (km: number) => void;
+  /** Draw a short predicted-track (course/heading) leader ahead of moving aircraft & ships. */
+  showCourseVectors?: boolean;
+}
+
+/**
+ * A thin rotated bar from a blip toward its heading — the radar's pixel projection of the physical km
+ * leader. A default horizontal View points east (+x); rotating by `bearingDeg - 90` about its centre
+ * aims it along the true bearing (0 = N → up). Centred on the blip→endpoint midpoint so it spans the leg.
+ */
+function RadarLeader({
+  x,
+  y,
+  leadPx,
+  bearingDeg,
+  color,
+}: {
+  x: number;
+  y: number;
+  leadPx: number;
+  bearingDeg: number;
+  color: string;
+}) {
+  const rad = (bearingDeg * Math.PI) / 180;
+  const ex = x + leadPx * Math.sin(rad);
+  const ey = y - leadPx * Math.cos(rad);
+  const midX = (x + ex) / 2;
+  const midY = (y + ey) / 2;
+  return (
+    <View
+      style={{
+        position: "absolute",
+        left: midX - leadPx / 2,
+        top: midY - 1,
+        width: leadPx,
+        height: 2,
+        backgroundColor: color,
+        opacity: 0.8,
+        borderRadius: 1,
+        transform: [{ rotate: `${bearingDeg - 90}deg` }],
+        pointerEvents: "none",
+      }}
+    />
+  );
 }
 
 /** Round a range up to a tidy 1 / 2 / 5 × 10ⁿ value for the outer ring. */
@@ -50,6 +101,7 @@ export function AircraftRadar({
   onSelectVessel,
   rangeKm,
   onRangeChange,
+  showCourseVectors = false,
 }: AircraftRadarProps) {
   const [size, setSize] = useState(0);
   const onLayout = (e: LayoutChangeEvent) => {
@@ -130,6 +182,58 @@ export function AircraftRadar({
           <Text style={[styles.cardinal, { left: cx - R - 15, top: cy - 8 }]}>W</Text>
 
           <View style={[styles.observer, { left: cx - 4, top: cy - 4 }]} />
+
+          {/* Course leaders under the blips: same physical km lead as the geographic maps, in px. */}
+          {showCourseVectors &&
+            rel.map(({ a, distanceKm, bearingDeg }) => {
+              if (distanceKm > maxRange || a.trk == null || a.gs == null || a.gs < MIN_COURSE_SPEED_KN) {
+                return null;
+              }
+              const rr = Math.min(distanceKm / maxRange, 1) * R;
+              const rad = (bearingDeg * Math.PI) / 180;
+              const x = cx + rr * Math.sin(rad);
+              const y = cy - rr * Math.cos(rad);
+              // Clamp so a fast target at close range doesn't shoot the leader off the scope.
+              const leadPx = Math.min(leadDistanceKm(a.gs, AIRCRAFT_LEAD_SECONDS) * (R / maxRange), R);
+              return (
+                <RadarLeader
+                  key={`ac-course-${a.hex}`}
+                  x={x}
+                  y={y}
+                  leadPx={leadPx}
+                  bearingDeg={a.trk}
+                  color={AIRCRAFT_COURSE_COLOR}
+                />
+              );
+            })}
+          {showCourseVectors &&
+            vesselRel.map(({ v, distanceKm, bearingDeg }) => {
+              const course = v.cog ?? v.hdg;
+              if (
+                distanceKm > maxRange ||
+                v.kind !== "ship" ||
+                course == null ||
+                v.sog == null ||
+                v.sog < MIN_COURSE_SPEED_KN
+              ) {
+                return null;
+              }
+              const rr = Math.min(distanceKm / maxRange, 1) * R;
+              const rad = (bearingDeg * Math.PI) / 180;
+              const x = cx + rr * Math.sin(rad);
+              const y = cy - rr * Math.cos(rad);
+              const leadPx = Math.min(leadDistanceKm(v.sog, SHIP_LEAD_SECONDS) * (R / maxRange), R);
+              return (
+                <RadarLeader
+                  key={`ship-course-${v.mmsi}`}
+                  x={x}
+                  y={y}
+                  leadPx={leadPx}
+                  bearingDeg={course}
+                  color={SHIP_COURSE_COLOR}
+                />
+              );
+            })}
 
           {rel.map(({ a, distanceKm, bearingDeg }) => {
             const beyond = distanceKm > maxRange;
