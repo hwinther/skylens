@@ -173,7 +173,7 @@ export function AircraftRadar({
 
           {/* Range-zoom control, top-right. `+` / `−` step the fixed ladder; the chip resets to Auto. */}
           {onRangeChange && (
-            <View style={styles.zoomControl} pointerEvents="box-none">
+            <View style={[styles.zoomControl, { pointerEvents: "box-none" }]}>
               <Pressable
                 testID="radar-range-label"
                 onPress={() => onRangeChange(0)}
