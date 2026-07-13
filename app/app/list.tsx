@@ -183,6 +183,8 @@ export default function ListScreen() {
       <SatelliteDetailSheet
         noradId={selectedNoradId}
         view={selectedNoradId != null ? byNoradId.get(selectedNoradId) : undefined}
+        observer={observer}
+        elevationMaskDeg={satElevationMaskDeg}
         onClose={() => setSelectedNoradId(null)}
       />
     </SafeAreaView>

@@ -190,6 +190,8 @@ export default function ArScreen() {
       <SatelliteDetailSheet
         noradId={selectedNoradId}
         view={selectedNoradId != null ? satHook.byNoradId.get(selectedNoradId) : undefined}
+        observer={demoMode ? DEMO_HOME : observer}
+        elevationMaskDeg={satElevationMaskDeg}
         onClose={() => setSelectedNoradId(null)}
       />
     </View>

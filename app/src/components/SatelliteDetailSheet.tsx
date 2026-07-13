@@ -24,8 +24,14 @@ import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
 import type { SatelliteDetail, SatelliteTransmitter } from "@/api/types";
 import {
+  buildSatrec,
+  DEFAULT_ELEVATION_MASK_DEG,
   dopplerCorrectedHz,
+  formatCountdown,
   formatFrequencyHz,
+  formatPassDuration,
+  nextPass,
+  type Observer,
   type SatelliteView,
 } from "@/ar";
 import { compass8 } from "./webmap/relative";
@@ -38,7 +44,16 @@ export interface SatelliteDetailSheetProps {
   noradId: number | null;
   /** Live 1 Hz view from the hook's byNoradId map; undefined once the satellite drops below the mask. */
   view?: SatelliteView;
+  /** Observer position for the client-side "Next pass" prediction; omit (or null) to hide that section. */
+  observer?: Observer | null;
+  /** Elevation mask (deg) the pass prediction uses; defaults to DEFAULT_ELEVATION_MASK_DEG. */
+  elevationMaskDeg?: number;
   onClose: () => void;
+}
+
+/** Local wall-clock time for a pass instant, e.g. "18:42:10" (display only — not unit-tested). */
+function passClock(d: Date): string {
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
 /** Active ⇒ the transmitter is currently operational (SatNOGS `alive`). */
@@ -56,11 +71,20 @@ function sortTransmitters(txs: SatelliteTransmitter[]): SatelliteTransmitter[] {
   });
 }
 
-export function SatelliteDetailSheet({ noradId, view, onClose }: SatelliteDetailSheetProps) {
+export function SatelliteDetailSheet({
+  noradId,
+  view,
+  observer,
+  elevationMaskDeg,
+  onClose,
+}: SatelliteDetailSheetProps) {
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
   const [detail, setDetail] = useState<SatelliteDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A 1 Hz wall-clock tick so the "in 2h 14m" countdown stays live while the sheet is open (even when
+  // the satellite is below the mask and no `view` arrives to re-render). Cleared on close/unmount.
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
     setDetail(null);
@@ -83,6 +107,23 @@ export function SatelliteDetailSheet({ noradId, view, onClose }: SatelliteDetail
       cancelled = true;
     };
   }, [noradId, client]);
+
+  useEffect(() => {
+    if (noradId == null) return;
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [noradId]);
+
+  const maskDeg = elevationMaskDeg ?? DEFAULT_ELEVATION_MASK_DEG;
+  // Predict the next pass once per detail load (keyed on the satellite + observer + mask, NOT per
+  // render): build a satrec straight from the verbatim OMM and scan it client-side. `new Date()` is
+  // captured here so the AOS/LOS times are fixed for this open; only the countdown ticks (via nowMs).
+  const pass = useMemo(() => {
+    if (!detail || !observer) return null;
+    const satrec = buildSatrec(detail.satellite.omm);
+    if (!satrec) return null;
+    return nextPass(satrec, observer, new Date(), maskDeg);
+  }, [detail, observer, maskDeg]);
 
   // Identity: prefer the live view, fall back to the fetched static satellite, then the bare id.
   const name = view?.name?.trim() || detail?.satellite.name?.trim() || String(noradId ?? "");
@@ -123,6 +164,36 @@ export function SatelliteDetailSheet({ noradId, view, onClose }: SatelliteDetail
         ) : (
           <Text style={styles.belowMask}>Below the elevation mask — live pass data hidden.</Text>
         )}
+
+        <View testID="sat-next-pass" style={styles.passSection}>
+          <Text style={styles.passHeading}>Next pass</Text>
+          {observer == null ? (
+            <Text style={styles.passMuted}>Location needed for passes</Text>
+          ) : pass == null ? (
+            <Text style={styles.passMuted}>No pass in next 48 h</Text>
+          ) : pass.inProgress ? (
+            <>
+              <Text style={styles.passLine}>
+                Overhead now · max {Math.round(pass.maxElevationDeg)}° · ↓ {passClock(pass.losTime)}{" "}
+                {compass8(pass.losAzimuthDeg)} · sets {formatCountdown(pass.losTime.getTime() - nowMs)}
+              </Text>
+              <Text style={styles.passSub}>
+                Duration {formatPassDuration(pass.losTime.getTime() - pass.aosTime.getTime())}
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.passLine}>
+                ↑ {passClock(pass.aosTime)} {compass8(pass.aosAzimuthDeg)} · max{" "}
+                {Math.round(pass.maxElevationDeg)}° · ↓ {passClock(pass.losTime)}{" "}
+                {compass8(pass.losAzimuthDeg)} · {formatCountdown(pass.aosTime.getTime() - nowMs)}
+              </Text>
+              <Text style={styles.passSub}>
+                Duration {formatPassDuration(pass.losTime.getTime() - pass.aosTime.getTime())}
+              </Text>
+            </>
+          )}
+        </View>
 
         <ScrollView style={styles.txScroll} contentContainerStyle={styles.txContent}>
           {loading && <ActivityIndicator color={SAT_VIOLET} />}
@@ -215,6 +286,17 @@ const styles = StyleSheet.create({
   norad: { color: "#7fa6c4", fontSize: 13, fontWeight: "600", marginLeft: "auto" },
   liveRows: { gap: 2, marginBottom: 8 },
   belowMask: { color: "#7fa6c4", fontSize: 13, fontStyle: "italic", marginBottom: 8 },
+  passSection: {
+    borderTopColor: "#16283a",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 8,
+    marginBottom: 4,
+    gap: 2,
+  },
+  passHeading: { color: SAT_VIOLET, fontSize: 12, fontWeight: "700", textTransform: "uppercase" },
+  passLine: { color: "#EDE3FA", fontSize: 14, fontWeight: "600" },
+  passSub: { color: "#9FC7E0", fontSize: 12 },
+  passMuted: { color: "#7fa6c4", fontSize: 13, fontStyle: "italic" },
   row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
   rowLabel: { color: "#7fa6c4", fontSize: 14 },
   rowValue: { color: "#EAF6FF", fontSize: 14, fontWeight: "500" },
