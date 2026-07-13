@@ -31,6 +31,26 @@ export type VesselMetadata = Schemas["Skylens.Api.Enrichment.VesselMetadata"];
 /** GET /api/vessels/{mmsi} — live state (if tracked) + derived metadata; either half may be null. */
 export type VesselDetail = Schemas["Skylens.Api.Endpoints.ApiEndpoints.VesselDetail"];
 
+/**
+ * Fishing-mode types (Phase A backend; the app consumes these in Phase B). Each `geometry` is the raw
+ * upstream GeoJSON passed through verbatim, so it types as a loose object — Phase B casts it to a
+ * GeoJSON geometry (Polygon/MultiPolygon for forbidden/zero areas, LineString for cod boundaries,
+ * Point for lost gear) before rendering.
+ */
+
+/** One fishing-regulation zone: `kind` is "cod" | "forbidden" | "zero", plus optional info + geometry. */
+export type FishingZone = Schemas["Skylens.Api.Enrichment.FishingZone"];
+
+/** GET /api/fishing/zones — combined cod + forbidden + zero zones (empty + `note` when unconfigured). */
+export type FishingZonesResponse =
+  Schemas["Skylens.Api.Endpoints.ApiEndpoints.FishingZonesResponse"];
+
+/** One piece of lost/ghost fishing gear (anonymized): gear type/count, loss time/cause, point geometry. */
+export type LostGear = Schemas["Skylens.Api.Enrichment.LostGear"];
+
+/** GET /api/fishing/lostgear — lost gear points (empty + `note` when unconfigured). */
+export type LostGearResponse = Schemas["Skylens.Api.Endpoints.ApiEndpoints.LostGearResponse"];
+
 /** GET /api/aircraft/{hex}/route — AeroAPI route by callsign. */
 export type RouteResponse = Schemas["Skylens.Api.Enrichment.FlightRoute"];
 

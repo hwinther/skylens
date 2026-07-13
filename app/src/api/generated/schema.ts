@@ -212,6 +212,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fishing/zones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["FishingZones"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fishing/lostgear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["FishingLostGear"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -231,6 +263,18 @@ export interface components {
             edgeMarkerPresent?: boolean;
             userAgent?: string | null;
             detail?: string | null;
+        };
+        "Skylens.Api.Endpoints.ApiEndpoints.FishingZonesResponse": {
+            /** Format: date-time */
+            fetchedAtUtc?: string;
+            zones?: components["schemas"]["Skylens.Api.Enrichment.FishingZone"][] | null;
+            note?: string | null;
+        };
+        "Skylens.Api.Endpoints.ApiEndpoints.LostGearResponse": {
+            /** Format: date-time */
+            fetchedAtUtc?: string;
+            gear?: components["schemas"]["Skylens.Api.Enrichment.LostGear"][] | null;
+            note?: string | null;
         };
         "Skylens.Api.Endpoints.ApiEndpoints.MeResponse": {
             sub?: string | null;
@@ -286,6 +330,11 @@ export interface components {
             operator?: string | null;
             source?: string | null;
         };
+        "Skylens.Api.Enrichment.FishingZone": {
+            kind?: string | null;
+            info?: string | null;
+            geometry?: Record<string, never> | null;
+        };
         "Skylens.Api.Enrichment.FlightRoute": {
             ident: string | null;
             originIcao?: string | null;
@@ -293,6 +342,16 @@ export interface components {
             destinationIcao?: string | null;
             destinationName?: string | null;
             source?: string | null;
+        };
+        "Skylens.Api.Enrichment.LostGear": {
+            toolTypeCode?: string | null;
+            /** Format: int32 */
+            count?: number | null;
+            /** Format: date-time */
+            lostTime?: string | null;
+            lostCause?: string | null;
+            source?: string | null;
+            geometry?: Record<string, never> | null;
         };
         "Skylens.Api.Enrichment.OmmElements": {
             OBJECT_NAME?: string | null;
@@ -370,6 +429,11 @@ export interface components {
             dimPort?: number | null;
             /** Format: int32 */
             dimStarboard?: number | null;
+            registerName?: string | null;
+            registerOwner?: string | null;
+            registerType?: string | null;
+            /** Format: double */
+            registerLengthOverall?: number | null;
             source?: string | null;
         };
         "Skylens.Api.State.AircraftDto": {
@@ -753,6 +817,46 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    FishingZones: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Skylens.Api.Endpoints.ApiEndpoints.FishingZonesResponse"];
+                };
+            };
+        };
+    };
+    FishingLostGear: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Skylens.Api.Endpoints.ApiEndpoints.LostGearResponse"];
+                };
             };
         };
     };

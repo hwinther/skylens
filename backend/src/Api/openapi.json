@@ -433,6 +433,46 @@
           }
         }
       }
+    },
+    "/api/fishing/zones": {
+      "get": {
+        "tags": [
+          "Skylens.Api, Version=0.0.0.1, Culture=neutral, PublicKeyToken=null"
+        ],
+        "operationId": "FishingZones",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Skylens.Api.Endpoints.ApiEndpoints.FishingZonesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/fishing/lostgear": {
+      "get": {
+        "tags": [
+          "Skylens.Api, Version=0.0.0.1, Culture=neutral, PublicKeyToken=null"
+        ],
+        "operationId": "FishingLostGear",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Skylens.Api.Endpoints.ApiEndpoints.LostGearResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -486,6 +526,48 @@
             "nullable": true
           },
           "detail": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Skylens.Api.Endpoints.ApiEndpoints.FishingZonesResponse": {
+        "type": "object",
+        "properties": {
+          "fetchedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "zones": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Skylens.Api.Enrichment.FishingZone"
+            },
+            "nullable": true
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Skylens.Api.Endpoints.ApiEndpoints.LostGearResponse": {
+        "type": "object",
+        "properties": {
+          "fetchedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "gear": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Skylens.Api.Enrichment.LostGear"
+            },
+            "nullable": true
+          },
+          "note": {
             "type": "string",
             "nullable": true
           }
@@ -666,6 +748,24 @@
         },
         "additionalProperties": false
       },
+      "Skylens.Api.Enrichment.FishingZone": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "nullable": true
+          },
+          "info": {
+            "type": "string",
+            "nullable": true
+          },
+          "geometry": {
+            "type": "object",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "Skylens.Api.Enrichment.FlightRoute": {
         "required": [
           "ident"
@@ -694,6 +794,38 @@
           },
           "source": {
             "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Skylens.Api.Enrichment.LostGear": {
+        "type": "object",
+        "properties": {
+          "toolTypeCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "count": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "lostTime": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "lostCause": {
+            "type": "string",
+            "nullable": true
+          },
+          "source": {
+            "type": "string",
+            "nullable": true
+          },
+          "geometry": {
+            "type": "object",
             "nullable": true
           }
         },
@@ -906,6 +1038,23 @@
           "dimStarboard": {
             "type": "integer",
             "format": "int32",
+            "nullable": true
+          },
+          "registerName": {
+            "type": "string",
+            "nullable": true
+          },
+          "registerOwner": {
+            "type": "string",
+            "nullable": true
+          },
+          "registerType": {
+            "type": "string",
+            "nullable": true
+          },
+          "registerLengthOverall": {
+            "type": "number",
+            "format": "double",
             "nullable": true
           },
           "source": {

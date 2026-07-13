@@ -65,6 +65,23 @@ public sealed record VesselMetadata
     public int? DimPort { get; init; }
     public int? DimStarboard { get; init; }
 
+    // -- BarentsWatch FiskInfo NOR/NIS ship-register enrichment (fishing mode, Phase A) ---------------
+    // Additive fields folded in from GET /v2/shipregister/{mmsi} when FiskInfo is configured. The
+    // register carries no home-port field, so the registered owner (organisation) + vessel-type
+    // description are the useful identity/enrichment fields it provides. All null when unconfigured/404.
+
+    /// <summary>Registered vessel name from the NOR/NIS ship register.</summary>
+    public string? RegisterName { get; init; }
+
+    /// <summary>Registered owner (organisation name) from the ship register.</summary>
+    public string? RegisterOwner { get; init; }
+
+    /// <summary>Ship-register vessel-type description (English, falling back to Norwegian).</summary>
+    public string? RegisterType { get; init; }
+
+    /// <summary>Registered length overall, metres, from the ship register.</summary>
+    public double? RegisterLengthOverall { get; init; }
+
     /// <summary>Where this metadata came from: "ais" (derived from the live feed) for now.</summary>
     public string Source { get; init; } = "ais";
 
