@@ -68,11 +68,13 @@ jobs:
       - name: Resolve version + versionCode
         id: ver
         run: |
-          # Version source: the app-v* release tag, else the workflow_dispatch input, else app.json.
-          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            version="${GITHUB_REF_NAME#app-v}"
-          elif [ -n "$INPUT_VERSION" ]; then
+          # Version source: the explicit input (dispatch / tag-and-release), else the tag
+          # (app-v0.15.0 or a v1.2.3 release tag), else app.json.
+          if [ -n "$INPUT_VERSION" ]; then
             version="$INPUT_VERSION"
+          elif [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            version="${GITHUB_REF_NAME#app-v}"   # app-v0.15.0 -> 0.15.0
+            version="${version#v}"               # or a v1.2.3 release tag -> 1.2.3
           else
             version="$(node -p "require('./app.json').expo.version")"
           fi

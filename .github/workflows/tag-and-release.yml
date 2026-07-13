@@ -18,6 +18,14 @@ on:
         description: "Fail the container workflow if Grype finds vulnerabilities (turn off for a release override)"
         type: boolean
         default: true
+      build_android:
+        description: "Also build the Android app (dispatch android-build.yml at this tag)"
+        type: boolean
+        default: true
+      android_upload_to_play:
+        description: "Have the Android build upload the AAB to the Play internal-testing track"
+        type: boolean
+        default: false
 
 jobs:
   tag:
@@ -69,3 +77,41 @@ jobs:
           gh workflow run container.yml
           --ref "${{ steps.ref.outputs.ref }}"
           -f grype_fail_build=${{ inputs.container_grype_fail_build }}
+
+  trigger-android-build:
+    needs: tag
+    if: ${{ success() && inputs.build_android }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Determine version for the Android build
+        id: ver
+        run: |
+          git fetch --tags --force
+          TAG="${{ inputs.tag_name }}"
+          if [ "$TAG" = "auto" ] || [ -z "$TAG" ]; then
+            TAG=$(git tag -l 'v*' --sort=-v:refname | head -n1)
+          fi
+          if [ -z "$TAG" ]; then
+            echo "::error::Could not resolve a tag for the Android build."
+            exit 1
+          fi
+          echo "Using tag: $TAG (version ${TAG#v})"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch android-build workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh workflow run android-build.yml
+          --ref "${{ steps.ver.outputs.tag }}"
+          -f version="${{ steps.ver.outputs.version }}"
+          -f upload_to_play=${{ inputs.android_upload_to_play }}
