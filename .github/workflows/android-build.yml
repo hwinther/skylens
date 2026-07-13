@@ -13,8 +13,11 @@ name: "Build Android app (AAB)"
 #   PLAY_SERVICE_ACCOUNT_JSON       — (upload only) Google Play service-account JSON
 #
 # Third-party actions are pinned to full commit SHAs (repo policy / zizmor blanket-pin); the trailing
-# comment tracks the version. No dependency cache is restored — cache-poisoning guard for a workflow
-# that produces a signed release artifact.
+# comment tracks the version. npm/gradle caches are kept for build speed: zizmor's cache-poisoning
+# finding is accepted because this repo is PUBLIC (external contributors get fork PRs, whose caches
+# are isolated and can't be restored by this tag/dispatch-only release workflow) and single-maintainer
+# — dismiss code-scanning alerts #21 & #22 with that rationale. Revisit if branch-push collaborators
+# are added.
 
 on:
   workflow_dispatch:
