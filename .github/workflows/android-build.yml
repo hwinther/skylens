@@ -20,6 +20,10 @@ name: "Build Android app (AAB)"
 on:
   workflow_dispatch:
     inputs:
+      version:
+        description: "Version major.minor.patch (blank = app.json version). Tag builds use the app-v* tag."
+        type: string
+        default: ""
       upload_to_play:
         description: "Also upload the AAB to the Play internal-testing track (first upload must be manual)"
         type: boolean
@@ -61,10 +65,32 @@ jobs:
       - name: Install dependencies
         run: npm ci # app/.npmrc pins legacy-peer-deps=true
 
+      - name: Resolve version + versionCode
+        id: ver
+        run: |
+          # Version source: the app-v* release tag, else the workflow_dispatch input, else app.json.
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            version="${GITHUB_REF_NAME#app-v}"
+          elif [ -n "$INPUT_VERSION" ]; then
+            version="$INPUT_VERSION"
+          else
+            version="$(node -p "require('./app.json').expo.version")"
+          fi
+          # Encode major.minor.patch -> versionCode: 2 digits major, 3 minor, 2 patch (0.15.0 -> 1500).
+          core="${version%%[-+]*}"                        # drop any -prerelease / +build suffix
+          IFS=. read -r major minor patch _ <<< "$core"
+          code=$(( 10#${major:-0} * 100000 + 10#${minor:-0} * 100 + 10#${patch:-0} ))
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "Resolved version $version -> versionCode $code"
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+
       - name: Prebuild native Android project
         env:
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
-          ANDROID_VERSION_CODE: ${{ github.run_number }} # monotonic per run — see app/app.config.js
+          ANDROID_VERSION_NAME: ${{ steps.ver.outputs.version }}
+          ANDROID_VERSION_CODE: ${{ steps.ver.outputs.code }}
         run: npx expo prebuild -p android --no-install
 
       - name: Decode upload keystore

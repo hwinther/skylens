@@ -372,6 +372,67 @@ public sealed class SmokeTests
     }
 
     [Fact]
+    public async Task Api_fishing_zones_requires_authentication()
+    {
+        using var client = _factory.CreateClient();
+
+        using var resp = await client.GetAsync("/api/fishing/zones", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task Api_fishing_lostgear_requires_authentication()
+    {
+        using var client = _factory.CreateClient();
+
+        using var resp = await client.GetAsync("/api/fishing/lostgear", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task Api_fishing_zones_returns_empty_with_note_when_unconfigured()
+    {
+        using var client = _authFactory.CreateClient();
+
+        // The DevAuth factory has no FiskInfo credentials, so the client is unconfigured — the endpoint
+        // must degrade to a 200 with an empty zones list + a note (never a 503), so the map layer just
+        // shows nothing rather than erroring.
+        using var resp = await client.GetAsync("/api/fishing/zones", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+
+        Assert.True(root.TryGetProperty("fetchedAtUtc", out _));
+        var zones = root.GetProperty("zones");
+        Assert.Equal(JsonValueKind.Array, zones.ValueKind);
+        Assert.Equal(0, zones.GetArrayLength());
+        Assert.Equal("fiskinfo-unconfigured", root.GetProperty("note").GetString());
+    }
+
+    [Fact]
+    public async Task Api_fishing_lostgear_returns_empty_with_note_when_unconfigured()
+    {
+        using var client = _authFactory.CreateClient();
+
+        using var resp = await client.GetAsync("/api/fishing/lostgear", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+
+        Assert.True(root.TryGetProperty("fetchedAtUtc", out _));
+        var gear = root.GetProperty("gear");
+        Assert.Equal(JsonValueKind.Array, gear.ValueKind);
+        Assert.Equal(0, gear.GetArrayLength());
+        Assert.Equal("fiskinfo-unconfigured", root.GetProperty("note").GetString());
+    }
+
+    [Fact]
     public async Task Api_vessel_detail_returns_404_for_unknown_mmsi()
     {
         using var client = _authFactory.CreateClient();

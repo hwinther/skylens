@@ -192,3 +192,34 @@ public sealed class BarentsWatchOptions
 
     public bool Configured => !string.IsNullOrEmpty(ClientId) && !string.IsNullOrEmpty(ClientSecret);
 }
+
+/// <summary>
+///     BarentsWatch FiskInfo ("extended") API — a SECOND BarentsWatch OAuth2 client-credentials client
+///     (separate credentials from <see cref="BarentsWatchOptions" />) against the same
+///     <see cref="TokenEndpoint" />, powering "fishing mode": fishing-regulation zone polygons, lost/ghost
+///     fishing gear, and NOR/NIS ship-register enrichment. <see cref="Scope" /> is BarentsWatch's general
+///     API scope (defaults to <c>"api"</c> — a config value so it can be corrected without a redeploy). A
+///     daily <see cref="DailyBudget" /> fails closed. Credentials come from env/secrets
+///     (<c>FISKINFO__CLIENTID</c> / <c>FISKINFO__CLIENTSECRET</c>), never committed;
+///     <see cref="Configured" /> gates every upstream call.
+/// </summary>
+public sealed class FiskInfoOptions
+{
+    public const string SectionName = "FiskInfo";
+
+    public string? ClientId { get; set; }
+    public string? ClientSecret { get; set; }
+
+    /// <summary>OAuth2 token endpoint (client-credentials grant); shared with the AIS client.</summary>
+    public string TokenEndpoint { get; set; } = "https://id.barentswatch.no/connect/token";
+
+    /// <summary>OAuth2 scope; BarentsWatch's general API scope. Defaults to "api" (correctable via config).</summary>
+    public string Scope { get; set; } = "api";
+
+    /// <summary>FiskInfo API base (geodata, lostfishingfacility, shipregister live under here).</summary>
+    public string BaseUrl { get; set; } = "https://www.barentswatch.no/bwapi";
+
+    public int DailyBudget { get; set; } = 500;
+
+    public bool Configured => !string.IsNullOrEmpty(ClientId) && !string.IsNullOrEmpty(ClientSecret);
+}

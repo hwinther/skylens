@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Microsoft.OpenApi;
 
 namespace Skylens.Api.Extensions;
@@ -18,6 +19,13 @@ internal static class OpenApiExtensions
         services.AddSwaggerGen(static options =>
         {
             options.CustomSchemaIds(static type => type.FullName?.Replace("+", ".") ?? type.Name);
+
+            // GeoJSON `geometry` on the fishing-mode DTOs is a JsonNode passed through VERBATIM. Left to
+            // its own devices Swashbuckle introspects JsonNode's CLR internals (recursive parent/root
+            // refs, additionalProperties:false), producing a misleading schema that also mismatches the
+            // real geometry at runtime. Map it to a free-form object so it types as a loose object the
+            // client casts to a GeoJSON geometry (Polygon/MultiPolygon/LineString/Point).
+            options.MapType<JsonNode>(static () => new OpenApiSchema { Type = JsonSchemaType.Object });
             options.SwaggerDoc("v1", new OpenApiInfo
             {
                 Version = "v1",

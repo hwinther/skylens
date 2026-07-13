@@ -13,6 +13,7 @@
 module.exports = ({ config }) => {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
   const versionCode = process.env.ANDROID_VERSION_CODE;
+  const versionName = process.env.ANDROID_VERSION_NAME;
 
   const android = { ...config.android };
 
@@ -25,10 +26,10 @@ module.exports = ({ config }) => {
     );
   }
 
-  // CI (GitHub Actions) sets a monotonic versionCode from the run number so each Play upload is
-  // unique. Absent locally / on EAS (which manages versionCode remotely), this is skipped and
-  // Expo's default applies.
+  // CI derives the Android versionCode from the release version (major.minor.patch -> 2.3.2 digits,
+  // e.g. 0.15.0 -> 1500) in android-build.yml, and passes the version string as ANDROID_VERSION_NAME
+  // so versionName tracks it too. Absent locally / on EAS (remote-managed), both are skipped.
   if (versionCode) android.versionCode = Number(versionCode);
 
-  return { ...config, android };
+  return { ...config, ...(versionName ? { version: versionName } : {}), android };
 };

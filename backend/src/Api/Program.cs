@@ -31,6 +31,7 @@ builder.Services.AddOptions<AdsbxOptions>().Bind(configuration.GetSection(AdsbxO
 builder.Services.AddOptions<AeroApiOptions>().Bind(configuration.GetSection(AeroApiOptions.SectionName));
 builder.Services.AddOptions<AircraftDbOptions>().Bind(configuration.GetSection(AircraftDbOptions.SectionName));
 builder.Services.AddOptions<BarentsWatchOptions>().Bind(configuration.GetSection(BarentsWatchOptions.SectionName));
+builder.Services.AddOptions<FiskInfoOptions>().Bind(configuration.GetSection(FiskInfoOptions.SectionName));
 builder.Services.AddOptions<SatellitesOptions>().Bind(configuration.GetSection(SatellitesOptions.SectionName));
 builder.Services.AddOptions<CorsOptions>().Bind(configuration.GetSection(CorsOptions.SectionName));
 
@@ -182,6 +183,11 @@ builder.Services.AddKeyedSingleton("barentswatch", static (sp, _) =>
     UpstreamBudget.Daily(
         sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<BarentsWatchOptions>>().Value.DailyBudget,
         sp.GetRequiredService<TimeProvider>()));
+// FiskInfo (fishing mode: regulation zones + lost gear + ship-register enrichment): daily budget.
+builder.Services.AddKeyedSingleton("fiskinfo", static (sp, _) =>
+    UpstreamBudget.Daily(
+        sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<FiskInfoOptions>>().Value.DailyBudget,
+        sp.GetRequiredService<TimeProvider>()));
 // Satellites vertical: CelesTrak TLE + SatNOGS transmitters, each with its own key-less daily budget.
 builder.Services.AddKeyedSingleton("celestrak", static (sp, _) =>
     UpstreamBudget.Daily(
@@ -214,6 +220,12 @@ builder.Services.AddHttpClient("satnogs", client =>
 });
 builder.Services.AddSingleton<CelestrakTleService>();
 builder.Services.AddSingleton<SatNogsClient>();
+
+// FiskInfo (fishing mode) — a PLAIN SINGLETON over a NAMED client so its cached OAuth token + dataset
+// snapshots survive (a typed client would register the service transient and lose that state, exactly
+// like the satellite services above).
+builder.Services.AddHttpClient("fiskinfo", client => client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddSingleton<FiskInfoClient>();
 
 // The away-mode source the broadcaster consumes is the ADSBx client. HttpClient-typed clients are
 // registered transient, so resolve the same instance the DI container builds for AdsbxClient.

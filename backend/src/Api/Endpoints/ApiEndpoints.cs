@@ -203,6 +203,7 @@ public static class ApiEndpoints
                        string mmsi,
                        VesselStateStore store,
                        BarentsWatchClient barentsWatch,
+                       FiskInfoClient fiskInfo,
                        TimeProvider time,
                        CancellationToken ct) =>
                    {
@@ -211,6 +212,13 @@ public static class ApiEndpoints
 
                        var upstream = HasStaticData(local) ? null : await barentsWatch.LookupAsync(mmsi, ct);
                        var metadata = MergeVesselMetadata(local, upstream);
+
+                       // FiskInfo NOR/NIS ship-register enrichment (name/owner/type/length) folded into the
+                       // same single fetch. Fail-soft: null when FiskInfo is unconfigured or the MMSI isn't
+                       // in the register, cached 7 d per MMSI. It can also surface register-only info for an
+                       // MMSI we neither track nor cover via BarentsWatch (turning a would-be 404 into a 200).
+                       var register = await fiskInfo.LookupShipRegisterAsync(mmsi, ct);
+                       metadata = ApplyShipRegister(metadata, register, mmsi);
 
                        if (state is null && metadata is null)
                            return TypedResults.NotFound();
@@ -280,6 +288,55 @@ public static class ApiEndpoints
                    })
            .WithName("SatelliteDetail");
 
+        // GET /api/fishing/zones — combined fishing-regulation zones (coastal cod + forbidden + zero) from
+        // BarentsWatch FiskInfo, each carrying its raw GeoJSON `geometry` verbatim for the map layer. When
+        // FiskInfo is UNconfigured this returns 200 with an empty list + a note (so the layer degrades to
+        // "nothing to show"); a 503 + reason is only surfaced when FiskInfo IS configured but NOTHING could
+        // be fetched. Partial upstream failures still return the datasets that succeeded. Cached 12 h, so no
+        // per-request upstream spend — stays on the group's "global" rate limit.
+        api.MapGet("/fishing/zones",
+                   async Task<Results<Ok<FishingZonesResponse>, ProblemHttpResult>> (
+                       FiskInfoClient fiskInfo,
+                       TimeProvider time,
+                       CancellationToken ct) =>
+                   {
+                       if (!fiskInfo.Configured)
+                           return TypedResults.Ok(
+                               new FishingZonesResponse(time.GetUtcNow(), [], "fiskinfo-unconfigured"));
+
+                       var zones = await fiskInfo.GetZonesAsync(ct);
+                       if (zones is null)
+                           return TypedResults.Problem(
+                               detail: fiskInfo.LastReason ?? "fiskinfo-unavailable",
+                               statusCode: StatusCodes.Status503ServiceUnavailable);
+
+                       return TypedResults.Ok(new FishingZonesResponse(zones.FetchedAt, zones.Zones, null));
+                   })
+           .WithName("FishingZones");
+
+        // GET /api/fishing/lostgear — lost/ghost fishing gear still in the water (anonymized for regular
+        // users), point geometry passed through verbatim. Same unconfigured-empty / configured-failed-503
+        // behavior as /api/fishing/zones. Cached 3 h; stays on the group's "global" rate limit.
+        api.MapGet("/fishing/lostgear",
+                   async Task<Results<Ok<LostGearResponse>, ProblemHttpResult>> (
+                       FiskInfoClient fiskInfo,
+                       TimeProvider time,
+                       CancellationToken ct) =>
+                   {
+                       if (!fiskInfo.Configured)
+                           return TypedResults.Ok(
+                               new LostGearResponse(time.GetUtcNow(), [], "fiskinfo-unconfigured"));
+
+                       var gear = await fiskInfo.GetLostGearAsync(ct);
+                       if (gear is null)
+                           return TypedResults.Problem(
+                               detail: fiskInfo.LastReason ?? "fiskinfo-unavailable",
+                               statusCode: StatusCodes.Status503ServiceUnavailable);
+
+                       return TypedResults.Ok(new LostGearResponse(time.GetUtcNow(), gear, null));
+                   })
+           .WithName("FishingLostGear");
+
         return app;
     }
 
@@ -313,6 +370,29 @@ public static class ApiEndpoints
         };
     }
 
+    /// <summary>
+    ///     Fold FiskInfo NOR/NIS ship-register info into the vessel metadata: the register-specific fields
+    ///     (name/owner/type/length overall) are always set from the register, and IMO/call sign fill any
+    ///     still-null AIS values. A register hit for an MMSI with no other metadata materializes a
+    ///     register-only <see cref="VesselMetadata" />; a null register is a no-op (fail-soft).
+    /// </summary>
+    internal static VesselMetadata? ApplyShipRegister(VesselMetadata? metadata, ShipRegister? register, string mmsi)
+    {
+        if (register is null)
+            return metadata;
+
+        metadata ??= new VesselMetadata { Mmsi = mmsi };
+        return metadata with
+        {
+            Imo = metadata.Imo ?? register.Imo,
+            CallSign = metadata.CallSign ?? register.CallSign,
+            RegisterName = register.Name,
+            RegisterOwner = register.Owner,
+            RegisterType = register.VesselType,
+            RegisterLengthOverall = register.LengthOverall,
+        };
+    }
+
     private static IDisposable? BeginAuditScope(ILoggerFactory loggerFactory, string action, ClaimsPrincipal user) =>
         loggerFactory.CreateLogger("Skylens.Api.Enrichment.Audit")
                      .BeginScope(new Dictionary<string, object?>
@@ -327,6 +407,22 @@ public static class ApiEndpoints
     public sealed record AircraftDetail(AircraftDto? State, AircraftMetadata? Metadata);
 
     public sealed record VesselDetail(VesselDto? State, VesselMetadata? Metadata);
+
+    /// <summary>
+    ///     GET /api/fishing/zones — combined fishing-regulation zones with their fetch time. Each
+    ///     <see cref="FishingZone" /> carries a <c>kind</c> ("cod"/"forbidden"/"zero"), optional info, and
+    ///     the raw GeoJSON <c>geometry</c> verbatim. <see cref="Note" /> is set (and <see cref="Zones" />
+    ///     empty) only when FiskInfo is unconfigured.
+    /// </summary>
+    public sealed record FishingZonesResponse(
+        DateTimeOffset FetchedAtUtc, IReadOnlyList<FishingZone> Zones, string? Note);
+
+    /// <summary>
+    ///     GET /api/fishing/lostgear — lost/ghost fishing gear points with their fetch time.
+    ///     <see cref="Note" /> is set (and <see cref="Gear" /> empty) only when FiskInfo is unconfigured.
+    /// </summary>
+    public sealed record LostGearResponse(
+        DateTimeOffset FetchedAtUtc, IReadOnlyList<LostGear> Gear, string? Note);
 
     /// <summary>
     ///     GET /api/satellites — the whole current snapshot: when CelesTrak last built it,
