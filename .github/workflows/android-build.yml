@@ -12,8 +12,9 @@ name: "Build Android app (AAB)"
 #   ANDROID_KEY_PASSWORD            — key password
 #   PLAY_SERVICE_ACCOUNT_JSON       — (upload only) Google Play service-account JSON
 #
-# The `uses:` below are on version tags for readability — pin them to full commit SHAs (with a
-# trailing "# vX" comment) before merging, to satisfy zizmor (e.g. run `pinact run`).
+# Third-party actions are pinned to full commit SHAs (repo policy / zizmor blanket-pin); the trailing
+# comment tracks the version. No dependency cache is restored — cache-poisoning guard for a workflow
+# that produces a signed release artifact.
 
 on:
   workflow_dispatch:
@@ -41,21 +42,20 @@ jobs:
         working-directory: app
     steps:
       - name: Checkout
-        uses: actions/checkout@v4 # pin to SHA
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Setup Node
-        uses: actions/setup-node@v4 # pin to SHA
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: "24.x"
-          cache: npm
-          cache-dependency-path: app/package-lock.json
 
       - name: Setup JDK
-        uses: actions/setup-java@v4 # pin to SHA
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.5.0
         with:
           distribution: temurin
           java-version: "17"
-          cache: gradle
 
       - name: Install dependencies
         run: npm ci # app/.npmrc pins legacy-peer-deps=true
@@ -87,7 +87,7 @@ jobs:
             -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
 
       - name: Upload AAB artifact
-        uses: actions/upload-artifact@v4 # pin to SHA
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: skylens-release-aab
           path: app/android/app/build/outputs/bundle/release/*.aab
@@ -95,7 +95,7 @@ jobs:
 
       - name: Upload to Play (internal testing)
         if: ${{ inputs.upload_to_play }}
-        uses: r0adkll/upload-google-play@v1 # pin to SHA
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: no.wsh.skylens
