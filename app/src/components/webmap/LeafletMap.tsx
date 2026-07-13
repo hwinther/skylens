@@ -7,11 +7,20 @@
 import "leaflet/dist/leaflet.css";
 import { useEffect, useMemo, useRef } from "react";
 import L from "leaflet";
-import { MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
+import { MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, useMap } from "react-leaflet";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import type { AircraftDto, VesselDto } from "@/api/types";
+import type { AircraftDto, FishingZone, LostGear, VesselDto } from "@/api/types";
 import { iconForCategory } from "@/components/aircraftIcon";
 import { iconForVessel } from "@/components/vesselIcon";
+import { lineLatLngs, pointLatLng, polygonRings, type GeoGeometry } from "./geojson";
+import {
+  LOST_GEAR_COLOR,
+  LOST_GEAR_GLYPH,
+  lostGearDescription,
+  lostGearTitle,
+  zoneInfo,
+  zoneStyle,
+} from "./fishingStyle";
 import type { Observer } from "./relative";
 
 export interface LeafletMapProps {
@@ -22,6 +31,10 @@ export interface LeafletMapProps {
   vessels?: VesselDto[];
   /** Tap handler for a vessel marker (opens the vessel detail sheet). Markers are inert when omitted. */
   onSelectVessel?: (mmsi: string) => void;
+  /** Fishing-regulation zones to draw under the traffic; already gated by the caller (empty = nothing). */
+  zones?: FishingZone[];
+  /** Lost/ghost fishing-gear points to draw; already gated by the caller (empty = nothing). */
+  gear?: LostGear[];
 }
 
 // Reach the icon-font statics (not in the public types) so Leaflet's raw-HTML markers render the same
@@ -66,6 +79,83 @@ const observerIcon = L.divIcon({
   iconAnchor: [6, 6],
 });
 
+// Lost/ghost-gear marker: the same MCI-font divIcon path as the traffic markers, in hazard orange.
+const lostGearIcon: L.DivIcon = (() => {
+  const code = glyphMap[LOST_GEAR_GLYPH];
+  const glyph = code != null ? String.fromCodePoint(code) : "";
+  return L.divIcon({
+    className: "",
+    html: `<span style="font-family:'${iconFont}';font-size:18px;line-height:18px;color:${LOST_GEAR_COLOR};text-shadow:0 0 3px #000">${glyph}</span>`,
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+  });
+})();
+
+/**
+ * Fishing-regulation zones as translucent polygons (forbidden / zero) and lines (cod boundaries). Each
+ * carries a click Popup with the upstream `info` text when present. Rendered in Leaflet's overlay pane,
+ * so it always sits under the marker pane (traffic stays on top). Gated to nothing by an empty `zones`.
+ */
+function FishingZones({ zones }: { zones: FishingZone[] }) {
+  return (
+    <>
+      {zones.map((z, i) => {
+        const geom = z.geometry as GeoGeometry | null;
+        const style = zoneStyle(z.kind);
+        const info = zoneInfo(z);
+        const polys = polygonRings(geom);
+        if (polys.length > 0) {
+          // Leaflet Polygon positions take [outer, ...holes] rings; one <Polygon> per member polygon.
+          return polys.map((p, j) => (
+            <Polygon
+              key={`zone-poly-${i}-${j}`}
+              positions={[p.outer, ...p.holes]}
+              pathOptions={{
+                color: style.stroke,
+                weight: 1.5,
+                fillColor: style.stroke,
+                fillOpacity: style.fillOpacity,
+              }}
+            >
+              {info ? <Popup>{info}</Popup> : null}
+            </Polygon>
+          ));
+        }
+        const line = lineLatLngs(geom);
+        if (line.length > 0) {
+          return (
+            <Polyline key={`zone-line-${i}`} positions={line} pathOptions={{ color: style.stroke, weight: 2 }}>
+              {info ? <Popup>{info}</Popup> : null}
+            </Polyline>
+          );
+        }
+        return null;
+      })}
+    </>
+  );
+}
+
+/** Lost-gear points as hazard-orange markers; a Popup shows gear type + lost date + cause on click. */
+function LostGearMarkers({ gear }: { gear: LostGear[] }) {
+  return (
+    <>
+      {gear.map((g, i) => {
+        const pt = pointLatLng(g.geometry as GeoGeometry | null);
+        if (!pt) return null;
+        const description = lostGearDescription(g);
+        return (
+          <Marker key={`gear-${i}`} position={pt} icon={lostGearIcon} title={lostGearTitle(g)}>
+            <Popup>
+              {lostGearTitle(g)}
+              {description ? <><br />{description}</> : null}
+            </Popup>
+          </Marker>
+        );
+      })}
+    </>
+  );
+}
+
 /** Frame the initial view to fit the observer + traffic once, then leave panning to the user. */
 function FitBounds({ points }: { points: [number, number][] }) {
   const map = useMap();
@@ -84,6 +174,8 @@ export function LeafletMap({
   onSelect,
   vessels = [],
   onSelectVessel,
+  zones = [],
+  gear = [],
 }: LeafletMapProps) {
   const positioned = aircraft.filter((a) => a.lat != null && a.lon != null);
   const positionedVessels = vessels.filter((v) => v.lat != null && v.lon != null);
@@ -102,6 +194,9 @@ export function LeafletMap({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         maxZoom={19}
       />
+      {/* Fishing overlays render first (overlay pane) so aircraft/vessel markers stay on top. */}
+      <FishingZones zones={zones} />
+      <LostGearMarkers gear={gear} />
       <Marker position={[observer.lat, observer.lon]} icon={observerIcon} />
       {positioned.map((a) => (
         <Marker

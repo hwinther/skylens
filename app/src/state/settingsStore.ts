@@ -38,6 +38,10 @@ interface SettingsState {
   satGnss: boolean;
   /** Elevation mask (deg): satellites lower than this above the horizon are hidden. */
   satElevationMaskDeg: number;
+  /** Draw fishing-regulation zones (cod boundaries / forbidden / zero areas) on the geographic map. */
+  showFishingZones: boolean;
+  /** Draw reported lost/ghost fishing-gear points on the geographic map. */
+  showLostGear: boolean;
   setAzimuthTrim: (deg: number) => void;
   setHFov: (deg: number) => void;
   setRadiusKm: (km: number) => void;
@@ -50,6 +54,8 @@ interface SettingsState {
   setSatWeather: (on: boolean) => void;
   setSatGnss: (on: boolean) => void;
   setSatElevationMaskDeg: (deg: number) => void;
+  setShowFishingZones: (on: boolean) => void;
+  setShowLostGear: (on: boolean) => void;
 }
 
 // Opt-in override so the web build / Playwright E2E can boot straight into live mode (which talks to
@@ -98,6 +104,9 @@ export const useSettingsStore = create<SettingsState>()(
       satWeather: true,
       satGnss: true,
       satElevationMaskDeg: DEFAULT_ELEVATION_MASK_DEG,
+      // Fishing overlays are opt-in — they only make sense over the fjord/coast map view, so default off.
+      showFishingZones: false,
+      showLostGear: false,
       setAzimuthTrim: (azimuthTrimDeg) => set({ azimuthTrimDeg }),
       setHFov: (hFovDeg) => set({ hFovDeg }),
       setRadiusKm: (radiusKm) => set({ radiusKm }),
@@ -110,6 +119,8 @@ export const useSettingsStore = create<SettingsState>()(
       setSatWeather: (satWeather) => set({ satWeather }),
       setSatGnss: (satGnss) => set({ satGnss }),
       setSatElevationMaskDeg: (satElevationMaskDeg) => set({ satElevationMaskDeg }),
+      setShowFishingZones: (showFishingZones) => set({ showFishingZones }),
+      setShowLostGear: (showLostGear) => set({ showLostGear }),
     }),
     {
       name: "skylens.settings.v1",
