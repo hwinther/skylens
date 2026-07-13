@@ -41,7 +41,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: hwinther/reusable-workflows/.github/workflows/prune-ghcr.yml@a0e722a6a3002b2095899c71861906262160b125 # v2.0.0
+    uses: hwinther/reusable-workflows/.github/workflows/prune-ghcr.yml@00fef736b925dfc7b70ab0476276ae1f59e1683b # v2.0.1
     with:
       dry_run: ${{ github.event_name == 'schedule' && false || inputs.dry_run }}
       images: ${{ inputs.images || 'skylens/api' }}

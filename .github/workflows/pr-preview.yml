@@ -29,7 +29,7 @@ jobs:
       security-events: write
       actions: write
       pull-requests: write
-    uses: hwinther/reusable-workflows/.github/workflows/docker-container.yml@a0e722a6a3002b2095899c71861906262160b125 # v2.0.0
+    uses: hwinther/reusable-workflows/.github/workflows/docker-container.yml@00fef736b925dfc7b70ab0476276ae1f59e1683b # v2.0.1
     with:
       container_registry: ghcr.io
       container_image_name_postfix: api
@@ -47,7 +47,7 @@ jobs:
       packages: read
       pull-requests: write
       actions: read
-    uses: hwinther/reusable-workflows/.github/workflows/playwright-e2e.yml@a0e722a6a3002b2095899c71861906262160b125 # v2.0.0
+    uses: hwinther/reusable-workflows/.github/workflows/playwright-e2e.yml@00fef736b925dfc7b70ab0476276ae1f59e1683b # v2.0.1
     with:
       compose_file: docker-compose.e2e.yml
       playwright_working_directory: app
@@ -73,7 +73,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    uses: hwinther/reusable-workflows/.github/workflows/gitops-preview-upsert.yml@a0e722a6a3002b2095899c71861906262160b125 # v2.0.0
+    uses: hwinther/reusable-workflows/.github/workflows/gitops-preview-upsert.yml@00fef736b925dfc7b70ab0476276ae1f59e1683b # v2.0.1
     with:
       target_repo: hwinther/proxmox
       preview_base_path: clusters/production/apps/previews/skylens

@@ -16,7 +16,7 @@ on:
 
 jobs:
   update-lockfiles:
-    uses: hwinther/reusable-workflows/.github/workflows/dependabot-update-dotnet-lockfiles.yml@a0e722a6a3002b2095899c71861906262160b125 # v2.0.0
+    uses: hwinther/reusable-workflows/.github/workflows/dependabot-update-dotnet-lockfiles.yml@00fef736b925dfc7b70ab0476276ae1f59e1683b # v2.0.1
     permissions:
       contents: read
     with:
