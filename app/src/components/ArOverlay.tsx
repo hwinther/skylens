@@ -11,6 +11,7 @@ import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import {
   declutter,
   deadReckonVessel,
+  extrapolateView,
   GROUP_PRIORITY,
   lookAngles,
   project,
@@ -43,6 +44,8 @@ export interface ArOverlayProps {
   showAton?: boolean;
   /** Satellites already reduced to observer-relative az/el at 1 Hz (SGP4 runs in useSatellites, never here). */
   satellites?: SatelliteView[];
+  /** Epoch ms the satellite set was propagated at (for per-frame az/el extrapolation between 1 Hz ticks). */
+  satellitesSampledAt?: number;
   /** Draw the orbital (satellite) pass. */
   showSatellites?: boolean;
   poseRef: React.MutableRefObject<CameraPose>;
@@ -123,6 +126,7 @@ export function ArOverlay({
   showShips = false,
   showAton = false,
   satellites = NO_SATELLITES_INPUT,
+  satellitesSampledAt = 0,
   showSatellites = false,
   poseRef,
   positionRef,
@@ -155,6 +159,7 @@ export function ArOverlay({
   const showShipsRef = useRef(showShips);
   const showAtonRef = useRef(showAton);
   const satellitesRef = useRef(satellites);
+  const satellitesSampledAtRef = useRef(satellitesSampledAt);
   const showSatellitesRef = useRef(showSatellites);
   useEffect(() => {
     aircraftRef.current = aircraft;
@@ -166,8 +171,9 @@ export function ArOverlay({
     showShipsRef.current = showShips;
     showAtonRef.current = showAton;
     satellitesRef.current = satellites;
+    satellitesSampledAtRef.current = satellitesSampledAt;
     showSatellitesRef.current = showSatellites;
-  }, [aircraft, snapshotAt, hFovDeg, showHorizon, vessels, vesselsSnapshotAt, showShips, showAton, satellites, showSatellites]);
+  }, [aircraft, snapshotAt, hFovDeg, showHorizon, vessels, vesselsSnapshotAt, showShips, showAton, satellites, satellitesSampledAt, showSatellites]);
 
   useEffect(() => {
     let raf = 0;
@@ -306,17 +312,20 @@ export function ArOverlay({
         setVesselClusters(NO_CLUSTERS);
       }
 
-      // --- Orbital pass: satellites at their precomputed az/el ---
-      // No lookAngles and no dead-reckon here: useSatellites already ran SGP4 + the look-angle
-      // transforms at 1 Hz, so we only re-project the fixed az/el through the current pose (a little
-      // stepping between 1 Hz updates is acceptable for something this far away). Own declutter pass
-      // so aircraft/vessel placement is untouched; priority keeps stations above GNSS, then higher
-      // elevation. No edge arrows — off-screen satellites simply don't draw.
+      // --- Orbital pass: satellites at their precomputed az/el, extrapolated to "now" ---
+      // useSatellites already ran SGP4 + the look-angle transforms at 1 Hz. Rather than re-project the
+      // fixed az/el (which visibly steps once a second for a fast LEO), we extrapolate each view by its
+      // carried angular rates over the sample age — one glide instead of a stutter. The age is clamped
+      // inside extrapolateView so a stalled tick can't fling labels. Own declutter pass so aircraft/
+      // vessel placement is untouched; priority keeps stations above GNSS, then higher elevation. No
+      // edge arrows — off-screen satellites simply don't draw.
       if (showSatellitesRef.current && satellitesRef.current.length) {
+        const satAgeS = Math.max(0, (Date.now() - satellitesSampledAtRef.current) / 1000);
         const sScreenLabels: ScreenLabel[] = [];
         const sRender: RenderSatellite[] = [];
         for (const s of satellitesRef.current) {
-          const proj = project({ azimuth: s.azimuthDeg, elevation: s.elevationDeg }, pose, config);
+          const { azimuthDeg, elevationDeg } = extrapolateView(s, satAgeS);
+          const proj = project({ azimuth: azimuthDeg, elevation: elevationDeg }, pose, config);
           if (!proj.onScreen) continue;
           const px = (proj.xNdc * width) / 2 + width / 2;
           const py = height / 2 - (proj.yNdc * height) / 2;

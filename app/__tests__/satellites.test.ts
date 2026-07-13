@@ -14,19 +14,24 @@
 import {
   buildSatrec,
   buildSatrecs,
+  clampEpochFraction,
   dopplerCorrectedHz,
+  extrapolateView,
   formatCountdown,
   formatFrequencyHz,
   formatPassDuration,
   GROUP_PRIORITY,
+  MAX_EXTRAPOLATION_S,
   nextPass,
   propagateAll,
+  RATE_SAMPLE_S,
   satGroupsFromSettings,
   SATELLITE_RENDER_CAP,
   selectVisible,
   type SatelliteView,
   type SatGroup,
 } from "@/ar/satellites";
+import { angleDiff } from "@/ar/geo";
 import type { SatelliteDto } from "@/api/types";
 
 /** Verbatim ISS OMM from backend/tests/Api.Tests/fixtures/tle.json (stations[0]). */
@@ -94,6 +99,8 @@ function view(noradId: number, group: SatGroup, elevationDeg: number): Satellite
     group,
     azimuthDeg: 180,
     elevationDeg,
+    azimuthRateDegS: 0,
+    elevationRateDegS: 0,
     rangeKm: 1000,
     rangeRateKmS: 0,
   };
@@ -129,6 +136,97 @@ describe("propagateAll — ISS reference pass over Oslo (self-derived pins)", ()
     expect(a.azimuthDeg).toBe(b.azimuthDeg);
     expect(a.elevationDeg).toBe(b.elevationDeg);
     expect(a.rangeKm).toBe(b.rangeKm);
+  });
+
+  it("carries az/el angular rates that self-consistently finite-difference two propagations", () => {
+    // The rate propagateAll carries at `date` must equal a finite difference between the primary sample
+    // at `date` and a second primary sample RATE_SAMPLE_S ahead (its internal second sample IS that
+    // next-instant primary sample), 0/360-wrap-safe via angleDiff. This guards the rate wiring against
+    // a regression without pinning an external truth value.
+    const v0 = propagateAll(buildSatrecs([issDto()]), observer, date)[0];
+    const vAhead = propagateAll(
+      buildSatrecs([issDto()]),
+      observer,
+      new Date(date.getTime() + RATE_SAMPLE_S * 1000),
+    )[0];
+    const expectedElRate = (vAhead.elevationDeg - v0.elevationDeg) / RATE_SAMPLE_S;
+    const expectedAzRate = angleDiff(vAhead.azimuthDeg, v0.azimuthDeg) / RATE_SAMPLE_S;
+    expect(v0.elevationRateDegS).toBeCloseTo(expectedElRate, 9);
+    expect(v0.azimuthRateDegS).toBeCloseTo(expectedAzRate, 9);
+  });
+
+  it("carries plausible ISS angular-rate magnitudes at the pinned overhead epoch", () => {
+    const v = propagateAll(buildSatrecs([issDto()]), observer, date)[0];
+    // Near transit the ISS sweeps in azimuth fast; both rates stay well under the 2°/s ceiling that a
+    // fling would blow through (and never a ±360°/s wrap spike). Loose bounds absorb a satellite.js patch.
+    expect(Math.abs(v.azimuthRateDegS)).toBeGreaterThan(0.01);
+    expect(Math.abs(v.azimuthRateDegS)).toBeLessThan(2);
+    expect(Math.abs(v.elevationRateDegS)).toBeGreaterThan(0.01);
+    expect(Math.abs(v.elevationRateDegS)).toBeLessThan(2);
+  });
+});
+
+describe("angular-rate azimuth wrap — the 0/360 seam never spikes", () => {
+  it("finite-differences a north crossing to a small signed rate, not ±360°/s", () => {
+    // A satellite crossing due north between two 1 s samples goes 359.5° → 0.5°. A naive (az2 − az1)/dt
+    // would read −359°/s; angleDiff (which propagateAll uses for the azimuth rate) reads the true +1°/s.
+    expect(angleDiff(0.5, 359.5) / RATE_SAMPLE_S).toBeCloseTo(1, 9);
+    // And the mirror crossing 0.5° → 359.5° (westbound through north) reads −1°/s.
+    expect(angleDiff(359.5, 0.5) / RATE_SAMPLE_S).toBeCloseTo(-1, 9);
+    // Never a full-circle spike in magnitude.
+    expect(Math.abs(angleDiff(0.5, 359.5))).toBeLessThan(2);
+  });
+});
+
+describe("extrapolateView — linear az/el lead, normalised, age-clamped", () => {
+  /** A view carrying fixed rates; identity/range fields are irrelevant to extrapolation. */
+  function rated(azimuthDeg: number, elevationDeg: number, azRate: number, elRate: number): SatelliteView {
+    return {
+      noradId: 1,
+      name: "sat-1",
+      group: "stations",
+      azimuthDeg,
+      elevationDeg,
+      azimuthRateDegS: azRate,
+      elevationRateDegS: elRate,
+      rangeKm: 1000,
+      rangeRateKmS: 0,
+    };
+  }
+
+  it("advances az/el linearly by rate × age at 1 s", () => {
+    const out = extrapolateView(rated(100, 20, 0.5, -0.3), 1);
+    expect(out.azimuthDeg).toBeCloseTo(100.5, 9);
+    expect(out.elevationDeg).toBeCloseTo(19.7, 9);
+  });
+
+  it("normalises azimuth across the 0/360 seam", () => {
+    // 359.9° + 0.2°/s × 1 s = 360.1° → wraps to 0.1°.
+    const out = extrapolateView(rated(359.9, 30, 0.2, 0), 1);
+    expect(out.azimuthDeg).toBeCloseTo(0.1, 9);
+  });
+
+  it("clamps age at MAX_EXTRAPOLATION_S (a stalled/backgrounded tick cannot fling)", () => {
+    const v = rated(100, 20, 0.5, -0.3);
+    const atMax = extrapolateView(v, MAX_EXTRAPOLATION_S);
+    const wayPast = extrapolateView(v, 60);
+    expect(wayPast.azimuthDeg).toBe(atMax.azimuthDeg);
+    expect(wayPast.elevationDeg).toBe(atMax.elevationDeg);
+    // Concretely: 2 s of lead, not 60 s.
+    expect(atMax.azimuthDeg).toBeCloseTo(101, 9);
+    expect(atMax.elevationDeg).toBeCloseTo(19.4, 9);
+  });
+
+  it("clamps a negative age to 0 (no backward extrapolation)", () => {
+    const out = extrapolateView(rated(100, 20, 0.5, -0.3), -5);
+    expect(out.azimuthDeg).toBeCloseTo(100, 9);
+    expect(out.elevationDeg).toBeCloseTo(20, 9);
+  });
+
+  it("leaves a zero-rate view where it is (steps, never flings)", () => {
+    const out = extrapolateView(rated(210, 45, 0, 0), MAX_EXTRAPOLATION_S);
+    expect(out.azimuthDeg).toBe(210);
+    expect(out.elevationDeg).toBe(45);
   });
 });
 
@@ -366,5 +464,25 @@ describe("buildSatrecs — corrupt OMM is dropped, not thrown", () => {
       entries = buildSatrecs([empty, issDto(), badEcc]);
     }).not.toThrow();
     expect(entries.map((e) => e.noradId)).toEqual([25544]);
+  });
+});
+
+describe("clampEpochFraction — Hermes/Android date-parse compatibility", () => {
+  // CelesTrak emits microsecond EPOCHs; json2satrec parses them with `new Date(EPOCH + "Z")`.
+  // Hermes rejects >3 fractional digits (Invalid Date → NaN satrec → satellite silently dropped
+  // on Android), while V8 — the engine running THIS test — parses leniently. So the honest seam
+  // is the normalizer itself: buildSatrec must feed json2satrec a 3-digit fraction.
+  it("truncates microsecond fractions to milliseconds", () => {
+    expect(clampEpochFraction("2026-07-11T07:33:23.712192")).toBe("2026-07-11T07:33:23.712");
+  });
+
+  it("leaves millisecond and whole-second epochs untouched", () => {
+    expect(clampEpochFraction("2026-07-11T07:33:23.712")).toBe("2026-07-11T07:33:23.712");
+    expect(clampEpochFraction("2026-07-11T07:33:23")).toBe("2026-07-11T07:33:23");
+  });
+
+  it("buildSatrec still succeeds on a microsecond-precision EPOCH", () => {
+    const rec = buildSatrec({ ...ISS_OMM, EPOCH: "2026-07-11T07:33:23.712192" } as unknown as SatelliteDto["omm"]);
+    expect(rec).not.toBeNull();
   });
 });

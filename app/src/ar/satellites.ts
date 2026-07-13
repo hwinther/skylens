@@ -26,7 +26,7 @@ import {
   type SatRec,
 } from "satellite.js";
 import type { SatelliteDto } from "@/api/types";
-import { deg2rad, rad2deg } from "./geo";
+import { angleDiff, deg2rad, normalizeAzimuth, rad2deg } from "./geo";
 
 /** The four normalised satellite groups the backend collapses CelesTrak's many lists into. */
 export type SatGroup = "stations" | "amateur" | "weather" | "gnss";
@@ -50,6 +50,20 @@ export const GROUP_PRIORITY: Record<SatGroup, number> = {
 
 /** Speed of light in km/s (matches satellite.js's internal constant used by dopplerFactor). */
 export const SPEED_OF_LIGHT_KM_S = 299792.458;
+
+/**
+ * Seconds ahead of the primary sample at which the second SGP4 evaluation is taken to finite-difference
+ * the az/el angular rates. 1 s is fine at these angular speeds (a fast LEO overhead is ~1°/s) and keeps
+ * the rate a clean per-second value. Doubling SGP4 (2 evals/sat/tick for ~333 sats) is trivial.
+ */
+export const RATE_SAMPLE_S = 1;
+
+/**
+ * Maximum sample age (s) the overlay is allowed to extrapolate a view. Clamps `extrapolateView` so a
+ * stalled 1 Hz interval or a backgrounded tab (where Date.now() jumps well past the last sample) can't
+ * fling a label far off its true track — after this the label simply holds a bounded lead.
+ */
+export const MAX_EXTRAPOLATION_S = 2;
 
 /** Group priority for an arbitrary (possibly unknown) group string — unknown sorts last. */
 function groupPriority(group: SatGroup): number {
@@ -79,6 +93,13 @@ export interface SatelliteView {
   azimuthDeg: number;
   /** Elevation in degrees above the local horizon, [-90, 90]. */
   elevationDeg: number;
+  /**
+   * Azimuth angular rate in degrees/second at the sample instant (finite-differenced over RATE_SAMPLE_S,
+   * 0/360-wrap-safe via angleDiff). The overlay extrapolates az between 1 Hz ticks with this; 0 ⇒ steps.
+   */
+  azimuthRateDegS: number;
+  /** Elevation angular rate in degrees/second at the sample instant. 0 ⇒ the view just steps (no fling). */
+  elevationRateDegS: number;
   /** Slant range to the satellite in km. */
   rangeKm: number;
   /** Range rate in km/s; negative = approaching (Doppler shifts the downlink higher). */
@@ -99,11 +120,25 @@ export interface Observer {
  * null — one code path the batch `buildSatrecs` and the detail sheet's single-satellite pass math
  * (`nextPass`) both go through.
  */
+/**
+ * Clamp an OMM EPOCH's fractional seconds to milliseconds (3 digits). CelesTrak emits microsecond
+ * precision ("…T07:33:23.712192"), and json2satrec parses it with `new Date(EPOCH + "Z")` — the
+ * ECMAScript date format only guarantees 3 fractional digits, and Hermes (Android) rejects more,
+ * yielding Invalid Date → NaN satrecs → every satellite silently dropped ON DEVICE while V8
+ * (web/jest) parses leniently and works. Sub-millisecond epoch truncation is irrelevant to SGP4.
+ */
+export function clampEpochFraction(epoch: string): string {
+  return epoch.replace(/(\.\d{3})\d+/, "$1");
+}
+
 export function buildSatrec(omm: SatelliteDto["omm"]): SatRec | null {
   try {
     // The OMM keys are UPPERCASE by design so this feeds json2satrec directly; our generated OMM
     // type marks every field optional (an NRT quirk), so cast to the library's stricter shape.
-    const satrec = json2satrec(omm as unknown as OMMJsonObject);
+    // EPOCH is normalized first — see clampEpochFraction (Hermes/Android compatibility).
+    const epoch = omm.EPOCH;
+    const normalized = typeof epoch === "string" ? { ...omm, EPOCH: clampEpochFraction(epoch) } : omm;
+    const satrec = json2satrec(normalized as unknown as OMMJsonObject);
     // json2satrec sets `error` on an unpropagatable element set instead of throwing — drop those.
     if (!satrec || satrec.error !== SatRecError.None) return null;
     return satrec;
@@ -150,6 +185,11 @@ export function propagateAll(
   const observerEcf = geodeticToEcf(observerGd);
   const gmst = gstime(date);
 
+  // Second sample RATE_SAMPLE_S ahead, used only to finite-difference the az/el angular rates the AR
+  // overlay extrapolates between 1 Hz ticks. Its GMST is precomputed once (same instant for every sat).
+  const date2 = new Date(date.getTime() + RATE_SAMPLE_S * 1000);
+  const gmst2 = gstime(date2);
+
   const views: SatelliteView[] = [];
   for (const entry of entries) {
     const pv = propagate(entry.satrec, date);
@@ -176,18 +216,61 @@ export function propagateAll(
     // line-of-sight dot — so back the signed range rate out of it. Negative ⇒ approaching.
     const rangeRateKmS = (1 - dopplerFactor(observerEcf, positionEcf, velocityEcf)) * SPEED_OF_LIGHT_KM_S;
 
+    // Angular rates: propagate the SAME satrec RATE_SAMPLE_S ahead and finite-difference the look
+    // angles. angleDiff carries the 0/360 azimuth seam (a satellite crossing north must NOT produce a
+    // ±360°/s spike). Any error / non-finite in the second sample leaves the rates at 0 — that view
+    // simply steps at 1 Hz like before, it never flings. The primary sample still governs inclusion.
+    let azimuthRateDegS = 0;
+    let elevationRateDegS = 0;
+    const pv2 = propagate(entry.satrec, date2);
+    if (
+      pv2 &&
+      pv2.position &&
+      Number.isFinite(pv2.position.x) &&
+      Number.isFinite(pv2.position.y) &&
+      Number.isFinite(pv2.position.z)
+    ) {
+      const look2 = ecfToLookAngles(observerGd, eciToEcf(pv2.position, gmst2));
+      const azimuthDeg2 = normalizeAzimuth(rad2deg(look2.azimuth));
+      const elevationDeg2 = rad2deg(look2.elevation);
+      if (Number.isFinite(azimuthDeg2) && Number.isFinite(elevationDeg2)) {
+        azimuthRateDegS = angleDiff(azimuthDeg2, azimuthDeg) / RATE_SAMPLE_S;
+        elevationRateDegS = (elevationDeg2 - elevationDeg) / RATE_SAMPLE_S;
+      }
+    }
+
     views.push({
       noradId: entry.noradId,
       name: entry.name,
       group: entry.group,
       azimuthDeg,
       elevationDeg,
+      azimuthRateDegS,
+      elevationRateDegS,
       rangeKm,
       rangeRateKmS: Number.isFinite(rangeRateKmS) ? rangeRateKmS : 0,
       ...(entry.freqSummary != null ? { freqSummary: entry.freqSummary } : {}),
     });
   }
   return views;
+}
+
+/**
+ * Extrapolate a 1 Hz `SatelliteView` forward by `ageSeconds` using its carried az/el angular rates, so
+ * the ~20 fps overlay glides a fast LEO satellite between propagation ticks instead of stepping once a
+ * second. Linear: az = normalizeAzimuth(az + azRate·age), el = el + elRate·age. `ageSeconds` is clamped
+ * to [0, MAX_EXTRAPOLATION_S] so a stalled interval / backgrounded tab can't fling the label. A view
+ * with zero rates (a failed second sample) is returned essentially unchanged — it steps like before.
+ */
+export function extrapolateView(
+  view: SatelliteView,
+  ageSeconds: number,
+): { azimuthDeg: number; elevationDeg: number } {
+  const age = Math.min(MAX_EXTRAPOLATION_S, Math.max(0, ageSeconds));
+  return {
+    azimuthDeg: normalizeAzimuth(view.azimuthDeg + view.azimuthRateDegS * age),
+    elevationDeg: view.elevationDeg + view.elevationRateDegS * age,
+  };
 }
 
 /**
