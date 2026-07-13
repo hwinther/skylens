@@ -94,28 +94,41 @@ export interface Observer {
 }
 
 /**
+ * Build one SGP4 propagator from a single OMM element set, or null if it can't be propagated. Both a
+ * corrupt OMM (json2satrec throws) and an unpropagatable one (json2satrec sets `error`) collapse to
+ * null — one code path the batch `buildSatrecs` and the detail sheet's single-satellite pass math
+ * (`nextPass`) both go through.
+ */
+export function buildSatrec(omm: SatelliteDto["omm"]): SatRec | null {
+  try {
+    // The OMM keys are UPPERCASE by design so this feeds json2satrec directly; our generated OMM
+    // type marks every field optional (an NRT quirk), so cast to the library's stricter shape.
+    const satrec = json2satrec(omm as unknown as OMMJsonObject);
+    // json2satrec sets `error` on an unpropagatable element set instead of throwing — drop those.
+    if (!satrec || satrec.error !== SatRecError.None) return null;
+    return satrec;
+  } catch {
+    // Corrupt OMM (missing/garbage elements).
+    return null;
+  }
+}
+
+/**
  * Build one SGP4 propagator per satellite from its OMM elements. Failures (a corrupt / unpropagatable
  * OMM) are dropped rather than thrown — one bad element set never sinks the whole snapshot.
  */
 export function buildSatrecs(sats: SatelliteDto[]): SatrecEntry[] {
   const entries: SatrecEntry[] = [];
   for (const sat of sats) {
-    try {
-      // The OMM keys are UPPERCASE by design so this feeds json2satrec directly; our generated OMM
-      // type marks every field optional (an NRT quirk), so cast to the library's stricter shape.
-      const satrec = json2satrec(sat.omm as unknown as OMMJsonObject);
-      // json2satrec sets `error` on an unpropagatable element set instead of throwing — drop those.
-      if (!satrec || satrec.error !== SatRecError.None) continue;
-      entries.push({
-        noradId: sat.noradId,
-        name: sat.name,
-        group: toSatGroup(sat.group),
-        ...(sat.freqSummary != null ? { freqSummary: sat.freqSummary } : {}),
-        satrec,
-      });
-    } catch {
-      // Corrupt OMM (missing/garbage elements): skip it, keep the rest of the snapshot.
-    }
+    const satrec = buildSatrec(sat.omm);
+    if (!satrec) continue;
+    entries.push({
+      noradId: sat.noradId,
+      name: sat.name,
+      group: toSatGroup(sat.group),
+      ...(sat.freqSummary != null ? { freqSummary: sat.freqSummary } : {}),
+      satrec,
+    });
   }
   return entries;
 }
@@ -243,4 +256,250 @@ function normalizeAz(azDeg: number): number {
   let a = azDeg % 360;
   if (a < 0) a += 360;
   return a;
+}
+
+// ---------------------------------------------------------------------------
+// Pass prediction (AOS / LOS / max elevation) for a single satellite.
+//
+// A "pass" is one arc where the satellite is above the elevation mask. We scan
+// SGP4 forward in coarse steps to bracket the rise (AOS) and set (LOS) edges, then
+// bisect each edge to ~1 s and golden-section the elevation peak to ~0.1°. All of
+// this reuses the exact propagate → gstime → eciToEcf → ecfToLookAngles pipeline
+// that `propagateAll` runs, so a pass agrees with the live 1 Hz look angles.
+// ---------------------------------------------------------------------------
+
+/** A predicted (or in-progress) pass of one satellite over the observer. */
+export interface SatellitePass {
+  /** Acquisition of signal — the satellite rises through the mask. Clamped to `fromDate` if already up. */
+  aosTime: Date;
+  /** Loss of signal — the satellite sets below the mask. Clamped to the horizon end for an always-up pass. */
+  losTime: Date;
+  /** Peak elevation reached during the pass, degrees above the horizon. */
+  maxElevationDeg: number;
+  /** Instant of peak elevation. */
+  maxElevationTime: Date;
+  /** Azimuth (deg, 0 = N clockwise) at the AOS instant — the rise bearing. */
+  aosAzimuthDeg: number;
+  /** Azimuth (deg, 0 = N clockwise) at the LOS instant — the set bearing. */
+  losAzimuthDeg: number;
+  /** True ⇒ the satellite was already above the mask at `fromDate` (AOS is clamped to now). */
+  inProgress: boolean;
+}
+
+/** Observer position in the geodetic-radians shape satellite.js's look-angle transforms consume. */
+interface ObserverGd {
+  longitude: number;
+  latitude: number;
+  height: number;
+}
+
+/**
+ * Propagate `satrec` to `date` and reduce to observer-relative azimuth/elevation (deg), or null if the
+ * SGP4 step errors / returns a non-finite position — the same guards `propagateAll` applies per frame.
+ */
+function passLookAngles(satrec: SatRec, observerGd: ObserverGd, date: Date): { azimuthDeg: number; elevationDeg: number } | null {
+  const pv = propagate(satrec, date);
+  if (!pv || !pv.position) return null;
+  const positionEci = pv.position;
+  if (!Number.isFinite(positionEci.x) || !Number.isFinite(positionEci.y) || !Number.isFinite(positionEci.z)) {
+    return null;
+  }
+  const gmst = gstime(date);
+  const positionEcf = eciToEcf(positionEci, gmst);
+  const look = ecfToLookAngles(observerGd, positionEcf);
+  const azimuthDeg = normalizeAz(rad2deg(look.azimuth));
+  const elevationDeg = rad2deg(look.elevation);
+  if (!Number.isFinite(azimuthDeg) || !Number.isFinite(elevationDeg)) return null;
+  return { azimuthDeg, elevationDeg };
+}
+
+/**
+ * Bisect the mask crossing between two bracketing instants (elevations on opposite sides of `maskDeg`)
+ * down to ~0.5 s. Works for both a rising and a falling edge — the direction is read off `loMs`.
+ */
+function bisectCrossing(loMs: number, hiMs: number, maskDeg: number, elevAt: (ms: number) => number | null): number {
+  let a = loMs;
+  let b = hiMs;
+  const belowAtA = (elevAt(a) ?? maskDeg) < maskDeg;
+  // 30 s bracket → 0.5 s takes ~6 halvings; cap the loop as a guard.
+  for (let i = 0; i < 50 && b - a > 500; i++) {
+    const mid = (a + b) / 2;
+    const below = (elevAt(mid) ?? maskDeg) < maskDeg;
+    if (below === belowAtA) a = mid;
+    else b = mid;
+  }
+  return (a + b) / 2;
+}
+
+/**
+ * Golden-section refine of the elevation peak within ±one step of the coarse maximum, clamped to the
+ * [aos, los] arc. Elevation is unimodal over that small window, so this lands the peak to well under 0.1°.
+ */
+function refinePeak(
+  centerMs: number,
+  aosMs: number,
+  losMs: number,
+  stepMs: number,
+  elevAt: (ms: number) => number | null,
+): { timeMs: number; elevationDeg: number } {
+  const f = (ms: number): number => elevAt(ms) ?? -Infinity;
+  let a = Math.max(aosMs, centerMs - stepMs);
+  let b = Math.min(losMs, centerMs + stepMs);
+  const gr = (Math.sqrt(5) - 1) / 2; // 0.618…
+  let c = b - gr * (b - a);
+  let d = a + gr * (b - a);
+  let fc = f(c);
+  let fd = f(d);
+  for (let i = 0; i < 50 && b - a > 250; i++) {
+    if (fc >= fd) {
+      b = d;
+      d = c;
+      fd = fc;
+      c = b - gr * (b - a);
+      fc = f(c);
+    } else {
+      a = c;
+      c = d;
+      fc = fd;
+      d = a + gr * (b - a);
+      fd = f(d);
+    }
+  }
+  const timeMs = (a + b) / 2;
+  return { timeMs, elevationDeg: f(timeMs) };
+}
+
+/**
+ * Predict the next pass of `satrec` over `observer` at or after `fromDate`, using the elevation mask
+ * `maskDeg`. Steps SGP4 forward in `stepSeconds` (default 30) increments up to `horizonHours` (default
+ * 48), brackets the rise/set edges, then refines AOS/LOS by bisection and the peak by golden-section.
+ *
+ * Returns null when no rise occurs within the horizon. Three edge cases are handled explicitly:
+ *  - Already above the mask at `fromDate` → `inProgress: true`, `aosTime = fromDate`, LOS found ahead.
+ *  - No rise within the horizon → null.
+ *  - Still up at the horizon end (a long/high MEO pass) → `losTime` is clamped to the horizon and the
+ *    pass is returned rather than scanned forever.
+ *
+ * A few thousand SGP4 evaluations for one satellite over 48 h — a few ms; fine to run inline.
+ */
+export function nextPass(
+  satrec: SatRec,
+  observer: Observer,
+  fromDate: Date,
+  maskDeg: number,
+  opts?: { stepSeconds?: number; horizonHours?: number },
+): SatellitePass | null {
+  const stepMs = (opts?.stepSeconds ?? 30) * 1000;
+  const observerGd: ObserverGd = {
+    longitude: deg2rad(observer.lon),
+    latitude: deg2rad(observer.lat),
+    height: (observer.alt ?? 0) / 1000, // metres → km
+  };
+  const elevAt = (ms: number): number | null => {
+    const look = passLookAngles(satrec, observerGd, new Date(ms));
+    return look ? look.elevationDeg : null;
+  };
+
+  const fromMs = fromDate.getTime();
+  const horizonMs = fromMs + (opts?.horizonHours ?? 48) * 3_600_000;
+  const startEl = elevAt(fromMs);
+
+  // --- Locate AOS: already up, or the first rising edge ahead. ---
+  let aosMs: number;
+  let inProgress: boolean;
+  if (startEl != null && startEl >= maskDeg) {
+    aosMs = fromMs;
+    inProgress = true;
+  } else {
+    let prevMs = fromMs;
+    let prevEl = startEl;
+    let rising: number | null = null;
+    for (let ms = fromMs + stepMs; ms <= horizonMs; ms += stepMs) {
+      const el = elevAt(ms);
+      if (el != null && prevEl != null && prevEl < maskDeg && el >= maskDeg) {
+        rising = bisectCrossing(prevMs, ms, maskDeg, elevAt);
+        break;
+      }
+      prevMs = ms;
+      prevEl = el;
+    }
+    if (rising == null) return null; // no pass within the horizon
+    aosMs = rising;
+    inProgress = false;
+  }
+
+  // --- From AOS, track the coarse peak and locate the falling edge (LOS). ---
+  let maxEl = elevAt(aosMs) ?? maskDeg;
+  let maxElMs = aosMs;
+  let losMs: number | null = null;
+  {
+    let prevMs = aosMs;
+    let prevEl = maxEl;
+    for (let ms = aosMs + stepMs; ms <= horizonMs; ms += stepMs) {
+      const el = elevAt(ms);
+      if (el == null) {
+        prevMs = ms;
+        continue;
+      }
+      if (el > maxEl) {
+        maxEl = el;
+        maxElMs = ms;
+      }
+      if (prevEl != null && prevEl >= maskDeg && el < maskDeg) {
+        losMs = bisectCrossing(prevMs, ms, maskDeg, elevAt);
+        break;
+      }
+      prevMs = ms;
+      prevEl = el;
+    }
+  }
+  // Still above the mask at the window edge (e.g. a MEO GNSS sat): clamp LOS to the horizon.
+  if (losMs == null) losMs = horizonMs;
+
+  // --- Refine the peak locally to ~0.1°. ---
+  const peak = refinePeak(maxElMs, aosMs, losMs, stepMs, elevAt);
+  if (peak.elevationDeg > maxEl) {
+    maxEl = peak.elevationDeg;
+    maxElMs = peak.timeMs;
+  }
+
+  const aosLook = passLookAngles(satrec, observerGd, new Date(aosMs));
+  const losLook = passLookAngles(satrec, observerGd, new Date(losMs));
+
+  return {
+    aosTime: new Date(aosMs),
+    losTime: new Date(losMs),
+    maxElevationDeg: maxEl,
+    maxElevationTime: new Date(maxElMs),
+    aosAzimuthDeg: aosLook?.azimuthDeg ?? 0,
+    losAzimuthDeg: losLook?.azimuthDeg ?? 0,
+    inProgress,
+  };
+}
+
+/**
+ * Format a pass length (milliseconds) as mm:ss, e.g. 532_000 → "08:52". Minutes are not capped at 59
+ * (a clamped MEO arc can run long), seconds are two-digit. Pure display helper — kept here beside
+ * `formatFrequencyHz` so the sheet's pass math and its formatting are both jest-testable.
+ */
+export function formatPassDuration(durationMs: number): string {
+  const totalSec = Math.max(0, Math.round(durationMs / 1000));
+  const mm = Math.floor(totalSec / 60);
+  const ss = totalSec % 60;
+  return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+}
+
+/**
+ * Format a forward time delta (milliseconds) as a coarse countdown: "in 2h 14m", "in 14m", "in 45s".
+ * Non-positive deltas (the instant is now or past) render "now". Pure display helper.
+ */
+export function formatCountdown(deltaMs: number): string {
+  if (deltaMs <= 0) return "now";
+  const totalSec = Math.round(deltaMs / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `in ${h}h ${m}m`;
+  if (m > 0) return `in ${m}m`;
+  return `in ${s}s`;
 }

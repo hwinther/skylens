@@ -12,10 +12,14 @@
  */
 
 import {
+  buildSatrec,
   buildSatrecs,
   dopplerCorrectedHz,
+  formatCountdown,
   formatFrequencyHz,
+  formatPassDuration,
   GROUP_PRIORITY,
+  nextPass,
   propagateAll,
   satGroupsFromSettings,
   SATELLITE_RENDER_CAP,
@@ -54,6 +58,32 @@ function issDto(): SatelliteDto {
     freqSummary: "145.800 MHz FM",
     omm: ISS_OMM as unknown as SatelliteDto["omm"],
   };
+}
+
+/** Verbatim GPS BIIR-5 OMM from backend/tests/Api.Tests/fixtures/tle.json (gps-ops[0]) — a MEO sat. */
+const GPS_OMM = {
+  OBJECT_NAME: "GPS BIIR-5  (PRN 22)",
+  OBJECT_ID: "2000-040A",
+  EPOCH: "2026-07-11T16:25:05.022624",
+  MEAN_MOTION: 2.00557794,
+  ECCENTRICITY: 0.01205638,
+  INCLINATION: 54.8489,
+  RA_OF_ASC_NODE: 214.1892,
+  ARG_OF_PERICENTER: 302.6973,
+  MEAN_ANOMALY: 28.6671,
+  EPHEMERIS_TYPE: 0,
+  CLASSIFICATION_TYPE: "U",
+  NORAD_CAT_ID: 26407,
+  ELEMENT_SET_NO: 999,
+  REV_AT_EPOCH: 19043,
+  BSTAR: 0,
+  MEAN_MOTION_DOT: 1.02e-6,
+  MEAN_MOTION_DDOT: 0,
+} as const;
+
+/** Assert a Date lands within `toleranceMs` of an expected ISO instant (pass-time regression pin). */
+function expectTimeNear(actual: Date, expectedIso: string, toleranceMs: number) {
+  expect(Math.abs(actual.getTime() - new Date(expectedIso).getTime())).toBeLessThanOrEqual(toleranceMs);
 }
 
 /** Fabricate a bare SatelliteView for selection tests (no propagation involved). */
@@ -99,6 +129,107 @@ describe("propagateAll — ISS reference pass over Oslo (self-derived pins)", ()
     expect(a.azimuthDeg).toBe(b.azimuthDeg);
     expect(a.elevationDeg).toBe(b.elevationDeg);
     expect(a.rangeKm).toBe(b.rangeKm);
+  });
+});
+
+describe("nextPass — ISS pass prediction (self-derived pins)", () => {
+  // Same Oslo observer as above. These AOS/LOS/maxEl values are SELF-DERIVED regression pins: produced
+  // by running nextPass once and freezing the outputs (like the propagateAll pins), not external truth.
+  // Tolerances (±3 s on the edges, ±0.5° on the peak) absorb a satellite.js patch without going brittle.
+  const observer = { lat: 59.9, lon: 10.7, alt: 100 };
+
+  it("predicts AOS / LOS / max elevation / rise+set bearings for the next ISS pass", () => {
+    // fromDate ~9 min before the ISS clears the mask — a full rise→set arc is predicted.
+    const pass = nextPass(buildSatrec(ISS_OMM as unknown as SatelliteDto["omm"])!, observer, new Date("2026-07-11T21:40:00.000Z"), 5);
+    expect(pass).not.toBeNull();
+    const p = pass!;
+    expect(p.inProgress).toBe(false);
+    expectTimeNear(p.aosTime, "2026-07-11T21:49:09.140Z", 3000);
+    expectTimeNear(p.losTime, "2026-07-11T21:56:34.687Z", 3000);
+    expectTimeNear(p.maxElevationTime, "2026-07-11T21:52:52.027Z", 5000);
+    expect(p.maxElevationDeg).toBeGreaterThan(20.62 - 0.5);
+    expect(p.maxElevationDeg).toBeLessThan(20.62 + 0.5);
+    // Rise in the SW (~240°), set in the SE (~121°) — the ascending southbound arc.
+    expect(p.aosAzimuthDeg).toBeCloseTo(240.35, 0); // ±0.5°
+    expect(p.losAzimuthDeg).toBeCloseTo(121.32, 0);
+    // AOS/LOS both sit essentially on the mask; the elevation only exceeds it in between.
+    expect(p.losTime.getTime()).toBeGreaterThan(p.aosTime.getTime());
+  });
+
+  it("is deterministic across repeated prediction of the same window", () => {
+    const from = new Date("2026-07-11T21:40:00.000Z");
+    const a = nextPass(buildSatrec(ISS_OMM as unknown as SatelliteDto["omm"])!, observer, from, 5)!;
+    const b = nextPass(buildSatrec(ISS_OMM as unknown as SatelliteDto["omm"])!, observer, from, 5)!;
+    expect(a.aosTime.getTime()).toBe(b.aosTime.getTime());
+    expect(a.losTime.getTime()).toBe(b.losTime.getTime());
+    expect(a.maxElevationDeg).toBe(b.maxElevationDeg);
+  });
+
+  it("clamps AOS to now and flags inProgress when the satellite is already up", () => {
+    // fromDate mid-pass (the propagateAll fixture instant, ISS ~20° up) → AOS clamps to fromDate.
+    const from = new Date("2026-07-11T21:52:23.712Z");
+    const p = nextPass(buildSatrec(ISS_OMM as unknown as SatelliteDto["omm"])!, observer, from, 5)!;
+    expect(p.inProgress).toBe(true);
+    expect(p.aosTime.getTime()).toBe(from.getTime()); // clamped exactly to now
+    expectTimeNear(p.losTime, "2026-07-11T21:56:34.727Z", 3000);
+    expect(p.maxElevationDeg).toBeGreaterThan(20.62 - 0.5);
+    expect(p.maxElevationDeg).toBeLessThan(20.62 + 0.5);
+  });
+
+  it("returns null when no rise occurs within the horizon", () => {
+    // Below the mask at 22:20Z with only a 36 s horizon — the next ISS pass is far outside it.
+    const p = nextPass(
+      buildSatrec(ISS_OMM as unknown as SatelliteDto["omm"])!,
+      observer,
+      new Date("2026-07-11T22:20:00.000Z"),
+      5,
+      { horizonHours: 0.01 },
+    );
+    expect(p).toBeNull();
+  });
+
+  it("clamps LOS to the horizon for an always-up MEO pass instead of spinning", () => {
+    // A GPS MEO sat is above the mask for hours. With a 30 min horizon it never sets in-window, so LOS
+    // must clamp to the horizon end and the pass still return (the no-hang guard) — not scan for hours.
+    const from = new Date("2026-07-11T18:00:00.000Z");
+    const p = nextPass(buildSatrec(GPS_OMM as unknown as SatelliteDto["omm"])!, observer, from, 5, {
+      horizonHours: 0.5,
+    });
+    expect(p).not.toBeNull();
+    expect(p!.inProgress).toBe(true);
+    expect(p!.aosTime.getTime()).toBe(from.getTime());
+    // LOS clamped exactly to fromDate + 30 min.
+    expect(p!.losTime.getTime()).toBe(from.getTime() + 30 * 60_000);
+    expect(Number.isFinite(p!.maxElevationDeg)).toBe(true);
+    expect(p!.maxElevationDeg).toBeGreaterThan(40); // ~46° over this arc
+  });
+});
+
+describe("formatPassDuration / formatCountdown — pure display helpers", () => {
+  it("formats a pass length as zero-padded mm:ss", () => {
+    expect(formatPassDuration(532_000)).toBe("08:52");
+    expect(formatPassDuration(9_000)).toBe("00:09");
+    expect(formatPassDuration(0)).toBe("00:00");
+  });
+
+  it("rounds to the nearest second and never goes negative", () => {
+    expect(formatPassDuration(89_600)).toBe("01:30"); // 89.6 s → 90 s
+    expect(formatPassDuration(-5_000)).toBe("00:00");
+  });
+
+  it("lets minutes exceed 59 for a long (clamped) arc", () => {
+    expect(formatPassDuration(75 * 60_000)).toBe("75:00");
+  });
+
+  it("formats a forward delta as a coarse countdown", () => {
+    expect(formatCountdown(2 * 3_600_000 + 14 * 60_000)).toBe("in 2h 14m");
+    expect(formatCountdown(14 * 60_000)).toBe("in 14m");
+    expect(formatCountdown(45_000)).toBe("in 45s");
+  });
+
+  it("renders 'now' for a non-positive delta", () => {
+    expect(formatCountdown(0)).toBe("now");
+    expect(formatCountdown(-60_000)).toBe("now");
   });
 });
 
