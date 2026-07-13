@@ -17,6 +17,7 @@ import {
   dopplerFactor,
   ecfToLookAngles,
   eciToEcf,
+  eciToGeodetic,
   geodeticToEcf,
   gstime,
   json2satrec,
@@ -104,6 +105,14 @@ export interface SatelliteView {
   rangeKm: number;
   /** Range rate in km/s; negative = approaching (Doppler shifts the downlink higher). */
   rangeRateKmS: number;
+  /**
+   * Sub-satellite point latitude in degrees, [-90, 90] — the geodetic point on Earth directly beneath
+   * the satellite at the sample instant (independent of the observer). 0 when the geodetic reduction is
+   * non-finite. The Map's ground-track overlay places the live sub-point marker here.
+   */
+  subLat: number;
+  /** Sub-satellite point longitude in degrees, normalised to [-180, 180). 0 when non-finite (see subLat). */
+  subLon: number;
   freqSummary?: string;
 }
 
@@ -216,6 +225,19 @@ export function propagateAll(
     // line-of-sight dot — so back the signed range rate out of it. Negative ⇒ approaching.
     const rangeRateKmS = (1 - dopplerFactor(observerEcf, positionEcf, velocityEcf)) * SPEED_OF_LIGHT_KM_S;
 
+    // Sub-satellite point: the geodetic point directly beneath the satellite (eciToGeodetic reuses the
+    // positionEci + gmst already in scope — no extra propagation). Observer-independent; the Map's
+    // ground-track overlay renders the live sub-point here. Non-finite reduction leaves it at 0/0.
+    let subLat = 0;
+    let subLon = 0;
+    const geo = eciToGeodetic(positionEci, gmst);
+    const subLatDeg = rad2deg(geo.latitude);
+    const subLonDeg = normalizeLon(rad2deg(geo.longitude));
+    if (Number.isFinite(subLatDeg) && Number.isFinite(subLonDeg)) {
+      subLat = subLatDeg;
+      subLon = subLonDeg;
+    }
+
     // Angular rates: propagate the SAME satrec RATE_SAMPLE_S ahead and finite-difference the look
     // angles. angleDiff carries the 0/360 azimuth seam (a satellite crossing north must NOT produce a
     // ±360°/s spike). Any error / non-finite in the second sample leaves the rates at 0 — that view
@@ -249,6 +271,8 @@ export function propagateAll(
       elevationRateDegS,
       rangeKm,
       rangeRateKmS: Number.isFinite(rangeRateKmS) ? rangeRateKmS : 0,
+      subLat,
+      subLon,
       ...(entry.freqSummary != null ? { freqSummary: entry.freqSummary } : {}),
     });
   }
@@ -339,6 +363,11 @@ function normalizeAz(azDeg: number): number {
   let a = azDeg % 360;
   if (a < 0) a += 360;
   return a;
+}
+
+/** Normalise a longitude (deg) to [-180, 180) so the antimeridian is a single clean seam. */
+export function normalizeLon(lonDeg: number): number {
+  return ((((lonDeg + 180) % 360) + 360) % 360) - 180;
 }
 
 // ---------------------------------------------------------------------------
@@ -585,4 +614,110 @@ export function formatCountdown(deltaMs: number): string {
   if (h > 0) return `in ${h}h ${m}m`;
   if (m > 0) return `in ${m}m`;
   return `in ${s}s`;
+}
+
+// ---------------------------------------------------------------------------
+// Ground track (sub-satellite path) for a single selected satellite.
+//
+// The sub-satellite point is the geodetic point directly beneath the satellite —
+// eciToGeodetic of the ECI position at the propagation instant. Sampling it across
+// ±half an orbital period, centred on `fromDate`, traces the path the satellite
+// draws across the Earth (±one orbit). Segments are pre-split at the antimeridian
+// so a renderer never draws a wrap-around line straight across the whole map. This
+// is Map-only overlay math (a globe-spanning track is meaningless on the you-centric
+// radar) and reuses the same propagate → gstime → eciToGeodetic reduction as the
+// live sub-point on SatelliteView.
+// ---------------------------------------------------------------------------
+
+/** One sampled sub-satellite point on a ground track. */
+export interface GroundTrackPoint {
+  /** Latitude in degrees, [-90, 90]. */
+  lat: number;
+  /** Longitude in degrees, [-180, 180). */
+  lon: number;
+  /** Epoch ms this sample was taken at. */
+  timeMs: number;
+}
+
+/** Floor for a derived ground-track span (minutes) — keeps a bogus tiny period from making an empty track. */
+export const MIN_TRACK_SPAN_MIN = 20;
+/** Ceiling for a derived ground-track span (minutes) — a GEO/decayed edge case can't produce a day-long span. */
+export const MAX_TRACK_SPAN_MIN = 24 * 60;
+
+/**
+ * Orbital period in minutes derived from the satrec mean motion: satrec.no is in radians/minute, so the
+ * period is 2π/no. Clamped to [MIN_TRACK_SPAN_MIN, MAX_TRACK_SPAN_MIN] so a near-zero mean motion (GEO)
+ * or a garbage value can't yield an absurd (or empty) span. This is the default ground-track span.
+ */
+export function orbitalPeriodMinutes(satrec: SatRec): number {
+  const no = satrec.no;
+  if (!Number.isFinite(no) || no <= 0) return MIN_TRACK_SPAN_MIN;
+  const period = (2 * Math.PI) / no;
+  if (!Number.isFinite(period)) return MIN_TRACK_SPAN_MIN;
+  return Math.min(MAX_TRACK_SPAN_MIN, Math.max(MIN_TRACK_SPAN_MIN, period));
+}
+
+/**
+ * Propagate `satrec` to `date` and reduce it to its sub-satellite point (the geodetic point directly
+ * beneath the satellite), or null when SGP4 errors / returns a non-finite position. Longitude is
+ * normalised to [-180, 180). Same reduction the live SatelliteView.subLat/subLon uses.
+ */
+export function subSatellitePoint(satrec: SatRec, date: Date): GroundTrackPoint | null {
+  const pv = propagate(satrec, date);
+  if (!pv || !pv.position) return null;
+  const p = pv.position;
+  if (!Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z)) return null;
+  const geo = eciToGeodetic(p, gstime(date));
+  const lat = rad2deg(geo.latitude);
+  const lon = normalizeLon(rad2deg(geo.longitude));
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  return { lat, lon, timeMs: date.getTime() };
+}
+
+/**
+ * Split a run of sub-satellite points into segments at each antimeridian crossing: whenever two
+ * consecutive samples' longitude jumps by more than 180°, the current segment is closed and a new one
+ * starts. This keeps a renderer from drawing a single line straight across the whole map when the track
+ * wraps past ±180°. Pure array-in/array-out — no propagation — so it is trivially unit-testable.
+ */
+export function splitAtAntimeridian(points: GroundTrackPoint[]): GroundTrackPoint[][] {
+  const segments: GroundTrackPoint[][] = [];
+  let current: GroundTrackPoint[] = [];
+  for (const pt of points) {
+    const prev = current[current.length - 1];
+    if (prev && Math.abs(pt.lon - prev.lon) > 180) {
+      segments.push(current);
+      current = [];
+    }
+    current.push(pt);
+  }
+  if (current.length > 0) segments.push(current);
+  return segments;
+}
+
+/**
+ * Sample the sub-satellite ground track of `satrec` across a span centred on `fromDate`, returning an
+ * array of segments already split at the antimeridian. The default span is ONE orbital period derived
+ * from the satrec mean motion (`orbitalPeriodMinutes`, clamped); the default step is 30 s. Non-finite
+ * samples are dropped. Centring on `fromDate` means the track shows roughly half an orbit behind and
+ * half ahead of the current sub-point.
+ */
+export function groundTrack(
+  satrec: SatRec,
+  fromDate: Date,
+  opts?: { spanMinutes?: number; stepSeconds?: number },
+): GroundTrackPoint[][] {
+  const spanMinutes = opts?.spanMinutes ?? orbitalPeriodMinutes(satrec);
+  const stepSeconds = opts?.stepSeconds ?? 30;
+  const stepMs = Math.max(1000, stepSeconds * 1000);
+  const halfSpanMs = (spanMinutes * 60_000) / 2;
+  const startMs = fromDate.getTime() - halfSpanMs;
+  const endMs = fromDate.getTime() + halfSpanMs;
+
+  const points: GroundTrackPoint[] = [];
+  for (let ms = startMs; ms <= endMs; ms += stepMs) {
+    const pt = subSatellitePoint(satrec, new Date(ms));
+    if (pt) points.push(pt);
+  }
+  return splitAtAntimeridian(points);
 }

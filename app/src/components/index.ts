@@ -13,4 +13,5 @@ export * from "./useDemoPose";
 export * from "./useLiveFeed";
 export * from "./useObserverLocation";
 export * from "./useSatellites";
+export * from "./useSatelliteGroundTrack";
 export * from "./useFishingLayers";

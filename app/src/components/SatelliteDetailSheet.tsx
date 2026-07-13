@@ -20,6 +20,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
 import type { SatelliteDetail, SatelliteTransmitter } from "@/api/types";
@@ -34,6 +35,7 @@ import {
   type Observer,
   type SatelliteView,
 } from "@/ar";
+import { useSatelliteTrackStore } from "@/state/satelliteTrackStore";
 import { compass8 } from "./webmap/relative";
 
 // Violet family — matches SatelliteLabel; a third accent distinct from aircraft blue and vessel teal.
@@ -79,6 +81,8 @@ export function SatelliteDetailSheet({
   onClose,
 }: SatelliteDetailSheetProps) {
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
+  const router = useRouter();
+  const setTracked = useSatelliteTrackStore((s) => s.setTracked);
   const [detail, setDetail] = useState<SatelliteDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -195,6 +199,22 @@ export function SatelliteDetailSheet({
           )}
         </View>
 
+        {noradId != null ? (
+          <Pressable
+            testID="sat-show-ground-track"
+            style={styles.trackButton}
+            onPress={() => {
+              // Hand the selection to the Map via the ephemeral store, close the sheet, and route to
+              // the Map tab (the sheet is reached from both AR and List — both land on the map).
+              setTracked(noradId);
+              onClose();
+              router.push("/map");
+            }}
+          >
+            <Text style={styles.trackButtonText}>Show ground track</Text>
+          </Pressable>
+        ) : null}
+
         <ScrollView style={styles.txScroll} contentContainerStyle={styles.txContent}>
           {loading && <ActivityIndicator color={SAT_VIOLET} />}
           {error && <Text style={styles.error}>{error}</Text>}
@@ -297,6 +317,16 @@ const styles = StyleSheet.create({
   passLine: { color: "#EDE3FA", fontSize: 14, fontWeight: "600" },
   passSub: { color: "#9FC7E0", fontSize: 12 },
   passMuted: { color: "#7fa6c4", fontSize: 13, fontStyle: "italic" },
+  trackButton: {
+    marginTop: 12,
+    alignItems: "center",
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: "rgba(199, 146, 234, 0.16)",
+    borderColor: SAT_VIOLET,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  trackButtonText: { color: SAT_VIOLET, fontSize: 15, fontWeight: "700" },
   row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
   rowLabel: { color: "#7fa6c4", fontSize: 14 },
   rowValue: { color: "#EAF6FF", fontSize: 14, fontWeight: "500" },
