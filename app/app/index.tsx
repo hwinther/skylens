@@ -140,6 +140,7 @@ export default function ArScreen() {
       showShips={showShips}
       showAton={showAton}
       satellites={satHook.visible}
+      satellitesSampledAt={satHook.satellitesSampledAt}
       showSatellites={showSatellites}
       poseRef={poseRef}
       positionRef={live.positionRef}

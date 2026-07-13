@@ -59,6 +59,11 @@ export interface UseSatellitesResult {
   byNoradId: Map<number, SatelliteView>;
   /** Age of the backend TLE snapshot in seconds, or null before the first successful fetch. */
   tleAgeSeconds: number | null;
+  /**
+   * Epoch ms the current `visible` set was propagated at (captured at tick start from the propagation
+   * clock). The overlay extrapolates az/el by `Date.now() - satellitesSampledAt`. 0 while idle/empty.
+   */
+  satellitesSampledAt: number;
   status: SatelliteStatus;
 }
 
@@ -70,12 +75,14 @@ interface Payload {
 interface PropagatedResult {
   visible: SatelliteView[];
   byNoradId: Map<number, SatelliteView>;
+  /** Epoch ms this set was propagated at (from the tick's propagation clock); 0 for the empty set. */
+  sampledAt: number;
 }
 
 // Stable empty singletons so an idle/empty hook returns the same references frame to frame.
 const NO_VIEWS: SatelliteView[] = [];
 const EMPTY_BY_ID: Map<number, SatelliteView> = new Map();
-const EMPTY_RESULT: PropagatedResult = { visible: NO_VIEWS, byNoradId: EMPTY_BY_ID };
+const EMPTY_RESULT: PropagatedResult = { visible: NO_VIEWS, byNoradId: EMPTY_BY_ID, sampledAt: 0 };
 const defaultNow = () => new Date();
 
 export function useSatellites(options: UseSatellitesOptions): UseSatellitesResult {
@@ -180,9 +187,16 @@ export function useSatellites(options: UseSatellitesOptions): UseSatellitesResul
     const tick = () => {
       const obs = observerRef.current;
       if (!obs) return;
-      const views = propagateAll(entriesRef.current, obs, nowRef.current());
+      // One clock read per tick: the same instant both drives propagation and stamps the sample, so the
+      // overlay's Date.now()-based extrapolation age is measured against exactly what was propagated.
+      const sampleDate = nowRef.current();
+      const views = propagateAll(entriesRef.current, obs, sampleDate);
       const visible = selectVisible(views, maskRef.current, groupsRef.current);
-      setResult({ visible, byNoradId: new Map(visible.map((v) => [v.noradId, v])) });
+      setResult({
+        visible,
+        byNoradId: new Map(visible.map((v) => [v.noradId, v])),
+        sampledAt: sampleDate.getTime(),
+      });
     };
 
     tick(); // immediate first placement
@@ -197,6 +211,7 @@ export function useSatellites(options: UseSatellitesOptions): UseSatellitesResul
     visible: shouldRun ? result.visible : NO_VIEWS,
     byNoradId: shouldRun ? result.byNoradId : EMPTY_BY_ID,
     tleAgeSeconds: payload?.tleAgeSeconds ?? null,
+    satellitesSampledAt: shouldRun ? result.sampledAt : 0,
     status: !enabled ? "unavailable" : payload ? "ok" : fetchState,
   };
 }

@@ -1,7 +1,7 @@
 /**
  * Web Map view: two spatial renderings of the same traffic, switchable — Radar (offline, you-centric)
- * and a real OpenStreetMap (Leaflet). react-native-maps has no web build, so Metro resolves this file
- * on web; native keeps map.tsx. The flat list lives in its own List tab now.
+ * and a real OpenStreetMap (Leaflet). react-native-maps has no web build, so Metro resolves this
+ * MapScreen.web.tsx on web; native gets MapScreen.tsx (imported via the thin app/map.tsx route). The flat list lives in its own List tab now.
  */
 
 import { useMemo, useState } from "react";
