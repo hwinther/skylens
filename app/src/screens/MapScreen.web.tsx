@@ -33,6 +33,7 @@ export default function MapScreen() {
   const demoMode = useSettingsStore((s) => s.demoMode);
   const showShips = useSettingsStore((s) => s.showShips);
   const showAton = useSettingsStore((s) => s.showAton);
+  const showCourseVectors = useSettingsStore((s) => s.showCourseVectors);
   const showFishingZones = useSettingsStore((s) => s.showFishingZones);
   const showLostGear = useSettingsStore((s) => s.showLostGear);
   const radarRangeKm = useSettingsStore((s) => s.radarRangeKm);
@@ -90,6 +91,7 @@ export default function MapScreen() {
             onSelectVessel={setSelectedMmsi}
             rangeKm={radarRangeKm}
             onRangeChange={setRadarRangeKm}
+            showCourseVectors={showCourseVectors}
           />
         ) : (
           <LeafletMap
@@ -105,6 +107,7 @@ export default function MapScreen() {
             trackName={track.name}
             trackKey={track.trackedNoradId}
             onClearTrack={track.clear}
+            showCourseVectors={showCourseVectors}
           />
         )}
         {view === "map" && track.trackedNoradId != null ? (

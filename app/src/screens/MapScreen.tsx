@@ -30,6 +30,12 @@ import {
   type GeoGeometry,
 } from "@/components/webmap/geojson";
 import {
+  aircraftCourseVector,
+  vesselCourseVector,
+  AIRCRAFT_COURSE_COLOR,
+  SHIP_COURSE_COLOR,
+} from "@/components/webmap/course";
+import {
   LOST_GEAR_COLOR,
   LOST_GEAR_GLYPH,
   lostGearDescription,
@@ -186,6 +192,7 @@ export default function MapScreen() {
   const demoMode = useSettingsStore((s) => s.demoMode);
   const showShips = useSettingsStore((s) => s.showShips);
   const showAton = useSettingsStore((s) => s.showAton);
+  const showCourseVectors = useSettingsStore((s) => s.showCourseVectors);
   const showFishingZones = useSettingsStore((s) => s.showFishingZones);
   const showLostGear = useSettingsStore((s) => s.showLostGear);
   const radarRangeKm = useSettingsStore((s) => s.radarRangeKm);
@@ -254,6 +261,7 @@ export default function MapScreen() {
             onSelectVessel={setSelectedMmsi}
             rangeKm={radarRangeKm}
             onRangeChange={setRadarRangeKm}
+            showCourseVectors={showCourseVectors}
           />
         ) : (
           <MapView
@@ -265,6 +273,33 @@ export default function MapScreen() {
             {/* Fishing overlays first so aircraft/vessel markers draw on top of the zone fills. */}
             {showFishingZones ? <FishingZoneShapes zones={zones} /> : null}
             {showLostGear ? <LostGearMarkers gear={gear} /> : null}
+            {/* Course leaders: dashed, under the solid violet track and the markers. */}
+            {showCourseVectors &&
+              positioned.map((a) => {
+                const v = aircraftCourseVector(a);
+                return v ? (
+                  <Polyline
+                    key={`ac-course-${a.hex}`}
+                    coordinates={toLatLngs(v)}
+                    strokeColor={AIRCRAFT_COURSE_COLOR}
+                    strokeWidth={2}
+                    lineDashPattern={[6, 4]}
+                  />
+                ) : null;
+              })}
+            {showCourseVectors &&
+              positionedVessels.map((ves) => {
+                const v = vesselCourseVector(ves);
+                return v ? (
+                  <Polyline
+                    key={`ship-course-${ves.mmsi}`}
+                    coordinates={toLatLngs(v)}
+                    strokeColor={SHIP_COURSE_COLOR}
+                    strokeWidth={2}
+                    lineDashPattern={[6, 4]}
+                  />
+                ) : null;
+              })}
             {/* Satellite ground track: one violet polyline per antimeridian-split segment. */}
             {track.segments.map((seg, i) => (
               <Polyline
