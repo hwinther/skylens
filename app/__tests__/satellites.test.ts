@@ -21,16 +21,25 @@ import {
   formatFrequencyHz,
   formatPassDuration,
   GROUP_PRIORITY,
+  groundTrack,
   MAX_EXTRAPOLATION_S,
+  MAX_TRACK_SPAN_MIN,
+  MIN_TRACK_SPAN_MIN,
   nextPass,
+  normalizeLon,
+  orbitalPeriodMinutes,
   propagateAll,
   RATE_SAMPLE_S,
   satGroupsFromSettings,
   SATELLITE_RENDER_CAP,
   selectVisible,
+  splitAtAntimeridian,
+  subSatellitePoint,
+  type GroundTrackPoint,
   type SatelliteView,
   type SatGroup,
 } from "@/ar/satellites";
+import type { SatRec } from "satellite.js";
 import { angleDiff } from "@/ar/geo";
 import type { SatelliteDto } from "@/api/types";
 
@@ -103,6 +112,8 @@ function view(noradId: number, group: SatGroup, elevationDeg: number): Satellite
     elevationRateDegS: 0,
     rangeKm: 1000,
     rangeRateKmS: 0,
+    subLat: 0,
+    subLon: 0,
   };
 }
 
@@ -136,6 +147,25 @@ describe("propagateAll — ISS reference pass over Oslo (self-derived pins)", ()
     expect(a.azimuthDeg).toBe(b.azimuthDeg);
     expect(a.elevationDeg).toBe(b.elevationDeg);
     expect(a.rangeKm).toBe(b.rangeKm);
+  });
+
+  it("carries a sub-satellite point (subLat/subLon) self-consistent with a direct eciToGeodetic", () => {
+    const v = propagateAll(buildSatrecs([issDto()]), observer, date)[0];
+    // Finite and in-range: latitude bounded by |inclination| (51.63°), longitude normalised to [-180, 180).
+    expect(Number.isFinite(v.subLat)).toBe(true);
+    expect(Number.isFinite(v.subLon)).toBe(true);
+    expect(v.subLat).toBeGreaterThanOrEqual(-90);
+    expect(v.subLat).toBeLessThanOrEqual(90);
+    expect(v.subLon).toBeGreaterThanOrEqual(-180);
+    expect(v.subLon).toBeLessThan(180);
+    // The SAME reduction (propagate → gstime → eciToGeodetic) run standalone must agree exactly — this
+    // guards the sub-point wiring against a regression without pinning an external truth value.
+    const direct = subSatellitePoint(buildSatrec(ISS_OMM as unknown as SatelliteDto["omm"])!, date)!;
+    expect(v.subLat).toBeCloseTo(direct.lat, 6);
+    expect(v.subLon).toBeCloseTo(direct.lon, 6);
+    // Self-derived pin: the ISS is over central Europe (~51.77°N, ~7.69°E) at this instant.
+    expect(v.subLat).toBeCloseTo(51.7665, 0); // ±0.5°
+    expect(v.subLon).toBeCloseTo(7.6907, 0);
   });
 
   it("carries az/el angular rates that self-consistently finite-difference two propagations", () => {
@@ -191,6 +221,8 @@ describe("extrapolateView — linear az/el lead, normalised, age-clamped", () =>
       elevationRateDegS: elRate,
       rangeKm: 1000,
       rangeRateKmS: 0,
+      subLat: 0,
+      subLon: 0,
     };
   }
 
@@ -300,6 +332,141 @@ describe("nextPass — ISS pass prediction (self-derived pins)", () => {
     expect(p!.losTime.getTime()).toBe(from.getTime() + 30 * 60_000);
     expect(Number.isFinite(p!.maxElevationDeg)).toBe(true);
     expect(p!.maxElevationDeg).toBeGreaterThan(40); // ~46° over this arc
+  });
+});
+
+describe("normalizeLon — longitude wrapped to [-180, 180)", () => {
+  it("wraps values past ±180 into range", () => {
+    expect(normalizeLon(0)).toBe(0);
+    expect(normalizeLon(179)).toBeCloseTo(179, 9);
+    expect(normalizeLon(190)).toBeCloseTo(-170, 9);
+    expect(normalizeLon(-190)).toBeCloseTo(170, 9);
+    expect(normalizeLon(540)).toBeCloseTo(-180, 9); // 540 = 360 + 180 → −180
+  });
+
+  it("maps the +180 seam to −180 (the range is half-open)", () => {
+    expect(normalizeLon(180)).toBe(-180);
+    expect(normalizeLon(-180)).toBe(-180);
+  });
+});
+
+describe("splitAtAntimeridian — segment on a >180° longitude jump", () => {
+  const pts = (lons: number[]): GroundTrackPoint[] => lons.map((lon, i) => ({ lat: 0, lon, timeMs: i }));
+
+  it("keeps a monotone run as a single segment", () => {
+    const segs = splitAtAntimeridian(pts([10, 20, 30, 40]));
+    expect(segs).toHaveLength(1);
+    expect(segs[0].map((p) => p.lon)).toEqual([10, 20, 30, 40]);
+  });
+
+  it("splits at a 179 → −179 antimeridian crossing (jump 358° > 180°)", () => {
+    const segs = splitAtAntimeridian(pts([170, 179, -179, -170]));
+    expect(segs).toHaveLength(2);
+    expect(segs[0].map((p) => p.lon)).toEqual([170, 179]);
+    expect(segs[1].map((p) => p.lon)).toEqual([-179, -170]);
+  });
+
+  it("splits twice (→ 3 segments) for a track that wraps the antimeridian twice", () => {
+    // Two >180° jumps (179→−179 and −170→179); the intervening steps stay under 180°.
+    const segs = splitAtAntimeridian(pts([170, 179, -179, -170, 179]));
+    expect(segs).toHaveLength(3);
+    expect(segs.map((s) => s.length)).toEqual([2, 2, 1]);
+  });
+
+  it("returns [] for an empty run and a single-element segment for one point", () => {
+    expect(splitAtAntimeridian([])).toEqual([]);
+    expect(splitAtAntimeridian(pts([42]))).toEqual([[{ lat: 0, lon: 42, timeMs: 0 }]]);
+  });
+});
+
+describe("orbitalPeriodMinutes — 2π/no, clamped", () => {
+  it("derives the ISS period (~93 min) from its mean motion", () => {
+    const iss = buildSatrec(ISS_OMM as unknown as SatelliteDto["omm"])!;
+    expect(orbitalPeriodMinutes(iss)).toBeCloseTo(92.97, 1); // ±0.05 min
+  });
+
+  it("derives the GPS MEO period (~718 min) — within the clamp window, so unclamped", () => {
+    const gps = buildSatrec(GPS_OMM as unknown as SatelliteDto["omm"])!;
+    const period = orbitalPeriodMinutes(gps);
+    expect(period).toBeGreaterThan(700);
+    expect(period).toBeLessThan(MAX_TRACK_SPAN_MIN);
+  });
+
+  it("floors a bogus (zero / non-positive) mean motion to MIN_TRACK_SPAN_MIN", () => {
+    expect(orbitalPeriodMinutes({ no: 0 } as SatRec)).toBe(MIN_TRACK_SPAN_MIN);
+    expect(orbitalPeriodMinutes({ no: -1 } as SatRec)).toBe(MIN_TRACK_SPAN_MIN);
+  });
+
+  it("ceils a GEO-slow mean motion to MAX_TRACK_SPAN_MIN (no day-long span)", () => {
+    // A period of ~5000 min (well past the 24 h ceiling) → clamped to MAX_TRACK_SPAN_MIN.
+    expect(orbitalPeriodMinutes({ no: (2 * Math.PI) / 5000 } as SatRec)).toBe(MAX_TRACK_SPAN_MIN);
+  });
+});
+
+describe("groundTrack — ISS sub-satellite path (self-derived pins)", () => {
+  const satrec = () => buildSatrec(ISS_OMM as unknown as SatelliteDto["omm"])!;
+
+  it("samples ~one period at the default 30 s step and pins the first/last sub-points", () => {
+    // Same instant the propagateAll sub-point pins use. This window does NOT cross the antimeridian, so
+    // it stays a single segment: the track runs from the SW Pacific up through Europe to the NW Pacific.
+    const date = new Date("2026-07-11T21:52:23.712Z");
+    const segs = groundTrack(satrec(), date);
+    expect(segs.length).toBeGreaterThanOrEqual(1);
+    const total = segs.reduce((n, s) => n + s.length, 0);
+    // span ≈ 92.97 min / 30 s ≈ 186 samples.
+    expect(total).toBeGreaterThanOrEqual(184);
+    expect(total).toBeLessThanOrEqual(188);
+    // Every sample finite and in range.
+    for (const seg of segs) {
+      for (const p of seg) {
+        expect(Number.isFinite(p.lat)).toBe(true);
+        expect(Number.isFinite(p.lon)).toBe(true);
+        expect(p.lat).toBeGreaterThanOrEqual(-90);
+        expect(p.lat).toBeLessThanOrEqual(90);
+        expect(p.lon).toBeGreaterThanOrEqual(-180);
+        expect(p.lon).toBeLessThan(180);
+      }
+    }
+    const first = segs[0][0];
+    const lastSeg = segs[segs.length - 1];
+    const last = lastSeg[lastSeg.length - 1];
+    // Self-derived pins (±0.5°): the span is centred on `date`, so it reaches ~46 min either side.
+    expect(first.lat).toBeCloseTo(-51.761, 0);
+    expect(first.lon).toBeCloseTo(-160.781, 0);
+    expect(last.lat).toBeCloseTo(-51.683, 0);
+    expect(last.lon).toBeCloseTo(173.208, 0);
+    // The centre sample sits at the live sub-point (~51.77°N, 7.69°E).
+    const centre = subSatellitePoint(satrec(), date)!;
+    expect(centre.lat).toBeCloseTo(51.7665, 0);
+    expect(centre.lon).toBeCloseTo(7.6907, 0);
+  });
+
+  it("pre-splits into >1 segment when the orbit crosses the antimeridian within the window", () => {
+    // A window centred 22 min later straddles the ±180° meridian → two segments, no wrap-around line.
+    const date = new Date("2026-07-11T22:14:23.712Z");
+    const segs = groundTrack(satrec(), date);
+    expect(segs.length).toBeGreaterThan(1);
+    // Splitting only partitions; the total sample count is unchanged (~186).
+    const total = segs.reduce((n, s) => n + s.length, 0);
+    expect(total).toBeGreaterThanOrEqual(184);
+    expect(total).toBeLessThanOrEqual(188);
+    // The seam really is a >180° jump between the two segments (never a within-segment wrap).
+    for (const seg of segs) {
+      for (let i = 1; i < seg.length; i++) {
+        expect(Math.abs(seg[i].lon - seg[i - 1].lon)).toBeLessThanOrEqual(180);
+      }
+    }
+  });
+
+  it("honours an explicit span/step and is deterministic", () => {
+    const date = new Date("2026-07-11T21:52:23.712Z");
+    const a = groundTrack(satrec(), date, { spanMinutes: 20, stepSeconds: 60 });
+    const b = groundTrack(satrec(), date, { spanMinutes: 20, stepSeconds: 60 });
+    const totalA = a.reduce((n, s) => n + s.length, 0);
+    // 20 min / 60 s ≈ 21 samples.
+    expect(totalA).toBeGreaterThanOrEqual(20);
+    expect(totalA).toBeLessThanOrEqual(22);
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 });
 

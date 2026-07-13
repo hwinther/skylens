@@ -12,7 +12,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { AircraftDto, FishingZone, LostGear, VesselDto } from "@/api/types";
 import { iconForCategory } from "@/components/aircraftIcon";
 import { iconForVessel } from "@/components/vesselIcon";
-import { lineLatLngs, pointLatLng, polygonRings, type GeoGeometry } from "./geojson";
+import { lineLatLngs, pointLatLng, polygonRings, type GeoGeometry, type LatLngTuple } from "./geojson";
 import {
   LOST_GEAR_COLOR,
   LOST_GEAR_GLYPH,
@@ -35,7 +35,21 @@ export interface LeafletMapProps {
   zones?: FishingZone[];
   /** Lost/ghost fishing-gear points to draw; already gated by the caller (empty = nothing). */
   gear?: LostGear[];
+  /** Satellite ground-track segments ([lat,lng] tuples, antimeridian-split); empty = no track drawn. */
+  trackSegments?: LatLngTuple[][];
+  /** Current sub-satellite point ([lat,lng]) for the live marker, or null when no track is shown. */
+  trackSubPoint?: LatLngTuple | null;
+  /** Name of the tracked satellite (marker popup). */
+  trackName?: string | null;
+  /** NORAD id of the tracked satellite — the fit-to-track key (auto-fit fires once per new id). */
+  trackKey?: number | null;
+  /** Clear the current track (clear chip + tapping the sub-point marker). */
+  onClearTrack?: () => void;
 }
+
+// Violet family — matches the satellite label / list / detail sheet, distinct from aircraft blue,
+// vessel teal, and the magenta fishing lines.
+const SAT_VIOLET = "#C792EA";
 
 // Reach the icon-font statics (not in the public types) so Leaflet's raw-HTML markers render the same
 // MaterialCommunityIcons glyphs the radar/list use, instead of a generic shape.
@@ -78,6 +92,18 @@ const observerIcon = L.divIcon({
   iconSize: [12, 12],
   iconAnchor: [6, 6],
 });
+
+// Violet sub-satellite marker: the same MCI-font divIcon path as the traffic markers.
+const satelliteIcon: L.DivIcon = (() => {
+  const code = glyphMap["satellite-variant"];
+  const glyph = code != null ? String.fromCodePoint(code) : "";
+  return L.divIcon({
+    className: "",
+    html: `<span style="font-family:'${iconFont}';font-size:22px;line-height:22px;color:${SAT_VIOLET};text-shadow:0 0 3px #000">${glyph}</span>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+  });
+})();
 
 // Lost/ghost-gear marker: the same MCI-font divIcon path as the traffic markers, in hazard orange.
 const lostGearIcon: L.DivIcon = (() => {
@@ -168,6 +194,24 @@ function FitBounds({ points }: { points: [number, number][] }) {
   return null;
 }
 
+/**
+ * Zoom the map out to the ground-track bounds when a track is first set (so a globe-spanning orbit is
+ * visible), keyed on the tracked NORAD id — it re-fits once per NEW satellite, not on every recompute
+ * or unrelated re-render (mirrors FitBounds' done-ref, but re-arms when the id changes). Points arrive
+ * a moment after selection (async fetch), so the fit fires on the first non-empty render for that id.
+ */
+function FitTrack({ points, trackKey }: { points: [number, number][]; trackKey: number | null }) {
+  const map = useMap();
+  const fittedFor = useRef<number | null>(null);
+  useEffect(() => {
+    if (trackKey == null || points.length === 0) return;
+    if (fittedFor.current === trackKey) return;
+    map.fitBounds(L.latLngBounds(points), { padding: [40, 40] });
+    fittedFor.current = trackKey;
+  }, [map, points, trackKey]);
+  return null;
+}
+
 export function LeafletMap({
   aircraft,
   observer,
@@ -176,6 +220,11 @@ export function LeafletMap({
   onSelectVessel,
   zones = [],
   gear = [],
+  trackSegments = [],
+  trackSubPoint = null,
+  trackName = null,
+  trackKey = null,
+  onClearTrack,
 }: LeafletMapProps) {
   const positioned = aircraft.filter((a) => a.lat != null && a.lon != null);
   const positionedVessels = vessels.filter((v) => v.lat != null && v.lon != null);
@@ -186,6 +235,8 @@ export function LeafletMap({
     ],
     [observer, positioned],
   );
+  // All track vertices flattened, for the fit-to-track bounds.
+  const trackPoints = useMemo<[number, number][]>(() => trackSegments.flat(), [trackSegments]);
 
   return (
     <MapContainer center={[observer.lat, observer.lon]} zoom={9} style={{ height: "100%", width: "100%" }} preferCanvas>
@@ -216,7 +267,26 @@ export function LeafletMap({
           eventHandlers={{ click: () => onSelectVessel?.(v.mmsi) }}
         />
       ))}
+      {/* Satellite ground track: one violet polyline per antimeridian-split segment, over the traffic. */}
+      {trackSegments.map((seg, i) => (
+        <Polyline
+          key={`sat-track-${i}`}
+          positions={seg}
+          pathOptions={{ color: SAT_VIOLET, weight: 2.5, opacity: 0.9 }}
+        />
+      ))}
+      {trackSubPoint ? (
+        <Marker
+          position={trackSubPoint}
+          icon={satelliteIcon}
+          title={trackName ?? "Satellite"}
+          eventHandlers={{ click: () => onClearTrack?.() }}
+        >
+          <Popup>{trackName ?? "Satellite"}</Popup>
+        </Marker>
+      ) : null}
       <FitBounds points={points} />
+      <FitTrack points={trackPoints} trackKey={trackKey} />
     </MapContainer>
   );
 }

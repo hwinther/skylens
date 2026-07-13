@@ -4,8 +4,8 @@
  * Web has no react-native-maps — see MapScreen.web.tsx (Leaflet). The flat list lives in the List tab.
  */
 
-import { useEffect, useMemo, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import MapView, { Marker, Polygon, Polyline } from "react-native-maps";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -13,7 +13,13 @@ import type { AircraftDto, FishingZone, LostGear, VesselDto } from "@/api/types"
 import { useAircraftList } from "@/state/aircraftStore";
 import { useVesselList } from "@/state/vesselStore";
 import { useSettingsStore } from "@/state/settingsStore";
-import { DetailSheet, AircraftRadar, VesselDetailSheet, useFishingLayers } from "@/components";
+import {
+  DetailSheet,
+  AircraftRadar,
+  VesselDetailSheet,
+  useFishingLayers,
+  useSatelliteGroundTrack,
+} from "@/components";
 import { iconForVessel } from "@/components/vesselIcon";
 import {
   lineLatLngs,
@@ -34,6 +40,9 @@ import { MapViewToggle, type MapView as MapViewMode } from "@/components/webmap/
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl, getHomeLocation } from "@/api/config";
 import { DEMO_HOME } from "@/mock/mockFeed";
+
+// Violet family — matches the satellite marker / detail sheet; distinct from the other map overlays.
+const SAT_VIOLET = "#C792EA";
 
 /**
  * One aircraft as a top-down airplane icon rotated to its track, laid flat on the map so the nose
@@ -181,15 +190,47 @@ export default function MapScreen() {
   const showLostGear = useSettingsStore((s) => s.showLostGear);
   const radarRangeKm = useSettingsStore((s) => s.radarRangeKm);
   const setRadarRangeKm = useSettingsStore((s) => s.setRadarRangeKm);
-  const [view, setView] = useState<MapViewMode>("radar");
+  const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
+  // Ground track for the satellite (if any) selected from a detail sheet. Reads the ephemeral store.
+  const track = useSatelliteGroundTrack(client);
+  // Arriving from "Show ground track" (a track is set) opens the real Map, not the you-centric radar —
+  // a globe-spanning track is meaningless there. Captured once at mount.
+  const [view, setView] = useState<MapViewMode>(track.trackedNoradId != null ? "map" : "radar");
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
   const [selectedMmsi, setSelectedMmsi] = useState<string | null>(null);
-  const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
+  const mapRef = useRef<MapView>(null);
+  const fittedFor = useRef<number | null>(null);
   // Fishing overlays fetch only when at least one toggle is on; fail-soft to empty when unconfigured.
   const { zones, gear } = useFishingLayers({
     client,
     enabled: showFishingZones || showLostGear,
   });
+
+  // Snap to the map view whenever a track is (re)selected — a track only renders there, and expo-router
+  // keeps this tab mounted across a re-navigation from the sheet, so the mount-time default alone can't
+  // catch a selection made while the tab already sits on radar. Guard runs via a named function to stay
+  // clear of the set-state-in-effect rule (same discipline as useSatellites' tick()).
+  useEffect(() => {
+    const snapToMap = () => setView("map");
+    if (track.trackedNoradId != null) snapToMap();
+  }, [track.trackedNoradId]);
+
+  // Fit the map to the track bounds once per new tracked satellite (so it zooms out to the whole orbit).
+  // Keyed on the tracked id, not every render; points arrive a moment after selection (async fetch).
+  useEffect(() => {
+    if (view !== "map" || track.trackedNoradId == null) {
+      if (track.trackedNoradId == null) fittedFor.current = null;
+      return;
+    }
+    if (fittedFor.current === track.trackedNoradId) return;
+    const coords = track.segments.flat().map((p) => ({ latitude: p.lat, longitude: p.lon }));
+    if (coords.length === 0) return;
+    mapRef.current?.fitToCoordinates(coords, {
+      edgePadding: { top: 60, right: 60, bottom: 60, left: 60 },
+      animated: true,
+    });
+    fittedFor.current = track.trackedNoradId;
+  }, [view, track.trackedNoradId, track.segments]);
   const observer = useMemo(
     () => (demoMode ? DEMO_HOME : (getHomeLocation() ?? DEMO_HOME)),
     [demoMode],
@@ -216,6 +257,7 @@ export default function MapScreen() {
           />
         ) : (
           <MapView
+            ref={mapRef}
             style={StyleSheet.absoluteFill}
             initialRegion={{ latitude: observer.lat, longitude: observer.lon, latitudeDelta: 1.2, longitudeDelta: 1.2 }}
             showsUserLocation
@@ -223,6 +265,15 @@ export default function MapScreen() {
             {/* Fishing overlays first so aircraft/vessel markers draw on top of the zone fills. */}
             {showFishingZones ? <FishingZoneShapes zones={zones} /> : null}
             {showLostGear ? <LostGearMarkers gear={gear} /> : null}
+            {/* Satellite ground track: one violet polyline per antimeridian-split segment. */}
+            {track.segments.map((seg, i) => (
+              <Polyline
+                key={`sat-track-${i}`}
+                coordinates={toLatLngs(seg.map((p) => [p.lat, p.lon]))}
+                strokeColor={SAT_VIOLET}
+                strokeWidth={2.5}
+              />
+            ))}
             <Marker
               coordinate={{ latitude: observer.lat, longitude: observer.lon }}
               title="You"
@@ -234,8 +285,24 @@ export default function MapScreen() {
             {positionedVessels.map((v) => (
               <VesselMarker key={v.mmsi} vessel={v} onSelect={setSelectedMmsi} />
             ))}
+            {/* Current sub-satellite point; tapping it also clears the track. */}
+            {track.subPoint ? (
+              <Marker
+                coordinate={toLatLng([track.subPoint.lat, track.subPoint.lon])}
+                title={track.name ?? "Satellite"}
+                onPress={track.clear}
+                anchor={{ x: 0.5, y: 0.5 }}
+              >
+                <MaterialCommunityIcons name="satellite-variant" size={24} color={SAT_VIOLET} />
+              </Marker>
+            ) : null}
           </MapView>
         )}
+        {view === "map" && track.trackedNoradId != null ? (
+          <Pressable testID="clear-track" style={styles.clearTrack} onPress={track.clear}>
+            <Text style={styles.clearTrackText}>✕ Clear track</Text>
+          </Pressable>
+        ) : null}
       </View>
       <DetailSheet hex={selectedHex} client={client} onClose={() => setSelectedHex(null)} />
       <VesselDetailSheet
@@ -250,4 +317,16 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#0B1622" },
   body: { flex: 1 },
+  clearTrack: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    backgroundColor: "rgba(11, 22, 34, 0.9)",
+    borderColor: SAT_VIOLET,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  clearTrackText: { color: SAT_VIOLET, fontSize: 13, fontWeight: "700" },
 });
