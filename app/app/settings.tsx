@@ -36,6 +36,8 @@ export default function SettingsScreen() {
     satElevationMaskDeg,
     showFishingZones,
     showLostGear,
+    showPlanets,
+    showEcliptic,
     setAzimuthTrim,
     setHFov,
     setRadiusKm,
@@ -49,6 +51,8 @@ export default function SettingsScreen() {
     setSatElevationMaskDeg,
     setShowFishingZones,
     setShowLostGear,
+    setShowPlanets,
+    setShowEcliptic,
   } = useSettingsStore();
   const status = useAuthStore((s) => s.status);
   const mockMode = useAuthStore((s) => s.mockMode);
@@ -198,6 +202,27 @@ export default function SettingsScreen() {
             max={15}
             onChange={setSatElevationMaskDeg}
           />
+        </Section>
+
+        <Section title="Sky">
+          <Row label="Show planets">
+            <Switch
+              testID="settings-show-planets"
+              value={showPlanets}
+              onValueChange={setShowPlanets}
+            />
+          </Row>
+          <Row label="Ecliptic line">
+            <Switch
+              testID="settings-show-ecliptic"
+              value={showEcliptic}
+              onValueChange={setShowEcliptic}
+            />
+          </Row>
+          <Text style={styles.hint}>
+            Sun, Moon and the naked-eye planets in the AR sky, plus the ecliptic — the arc they all
+            ride. Computed on-device; no network needed.
+          </Text>
         </Section>
 
         <Section title="Demo">

@@ -19,10 +19,12 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import {
   ArOverlay,
   DetailSheet,
+  PlanetDetailSheet,
   SatelliteDetailSheet,
   StatusStrip,
   useDemoPose,
   useObserverLocation,
+  usePlanets,
   usePoseRefs,
   useSatellites,
 } from "@/components";
@@ -48,9 +50,12 @@ export default function ArScreen() {
   const satWeather = useSettingsStore((s) => s.satWeather);
   const satGnss = useSettingsStore((s) => s.satGnss);
   const satElevationMaskDeg = useSettingsStore((s) => s.satElevationMaskDeg);
+  const showPlanets = useSettingsStore((s) => s.showPlanets);
+  const showEcliptic = useSettingsStore((s) => s.showEcliptic);
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
+  const [selectedPlanet, setSelectedPlanet] = useState<string | null>(null);
   // Selected satellite for the Phase 5 detail sheet. Captured now so the overlay's tap wiring is
   // complete; the sheet itself mounts in Phase 5 (see the placeholder near <DetailSheet/> below).
   const [selectedNoradId, setSelectedNoradId] = useState<number | null>(null);
@@ -92,6 +97,13 @@ export default function ArScreen() {
     enabled: showSatellites,
     groups: satGroups,
     elevationMaskDeg: satElevationMaskDeg,
+  });
+
+  // Planets are pure on-device astronomy (no hub, no network), so — like satellites — they run in demo
+  // and live alike, gated only on the toggle. Observer = demo home in demo mode, else the live fix.
+  const planetHook = usePlanets({
+    observer: demoMode ? DEMO_HOME : observer,
+    enabled: showPlanets || showEcliptic,
   });
 
   // Live sensor pose (only active when not in demo mode).
@@ -142,6 +154,11 @@ export default function ArScreen() {
       satellites={satHook.visible}
       satellitesSampledAt={satHook.satellitesSampledAt}
       showSatellites={showSatellites}
+      planets={planetHook.visible}
+      showPlanets={showPlanets}
+      ecliptic={planetHook.ecliptic}
+      showEcliptic={showEcliptic}
+      onSelectPlanet={setSelectedPlanet}
       poseRef={poseRef}
       positionRef={live.positionRef}
       hFovDeg={hFovDeg}
@@ -194,6 +211,12 @@ export default function ArScreen() {
         observer={demoMode ? DEMO_HOME : observer}
         elevationMaskDeg={satElevationMaskDeg}
         onClose={() => setSelectedNoradId(null)}
+      />
+      <PlanetDetailSheet
+        body={selectedPlanet}
+        view={selectedPlanet != null ? planetHook.byBody.get(selectedPlanet) : undefined}
+        observer={demoMode ? DEMO_HOME : observer}
+        onClose={() => setSelectedPlanet(null)}
       />
     </View>
   );

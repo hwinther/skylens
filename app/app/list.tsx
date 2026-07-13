@@ -12,7 +12,14 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useAircraftList } from "@/state/aircraftStore";
 import { useVesselList } from "@/state/vesselStore";
 import { useSettingsStore } from "@/state/settingsStore";
-import { DetailSheet, SatelliteDetailSheet, VesselDetailSheet, useSatellites } from "@/components";
+import {
+  DetailSheet,
+  PlanetDetailSheet,
+  SatelliteDetailSheet,
+  VesselDetailSheet,
+  usePlanets,
+  useSatellites,
+} from "@/components";
 import { iconForCategory } from "@/components/aircraftIcon";
 import { iconForVessel } from "@/components/vesselIcon";
 import { compass8, relativePosition } from "@/components/webmap/relative";
@@ -23,6 +30,8 @@ import { DEMO_HOME } from "@/mock/mockFeed";
 
 // Violet family — matches SatelliteLabel / the detail sheet; sets satellites apart from aircraft/ships.
 const SAT_VIOLET = "#C792EA";
+// Gold family — matches the AR planet labels; celestial bodies apart from every other domain's hue.
+const PLANET_GOLD = "#FFCF5C";
 
 export default function ListScreen() {
   const aircraft = useAircraftList();
@@ -35,9 +44,11 @@ export default function ListScreen() {
   const satWeather = useSettingsStore((s) => s.satWeather);
   const satGnss = useSettingsStore((s) => s.satGnss);
   const satElevationMaskDeg = useSettingsStore((s) => s.satElevationMaskDeg);
+  const showPlanets = useSettingsStore((s) => s.showPlanets);
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
   const [selectedMmsi, setSelectedMmsi] = useState<string | null>(null);
   const [selectedNoradId, setSelectedNoradId] = useState<number | null>(null);
+  const [selectedPlanet, setSelectedPlanet] = useState<string | null>(null);
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
   const observer = useMemo(
     () => (demoMode ? DEMO_HOME : (getHomeLocation() ?? DEMO_HOME)),
@@ -68,6 +79,13 @@ export default function ListScreen() {
   const overhead = useMemo(
     () => [...satellites].sort((a, b) => b.elevationDeg - a.elevationDeg),
     [satellites],
+  );
+
+  // Planets: pure on-device astronomy, independent of the hub — a "Sky" section ordered highest first.
+  const { visible: planetViews, byBody } = usePlanets({ observer, enabled: showPlanets });
+  const sky = useMemo(
+    () => [...planetViews].sort((a, b) => b.elevationDeg - a.elevationDeg),
+    [planetViews],
   );
 
   // Aircraft and (toggle-permitted) vessels merged into one list, sorted nearest-first. A per-row
@@ -173,6 +191,36 @@ export default function ListScreen() {
             ))}
           </>
         )}
+
+        {showPlanets && (
+          <>
+            <Text testID="list-sky-count" style={styles.heading}>
+              Sky ({sky.length})
+            </Text>
+            {sky.map((p) => (
+              <Pressable
+                key={`planet-${p.body}`}
+                testID={`list-planet-${p.body}`}
+                onPress={() => setSelectedPlanet(p.body)}
+                style={styles.row}
+              >
+                <MaterialCommunityIcons name="star-four-points" size={18} color={PLANET_GOLD} />
+                <Text style={styles.callsign} numberOfLines={1}>
+                  {p.name}
+                </Text>
+                <Text style={styles.meta}>
+                  {Math.round(p.elevationDeg)}° {compass8(p.azimuthDeg)}
+                </Text>
+                <Text style={styles.meta}>
+                  {p.magnitude != null ? `${p.magnitude.toFixed(1)}m` : "—"}
+                </Text>
+                <Text style={styles.satFreq} numberOfLines={1}>
+                  {p.constellation ?? ""}
+                </Text>
+              </Pressable>
+            ))}
+          </>
+        )}
       </ScrollView>
       <DetailSheet hex={selectedHex} client={client} onClose={() => setSelectedHex(null)} />
       <VesselDetailSheet
@@ -186,6 +234,12 @@ export default function ListScreen() {
         observer={observer}
         elevationMaskDeg={satElevationMaskDeg}
         onClose={() => setSelectedNoradId(null)}
+      />
+      <PlanetDetailSheet
+        body={selectedPlanet}
+        view={selectedPlanet != null ? byBody.get(selectedPlanet) : undefined}
+        observer={observer}
+        onClose={() => setSelectedPlanet(null)}
       />
     </SafeAreaView>
   );
