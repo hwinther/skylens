@@ -26,6 +26,13 @@ public sealed record VesselDto
     public int? ShipType { get; init; }
     public int? NavStatus { get; init; }
     public int? AidType { get; init; }
+
+    /// <summary>
+    ///     AtoN only: true = a virtual/phantom aid with no physical structure on the water (chart-only
+    ///     mark). Null/absent for ships and for physical aids. Sourced from AIS message-21 <c>virtual_aid</c>.
+    /// </summary>
+    public bool? Virtual { get; init; }
+
     public string? Flag { get; init; }
 
     /// <summary>Seconds since the last message for this target.</summary>
@@ -46,6 +53,7 @@ public sealed record VesselDto
         ShipType = s.ShipType,
         NavStatus = s.NavStatus,
         AidType = s.AidType,
+        Virtual = s.VirtualAid,
         Flag = s.Flag,
         Seen = (nowUtc - s.LastSeenUtc).TotalSeconds,
         Src = src,

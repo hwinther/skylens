@@ -20,6 +20,8 @@ export interface LeafletMapProps {
   onSelect: (hex: string) => void;
   /** AIS vessels to plot alongside aircraft; already filtered to the visible kinds by the caller. */
   vessels?: VesselDto[];
+  /** Tap handler for a vessel marker (opens the vessel detail sheet). Markers are inert when omitted. */
+  onSelectVessel?: (mmsi: string) => void;
 }
 
 // Reach the icon-font statics (not in the public types) so Leaflet's raw-HTML markers render the same
@@ -76,7 +78,13 @@ function FitBounds({ points }: { points: [number, number][] }) {
   return null;
 }
 
-export function LeafletMap({ aircraft, observer, onSelect, vessels = [] }: LeafletMapProps) {
+export function LeafletMap({
+  aircraft,
+  observer,
+  onSelect,
+  vessels = [],
+  onSelectVessel,
+}: LeafletMapProps) {
   const positioned = aircraft.filter((a) => a.lat != null && a.lon != null);
   const positionedVessels = vessels.filter((v) => v.lat != null && v.lon != null);
   const points = useMemo<[number, number][]>(
@@ -103,13 +111,14 @@ export function LeafletMap({ aircraft, observer, onSelect, vessels = [] }: Leafl
           eventHandlers={{ click: () => onSelect(a.hex) }}
         />
       ))}
-      {/* Vessels: non-interactive (no detail sheet yet); a title gives the name/mmsi on hover. */}
+      {/* Vessels: tappable → the vessel detail sheet; a title gives the name/mmsi on hover. */}
       {positionedVessels.map((v) => (
         <Marker
           key={v.mmsi}
           position={[v.lat as number, v.lon as number]}
           icon={vesselMarkerIcon(v)}
           title={v.name?.trim() || v.mmsi}
+          eventHandlers={{ click: () => onSelectVessel?.(v.mmsi) }}
         />
       ))}
       <FitBounds points={points} />

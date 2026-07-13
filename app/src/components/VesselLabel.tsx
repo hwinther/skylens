@@ -4,9 +4,10 @@
  * band). Marine styling — a teal/cyan family distinct from the blue AircraftLabel, tinted per class
  * by iconForVessel — so ships read as clearly "not aircraft".
  *
- * Display-only in this phase (pointerEvents: none): there's no vessel detail sheet yet, and the band
- * is dense, so taps pass straight through to aircraft labels / the camera. Mirrors the radar view,
- * whose vessel blips are likewise non-interactive.
+ * Deliberately display-only (pointerEvents: none): a vessel detail sheet now exists and is reachable
+ * from the List and Map tabs, but the AR surface band is intentionally dense — many labels crowd a
+ * narrow horizon strip — so making them tappable here would mostly produce mis-taps and steal taps
+ * from the aircraft labels / camera behind them. Tap-to-open stays on the roomier list/map surfaces.
  */
 
 import { memo } from "react";

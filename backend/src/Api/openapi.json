@@ -1039,6 +1039,10 @@
             "format": "int32",
             "nullable": true
           },
+          "virtual": {
+            "type": "boolean",
+            "nullable": true
+          },
           "flag": {
             "type": "string",
             "nullable": true

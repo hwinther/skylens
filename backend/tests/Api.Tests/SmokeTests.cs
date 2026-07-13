@@ -3,6 +3,7 @@ using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 namespace Skylens.Api.Tests;
@@ -334,6 +335,40 @@ public sealed class SmokeTests
         using var doc = JsonDocument.Parse(body);
         Assert.Equal(JsonValueKind.Array, doc.RootElement.ValueKind);
         Assert.Equal(0, doc.RootElement.GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Api_vessels_surfaces_the_virtual_flag_on_an_aton()
+    {
+        // An isolated DevAuth boot so seeding the shared store here can't perturb the empty-store test.
+        using var factory = new DevAuthFactory();
+        var store = factory.Services.GetRequiredService<Skylens.Api.State.VesselStateStore>();
+
+        // A virtual AtoN (type 21, virtual_aid=true) and a physical one, straight into the store — the
+        // GET /api/vessels DTO must carry `virtual:true` for the phantom mark and not for the physical one.
+        store.ApplyUpdate(new Skylens.Api.Ingest.VesselUpdate
+        {
+            Mmsi = "992500001", Kind = Skylens.Api.Ingest.VesselKind.Aton, MsgType = 21,
+            Lat = 60.0, Lon = 5.0, AidType = 5, AtonName = "VIRTUAL MARK", VirtualAid = true,
+        });
+        store.ApplyUpdate(new Skylens.Api.Ingest.VesselUpdate
+        {
+            Mmsi = "992500002", Kind = Skylens.Api.Ingest.VesselKind.Aton, MsgType = 21,
+            Lat = 60.1, Lon = 5.1, AidType = 1, AtonName = "PHYSICAL LIGHT", VirtualAid = false,
+        });
+
+        using var client = factory.CreateClient();
+        using var resp = await client.GetAsync("/api/vessels?kind=aton", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        using var doc = JsonDocument.Parse(body);
+
+        var virtualDto = doc.RootElement.EnumerateArray().Single(v => v.GetProperty("mmsi").GetString() == "992500001");
+        Assert.True(virtualDto.GetProperty("virtual").GetBoolean());
+
+        var physicalDto = doc.RootElement.EnumerateArray().Single(v => v.GetProperty("mmsi").GetString() == "992500002");
+        Assert.False(physicalDto.GetProperty("virtual").GetBoolean());
     }
 
     [Fact]

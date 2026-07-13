@@ -1,8 +1,8 @@
 /**
  * List view: a tabular readout of the current traffic — type icon, callsign/name, distance + bearing
  * from you, and two trailing figures (aircraft: flight level + ground speed; ships: SOG + COG) —
- * merged into one nearest-first list. Same 1 Hz / 5 s stores as AR/Map. Tapping an aircraft opens the
- * detail sheet; ships are read-only for now (no vessel detail sheet yet). Cross-platform (no map deps).
+ * merged into one nearest-first list. Same 1 Hz / 5 s stores as AR/Map. Tapping an aircraft, ship or
+ * AtoN opens its detail sheet; tapping a satellite opens the overhead sheet. Cross-platform (no map deps).
  */
 
 import { useMemo, useState } from "react";
@@ -12,7 +12,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useAircraftList } from "@/state/aircraftStore";
 import { useVesselList } from "@/state/vesselStore";
 import { useSettingsStore } from "@/state/settingsStore";
-import { DetailSheet, SatelliteDetailSheet, useSatellites } from "@/components";
+import { DetailSheet, SatelliteDetailSheet, VesselDetailSheet, useSatellites } from "@/components";
 import { iconForCategory } from "@/components/aircraftIcon";
 import { iconForVessel } from "@/components/vesselIcon";
 import { compass8, relativePosition } from "@/components/webmap/relative";
@@ -36,6 +36,7 @@ export default function ListScreen() {
   const satGnss = useSettingsStore((s) => s.satGnss);
   const satElevationMaskDeg = useSettingsStore((s) => s.satElevationMaskDeg);
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
+  const [selectedMmsi, setSelectedMmsi] = useState<string | null>(null);
   const [selectedNoradId, setSelectedNoradId] = useState<number | null>(null);
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
   const observer = useMemo(
@@ -119,7 +120,12 @@ export default function ListScreen() {
               <Text style={styles.meta}>{row.a.gs != null ? `${Math.round(row.a.gs)} kt` : "—"}</Text>
             </Pressable>
           ) : (
-            <View key={row.key} testID={`list-ship-${row.v.mmsi}`} style={styles.row}>
+            <Pressable
+              key={row.key}
+              testID={`list-ship-${row.v.mmsi}`}
+              onPress={() => setSelectedMmsi(row.v.mmsi)}
+              style={styles.row}
+            >
               <MaterialCommunityIcons name={row.icon.name} size={18} color={row.icon.color} />
               <View style={styles.marineLabel}>
                 <Text style={styles.shipName} numberOfLines={1}>
@@ -132,7 +138,7 @@ export default function ListScreen() {
               </Text>
               <Text style={styles.meta}>{row.v.sog != null ? `${Math.round(row.v.sog)} kn` : "—"}</Text>
               <Text style={styles.meta}>{row.v.cog != null ? `${Math.round(row.v.cog)}°` : "—"}</Text>
-            </View>
+            </Pressable>
           ),
         )}
 
@@ -169,6 +175,11 @@ export default function ListScreen() {
         )}
       </ScrollView>
       <DetailSheet hex={selectedHex} client={client} onClose={() => setSelectedHex(null)} />
+      <VesselDetailSheet
+        mmsi={selectedMmsi}
+        vessel={selectedMmsi != null ? vessels.find((v) => v.mmsi === selectedMmsi) : undefined}
+        onClose={() => setSelectedMmsi(null)}
+      />
       <SatelliteDetailSheet
         noradId={selectedNoradId}
         view={selectedNoradId != null ? byNoradId.get(selectedNoradId) : undefined}

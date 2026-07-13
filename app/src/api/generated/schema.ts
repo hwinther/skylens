@@ -414,6 +414,7 @@ export interface components {
             navStatus?: number | null;
             /** Format: int32 */
             aidType?: number | null;
+            virtual?: boolean | null;
             flag?: string | null;
             /** Format: double */
             seen?: number | null;

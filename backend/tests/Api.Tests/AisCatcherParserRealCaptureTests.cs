@@ -73,6 +73,23 @@ public sealed class AisCatcherParserRealCaptureTests
     }
 
     [Fact]
+    public void At_least_one_virtual_aton_flows_through_to_the_dto()
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        // The capture carries type-21 virtual AtoNs (virtual_aid=true) — the parser must lift that onto
+        // the state and VesselDto.FromState must surface it as Virtual, the exact path the endpoint uses.
+        var dtos = ParsedTargets()
+            .Where(v => v.Kind == VesselKind.Aton)
+            .Select(v => VesselDto.FromState(VesselState.FromUpdate(v, now), now))
+            .ToList();
+
+        Assert.Contains(dtos, d => d.Virtual == true);
+        // Virtual is an AtoN-only concept — every DTO carrying it must be of kind "aton".
+        Assert.All(dtos.Where(d => d.Virtual == true), d => Assert.Equal("aton", d.Kind));
+    }
+
+    [Fact]
     public void No_target_throws_on_dto_conversion()
     {
         var now = DateTimeOffset.UtcNow;

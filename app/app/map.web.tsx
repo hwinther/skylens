@@ -10,7 +10,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAircraftList } from "@/state/aircraftStore";
 import { useVesselList } from "@/state/vesselStore";
 import { useSettingsStore } from "@/state/settingsStore";
-import { DetailSheet, AircraftRadar } from "@/components";
+import { DetailSheet, AircraftRadar, VesselDetailSheet } from "@/components";
 import { MapViewToggle, type MapView } from "@/components/webmap/MapViewToggle";
 import { LeafletMap } from "@/components/webmap/LeafletMap";
 import { ApiClient } from "@/api/client";
@@ -25,6 +25,7 @@ export default function MapScreen() {
   const showAton = useSettingsStore((s) => s.showAton);
   const [view, setView] = useState<MapView>("radar");
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
+  const [selectedMmsi, setSelectedMmsi] = useState<string | null>(null);
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
   const observer = useMemo(
     () => (demoMode ? DEMO_HOME : (getHomeLocation() ?? DEMO_HOME)),
@@ -46,6 +47,7 @@ export default function MapScreen() {
             vessels={positionedVessels}
             observer={observer}
             onSelect={setSelectedHex}
+            onSelectVessel={setSelectedMmsi}
           />
         ) : (
           <LeafletMap
@@ -53,10 +55,16 @@ export default function MapScreen() {
             vessels={positionedVessels}
             observer={observer}
             onSelect={setSelectedHex}
+            onSelectVessel={setSelectedMmsi}
           />
         )}
       </View>
       <DetailSheet hex={selectedHex} client={client} onClose={() => setSelectedHex(null)} />
+      <VesselDetailSheet
+        mmsi={selectedMmsi}
+        vessel={selectedMmsi != null ? vessels.find((v) => v.mmsi === selectedMmsi) : undefined}
+        onClose={() => setSelectedMmsi(null)}
+      />
     </SafeAreaView>
   );
 }

@@ -13,7 +13,7 @@ import type { AircraftDto, VesselDto } from "@/api/types";
 import { useAircraftList } from "@/state/aircraftStore";
 import { useVesselList } from "@/state/vesselStore";
 import { useSettingsStore } from "@/state/settingsStore";
-import { DetailSheet, AircraftRadar } from "@/components";
+import { DetailSheet, AircraftRadar, VesselDetailSheet } from "@/components";
 import { iconForVessel } from "@/components/vesselIcon";
 import { MapViewToggle, type MapView as MapViewMode } from "@/components/webmap/MapViewToggle";
 import { ApiClient } from "@/api/client";
@@ -59,10 +59,16 @@ function AircraftMarker({
 /**
  * One vessel as its class icon. Ships are rotated flat to their course-over-ground (heading as a
  * fallback) so the icon points where they're steaming; AtoNs are stationary and drawn upright. Same
- * tracksViewChanges freeze as AircraftMarker so 1 Hz × N ships don't re-rasterise. Non-tappable for
- * now (there is no vessel detail sheet yet) — the tap just shows the native title/speed callout.
+ * tracksViewChanges freeze as AircraftMarker so 1 Hz × N ships don't re-rasterise. Tapping it opens
+ * the vessel detail sheet (mirrors AircraftMarker).
  */
-function VesselMarker({ vessel: v }: { vessel: VesselDto }) {
+function VesselMarker({
+  vessel: v,
+  onSelect,
+}: {
+  vessel: VesselDto;
+  onSelect: (mmsi: string) => void;
+}) {
   const [tracksViewChanges, setTracksViewChanges] = useState(true);
   useEffect(() => {
     const t = setTimeout(() => setTracksViewChanges(false), 800);
@@ -75,6 +81,7 @@ function VesselMarker({ vessel: v }: { vessel: VesselDto }) {
       coordinate={{ latitude: v.lat as number, longitude: v.lon as number }}
       title={v.name?.trim() || v.mmsi}
       description={v.sog != null ? `${Math.round(v.sog)} kn` : undefined}
+      onPress={() => onSelect(v.mmsi)}
       anchor={{ x: 0.5, y: 0.5 }}
       flat
       rotation={isShip ? (v.cog ?? v.hdg ?? 0) : 0}
@@ -93,6 +100,7 @@ export default function MapScreen() {
   const showAton = useSettingsStore((s) => s.showAton);
   const [view, setView] = useState<MapViewMode>("radar");
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
+  const [selectedMmsi, setSelectedMmsi] = useState<string | null>(null);
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
   const observer = useMemo(
     () => (demoMode ? DEMO_HOME : (getHomeLocation() ?? DEMO_HOME)),
@@ -114,6 +122,7 @@ export default function MapScreen() {
             vessels={positionedVessels}
             observer={observer}
             onSelect={setSelectedHex}
+            onSelectVessel={setSelectedMmsi}
           />
         ) : (
           <MapView
@@ -130,12 +139,17 @@ export default function MapScreen() {
               <AircraftMarker key={a.hex} aircraft={a} onSelect={setSelectedHex} />
             ))}
             {positionedVessels.map((v) => (
-              <VesselMarker key={v.mmsi} vessel={v} />
+              <VesselMarker key={v.mmsi} vessel={v} onSelect={setSelectedMmsi} />
             ))}
           </MapView>
         )}
       </View>
       <DetailSheet hex={selectedHex} client={client} onClose={() => setSelectedHex(null)} />
+      <VesselDetailSheet
+        mmsi={selectedMmsi}
+        vessel={selectedMmsi != null ? vessels.find((v) => v.mmsi === selectedMmsi) : undefined}
+        onClose={() => setSelectedMmsi(null)}
+      />
     </SafeAreaView>
   );
 }

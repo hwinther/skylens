@@ -23,7 +23,8 @@ const HIGH_SPEED = "#48B7D8"; // high-speed craft
 const FISHING = "#5EC26A"; // fishing
 const SPECIAL = "#E0A94E"; // tug / towing / special craft
 const SAILING = "#7FD1E8"; // sailing / pleasure craft
-const ATON = "#F2C14E"; // aids to navigation (lights, beacons, buoys)
+const ATON = "#F2C14E"; // physical aids to navigation (lights, beacons, buoys)
+const VIRTUAL_ATON = "#C77DBB"; // virtual/phantom aid — muted magenta, echoing chart convention
 
 /**
  * Icon + colour for a moving ship, keyed off the AIS `shipType` int (ITU-R M.1371). The mapping is
@@ -46,9 +47,15 @@ function iconForShip(shipType: number | null | undefined): VesselIcon {
 /**
  * Icon for an Aid to Navigation, keyed off the AIS `aidType` int (ITU-R M.1371). Kept coarse:
  * fixed lights/lighthouses (1–8), fixed beacons (9–20), and everything else — floating buoys
- * (21–31) plus unknown/default — as a life-ring. All AtoNs share the navigation amber.
+ * (21–31) plus unknown/default — as a life-ring; all physical AtoNs share the navigation amber.
+ *
+ * A `virtual` AtoN has no physical structure on the water (a chart-only "phantom" mark broadcast by a
+ * shore station), so it overrides the aidType entirely: a hollow outline marker in a muted magenta —
+ * mirroring how paper/ENC charts render virtual marks in magenta — telling it apart from the solid
+ * amber physical aids on every surface at a glance.
  */
-function iconForAton(aidType: number | null | undefined): VesselIcon {
+function iconForAton(aidType: number | null | undefined, virtual: boolean | null | undefined): VesselIcon {
+  if (virtual) return { name: "map-marker-radius-outline", color: VIRTUAL_ATON };
   const t = aidType ?? 0;
   if (t >= 1 && t <= 8) return { name: "lighthouse", color: ATON }; // lights / lighthouses
   if (t >= 9 && t <= 20) return { name: "lighthouse-on", color: ATON }; // fixed beacons
@@ -57,5 +64,5 @@ function iconForAton(aidType: number | null | undefined): VesselIcon {
 
 /** Icon + colour for any vessel; dispatches on `kind` ("ship" | "aton"). Shared by map/radar/list. */
 export function iconForVessel(v: VesselDto): VesselIcon {
-  return v.kind === "aton" ? iconForAton(v.aidType) : iconForShip(v.shipType);
+  return v.kind === "aton" ? iconForAton(v.aidType, v.virtual) : iconForShip(v.shipType);
 }

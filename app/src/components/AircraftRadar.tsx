@@ -18,6 +18,8 @@ export interface AircraftRadarProps {
   onSelect: (hex: string) => void;
   /** AIS vessels to plot alongside aircraft; already filtered to the visible kinds by the caller. */
   vessels?: VesselDto[];
+  /** Tap handler for a vessel blip (opens the vessel detail sheet). Blips are inert when omitted. */
+  onSelectVessel?: (mmsi: string) => void;
 }
 
 /** Round a range up to a tidy 1 / 2 / 5 × 10ⁿ value for the outer ring. */
@@ -31,7 +33,13 @@ function niceMax(km: number): number {
 
 const RINGS = [1 / 3, 2 / 3, 1];
 
-export function AircraftRadar({ aircraft, observer, onSelect, vessels = [] }: AircraftRadarProps) {
+export function AircraftRadar({
+  aircraft,
+  observer,
+  onSelect,
+  vessels = [],
+  onSelectVessel,
+}: AircraftRadarProps) {
   const [size, setSize] = useState(0);
   const onLayout = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -103,7 +111,7 @@ export function AircraftRadar({ aircraft, observer, onSelect, vessels = [] }: Ai
             );
           })}
 
-          {/* Vessels: non-interactive blips (no detail sheet yet) in their per-class maritime colour. */}
+          {/* Vessel blips in their per-class maritime colour; tappable → the vessel detail sheet. */}
           {vesselRel.map(({ v, distanceKm, bearingDeg }) => {
             const rr = Math.min(distanceKm / maxRange, 1) * R;
             const rad = (bearingDeg * Math.PI) / 180;
@@ -111,9 +119,15 @@ export function AircraftRadar({ aircraft, observer, onSelect, vessels = [] }: Ai
             const y = cy - rr * Math.cos(rad);
             const { name, color } = iconForVessel(v);
             return (
-              <View key={v.mmsi} testID={`map-ship-${v.mmsi}`} style={[styles.blip, { left: x - 12, top: y - 12 }]}>
+              <Pressable
+                key={v.mmsi}
+                testID={`map-ship-${v.mmsi}`}
+                onPress={() => onSelectVessel?.(v.mmsi)}
+                style={[styles.blip, { left: x - 12, top: y - 12 }]}
+                hitSlop={6}
+              >
                 <MaterialCommunityIcons name={name} size={16} color={color} />
-              </View>
+              </Pressable>
             );
           })}
         </View>

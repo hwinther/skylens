@@ -17,6 +17,7 @@ import type {
   SatelliteDetail,
   SatelliteListResponse,
   VersionResponse,
+  VesselDetail,
 } from "./types";
 
 export class ApiError extends Error {
@@ -148,6 +149,11 @@ export class ApiClient {
     } catch {
       return null;
     }
+  }
+
+  /** GET /api/vessels/{mmsi} — live AIS state (if tracked) + BarentsWatch-enriched static metadata. */
+  vesselDetail(mmsi: string): Promise<VesselDetail> {
+    return this.request<VesselDetail>(`/api/vessels/${encodeURIComponent(mmsi)}`);
   }
 
   /** Away-mode area query (ADSBx via the backend). */

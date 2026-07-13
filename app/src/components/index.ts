@@ -3,6 +3,7 @@ export * from "./AircraftRadar";
 export * from "./ArOverlay";
 export * from "./DetailSheet";
 export * from "./SatelliteDetailSheet";
+export * from "./VesselDetailSheet";
 export * from "./CompassCalibration";
 export * from "./StatusStrip";
 export * from "./VesselLabel";

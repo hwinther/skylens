@@ -14,8 +14,8 @@ import glyphMap from "@expo/vector-icons/build/vendor/react-native-vector-icons/
 function ship(shipType: number | null): VesselDto {
   return { mmsi: "1", kind: "ship", shipType };
 }
-function aton(aidType: number | null): VesselDto {
-  return { mmsi: "1", kind: "aton", aidType };
+function aton(aidType: number | null, virtual?: boolean | null): VesselDto {
+  return { mmsi: "1", kind: "aton", aidType, virtual };
 }
 
 describe("iconForVessel — ship types", () => {
@@ -57,13 +57,34 @@ describe("iconForVessel — aids to navigation", () => {
     for (const t of [21, 31, 0, 99]) expect(iconForVessel(aton(t)).name).toBe("lifebuoy");
     expect(iconForVessel(aton(null)).name).toBe("lifebuoy");
   });
+
+  it("gives a virtual AtoN a distinct glyph AND colour from the physical aid of the same type", () => {
+    for (const t of [1, 9, 21, null]) {
+      const physical = iconForVessel(aton(t, false));
+      const virtual = iconForVessel(aton(t, true));
+      // Both axes must differ so the phantom mark is unmistakable — colour alone isn't enough.
+      expect(virtual.name).not.toBe(physical.name);
+      expect(virtual.color).not.toBe(physical.color);
+    }
+    // The chosen phantom glyph is a hollow marker, constant regardless of the underlying aidType.
+    expect(iconForVessel(aton(5, true)).name).toBe("map-marker-radius-outline");
+  });
+
+  it("treats an absent/false virtual flag as a physical aid (no phantom treatment)", () => {
+    expect(iconForVessel(aton(5, false)).name).toBe("lighthouse");
+    expect(iconForVessel(aton(5, null)).name).toBe("lighthouse");
+    expect(iconForVessel(aton(5)).name).toBe("lighthouse");
+  });
 });
 
 describe("iconForVessel — glyph existence", () => {
   it("every icon name it can return exists in the MaterialCommunityIcons glyphmap", () => {
     const samples: VesselDto[] = [
       ...[30, 31, 32, 36, 37, 40, 52, 60, 70, 80, 999, null].map(ship),
-      ...[1, 8, 9, 20, 21, 31, 0, null].map(aton),
+      ...[1, 8, 9, 20, 21, 31, 0, null].map((t) => aton(t)),
+      // The virtual-AtoN phantom glyph is its own return path — sweep it too.
+      aton(5, true),
+      aton(21, true),
     ];
     const names = new Set<VesselIconName>(samples.map((v) => iconForVessel(v).name));
     // Sanity: the sweep actually exercised the distinct glyphs, not just one.

@@ -52,6 +52,18 @@ test("list tab shows AIS vessels streamed from the backend", async ({ page }) =>
   ).toBe(true);
 });
 
+test("tapping a vessel row opens the detail sheet", async ({ page }) => {
+  await page.goto("/list");
+
+  const shipRow = page.locator('[data-testid^="list-ship-"]').first();
+  await expect(shipRow).toBeVisible({ timeout: 30_000 });
+
+  // Tapping the row opens the VesselDetailSheet; its title renders immediately from the live DTO
+  // (name or MMSI fallback), independent of the GET /api/vessels/{mmsi} metadata fetch.
+  await shipRow.click();
+  await expect(page.getByTestId("vessel-detail-title")).toBeVisible();
+});
+
 test("radar plots AIS vessels streamed from the backend", async ({ page }) => {
   await page.goto("/map");
 
