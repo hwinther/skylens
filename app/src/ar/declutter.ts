@@ -100,7 +100,15 @@ export function declutter(
         }
       }
       if (lowestCollision === -Infinity) break;
-      y = lowestCollision + stepPx;
+      // Snap to exactly one step below the lowest colliding label. We must guarantee forward
+      // progress: `lowestCollision + stepPx` is mathematically > y, but with real fractional
+      // coordinates floating-point rounding can make the recomputed gap read as *just under*
+      // stepPx, so the label "collides with itself" and y never advances — an infinite loop that
+      // hard-freezes the tab once a few ships stack in one horizon-band column. Bail the moment y
+      // fails to strictly increase (also covers a non-finite y). The slot is clear either way.
+      const next = lowestCollision + stepPx;
+      if (!(next > y)) break;
+      y = next;
     }
 
     // Total downward displacement from the original anchor decides clustering.

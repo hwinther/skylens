@@ -102,6 +102,22 @@ describe("declutter", () => {
     expect(first.placed.find((p) => p.id === "a")!.y).toBe(100);
   });
 
+  it("terminates on the floating-point self-collision boundary (regression: AR tab freeze)", () => {
+    // Real captured coordinate where (y + stepPx) - y rounds to *just under* stepPx
+    // (27.9999… < 28). A pushed label then reads as still colliding with the label one step
+    // above it, so y never advances and the greedy loop spins forever — a hard tab freeze once a
+    // few ships stacked in one horizon-band column. The progress guard must break instead.
+    const badY = 1000.4172261956943;
+    expect(badY + LABEL_STEP_PX - badY).toBeLessThan(LABEL_STEP_PX); // precondition holds
+    const labels: ScreenLabel[] = [
+      { id: "a", x: 200, y: badY, priority: 2 },
+      { id: "b", x: 200, y: badY, priority: 1 }, // same column + same y → collides, must not hang
+    ];
+    // If the loop regressed this would never return; Jest's per-test timeout would fail it.
+    const { placed, clusters } = declutter(labels);
+    expect(placed.length + clusters.reduce((s, c) => s + c.count, 0)).toBe(2);
+  });
+
   it("uses the configured step size", () => {
     const cfg = { ...DEFAULT_DECLUTTER_CONFIG, stepPx: 40 };
     const labels: ScreenLabel[] = [
