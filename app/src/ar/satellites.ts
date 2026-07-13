@@ -120,11 +120,25 @@ export interface Observer {
  * null — one code path the batch `buildSatrecs` and the detail sheet's single-satellite pass math
  * (`nextPass`) both go through.
  */
+/**
+ * Clamp an OMM EPOCH's fractional seconds to milliseconds (3 digits). CelesTrak emits microsecond
+ * precision ("…T07:33:23.712192"), and json2satrec parses it with `new Date(EPOCH + "Z")` — the
+ * ECMAScript date format only guarantees 3 fractional digits, and Hermes (Android) rejects more,
+ * yielding Invalid Date → NaN satrecs → every satellite silently dropped ON DEVICE while V8
+ * (web/jest) parses leniently and works. Sub-millisecond epoch truncation is irrelevant to SGP4.
+ */
+export function clampEpochFraction(epoch: string): string {
+  return epoch.replace(/(\.\d{3})\d+/, "$1");
+}
+
 export function buildSatrec(omm: SatelliteDto["omm"]): SatRec | null {
   try {
     // The OMM keys are UPPERCASE by design so this feeds json2satrec directly; our generated OMM
     // type marks every field optional (an NRT quirk), so cast to the library's stricter shape.
-    const satrec = json2satrec(omm as unknown as OMMJsonObject);
+    // EPOCH is normalized first — see clampEpochFraction (Hermes/Android compatibility).
+    const epoch = omm.EPOCH;
+    const normalized = typeof epoch === "string" ? { ...omm, EPOCH: clampEpochFraction(epoch) } : omm;
+    const satrec = json2satrec(normalized as unknown as OMMJsonObject);
     // json2satrec sets `error` on an unpropagatable element set instead of throwing — drop those.
     if (!satrec || satrec.error !== SatRecError.None) return null;
     return satrec;

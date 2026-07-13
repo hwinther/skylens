@@ -14,6 +14,7 @@
 import {
   buildSatrec,
   buildSatrecs,
+  clampEpochFraction,
   dopplerCorrectedHz,
   extrapolateView,
   formatCountdown,
@@ -463,5 +464,25 @@ describe("buildSatrecs — corrupt OMM is dropped, not thrown", () => {
       entries = buildSatrecs([empty, issDto(), badEcc]);
     }).not.toThrow();
     expect(entries.map((e) => e.noradId)).toEqual([25544]);
+  });
+});
+
+describe("clampEpochFraction — Hermes/Android date-parse compatibility", () => {
+  // CelesTrak emits microsecond EPOCHs; json2satrec parses them with `new Date(EPOCH + "Z")`.
+  // Hermes rejects >3 fractional digits (Invalid Date → NaN satrec → satellite silently dropped
+  // on Android), while V8 — the engine running THIS test — parses leniently. So the honest seam
+  // is the normalizer itself: buildSatrec must feed json2satrec a 3-digit fraction.
+  it("truncates microsecond fractions to milliseconds", () => {
+    expect(clampEpochFraction("2026-07-11T07:33:23.712192")).toBe("2026-07-11T07:33:23.712");
+  });
+
+  it("leaves millisecond and whole-second epochs untouched", () => {
+    expect(clampEpochFraction("2026-07-11T07:33:23.712")).toBe("2026-07-11T07:33:23.712");
+    expect(clampEpochFraction("2026-07-11T07:33:23")).toBe("2026-07-11T07:33:23");
+  });
+
+  it("buildSatrec still succeeds on a microsecond-precision EPOCH", () => {
+    const rec = buildSatrec({ ...ISS_OMM, EPOCH: "2026-07-11T07:33:23.712192" } as unknown as SatelliteDto["omm"]);
+    expect(rec).not.toBeNull();
   });
 });
