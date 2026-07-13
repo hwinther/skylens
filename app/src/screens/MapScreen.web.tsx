@@ -10,7 +10,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAircraftList } from "@/state/aircraftStore";
 import { useVesselList } from "@/state/vesselStore";
 import { useSettingsStore } from "@/state/settingsStore";
-import { DetailSheet, AircraftRadar, VesselDetailSheet } from "@/components";
+import { DetailSheet, AircraftRadar, VesselDetailSheet, useFishingLayers } from "@/components";
 import { MapViewToggle, type MapView } from "@/components/webmap/MapViewToggle";
 import { LeafletMap } from "@/components/webmap/LeafletMap";
 import { ApiClient } from "@/api/client";
@@ -23,12 +23,19 @@ export default function MapScreen() {
   const demoMode = useSettingsStore((s) => s.demoMode);
   const showShips = useSettingsStore((s) => s.showShips);
   const showAton = useSettingsStore((s) => s.showAton);
+  const showFishingZones = useSettingsStore((s) => s.showFishingZones);
+  const showLostGear = useSettingsStore((s) => s.showLostGear);
   const radarRangeKm = useSettingsStore((s) => s.radarRangeKm);
   const setRadarRangeKm = useSettingsStore((s) => s.setRadarRangeKm);
   const [view, setView] = useState<MapView>("radar");
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
   const [selectedMmsi, setSelectedMmsi] = useState<string | null>(null);
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
+  // Fishing overlays fetch only when at least one toggle is on; fail-soft to empty when unconfigured.
+  const { zones, gear } = useFishingLayers({
+    client,
+    enabled: showFishingZones || showLostGear,
+  });
   const observer = useMemo(
     () => (demoMode ? DEMO_HOME : (getHomeLocation() ?? DEMO_HOME)),
     [demoMode],
@@ -60,6 +67,8 @@ export default function MapScreen() {
             observer={observer}
             onSelect={setSelectedHex}
             onSelectVessel={setSelectedMmsi}
+            zones={showFishingZones ? zones : []}
+            gear={showLostGear ? gear : []}
           />
         )}
       </View>

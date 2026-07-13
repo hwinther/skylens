@@ -89,4 +89,28 @@ describe("ApiClient", () => {
     const client = new ApiClient({ baseUrl: "http://x", getToken: () => null, fetchImpl });
     await expect(client.me()).rejects.toMatchObject({ status: 403, edgeBlocked: false });
   });
+
+  it("hits the fishing-zones endpoint", async () => {
+    let url = "";
+    const fetchImpl = (async (u: string) => {
+      url = String(u);
+      return jsonResponse({ fetchedAtUtc: "2026-01-01T00:00:00Z", zones: [], note: null });
+    }) as unknown as typeof fetch;
+    const client = new ApiClient({ baseUrl: "http://x", getToken: () => null, fetchImpl });
+    const res = await client.fishingZones();
+    expect(url).toBe("http://x/api/fishing/zones");
+    expect(res.zones).toEqual([]);
+  });
+
+  it("hits the lost-gear endpoint", async () => {
+    let url = "";
+    const fetchImpl = (async (u: string) => {
+      url = String(u);
+      return jsonResponse({ fetchedAtUtc: "2026-01-01T00:00:00Z", gear: [], note: "fiskinfo-unconfigured" });
+    }) as unknown as typeof fetch;
+    const client = new ApiClient({ baseUrl: "http://x", getToken: () => null, fetchImpl });
+    const res = await client.lostGear();
+    expect(url).toBe("http://x/api/fishing/lostgear");
+    expect(res.note).toBe("fiskinfo-unconfigured");
+  });
 });

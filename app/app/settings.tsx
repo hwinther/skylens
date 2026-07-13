@@ -34,6 +34,8 @@ export default function SettingsScreen() {
     satWeather,
     satGnss,
     satElevationMaskDeg,
+    showFishingZones,
+    showLostGear,
     setAzimuthTrim,
     setHFov,
     setRadiusKm,
@@ -45,6 +47,8 @@ export default function SettingsScreen() {
     setSatWeather,
     setSatGnss,
     setSatElevationMaskDeg,
+    setShowFishingZones,
+    setShowLostGear,
   } = useSettingsStore();
   const status = useAuthStore((s) => s.status);
   const mockMode = useAuthStore((s) => s.mockMode);
@@ -145,6 +149,27 @@ export default function SettingsScreen() {
           <Row label="Show aids to navigation">
             <Switch value={showAton} onValueChange={setShowAton} />
           </Row>
+        </Section>
+
+        <Section title="Fishing">
+          <Row label="Regulation zones">
+            <Switch
+              testID="settings-show-fishing-zones"
+              value={showFishingZones}
+              onValueChange={setShowFishingZones}
+            />
+          </Row>
+          <Row label="Lost gear">
+            <Switch
+              testID="settings-show-lost-gear"
+              value={showLostGear}
+              onValueChange={setShowLostGear}
+            />
+          </Row>
+          <Text style={styles.hint}>
+            Cod boundaries, forbidden/zero areas and reported lost gear. Shown on the fjord/coast Map
+            view (not Radar).
+          </Text>
         </Section>
 
         <Section title="Satellites">

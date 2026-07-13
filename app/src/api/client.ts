@@ -11,7 +11,9 @@ import { flushClientLog, reportClientFailure } from "./clientLog";
 import type {
   AircraftDetail,
   AircraftDto,
+  FishingZonesResponse,
   HealthResponse,
+  LostGearResponse,
   MeResponse,
   RouteResponse,
   SatelliteDetail,
@@ -172,5 +174,21 @@ export class ApiClient {
   /** GET /api/satellites/{noradId} — one satellite's elements + its full SatNOGS transmitter list. */
   satelliteDetail(noradId: number): Promise<SatelliteDetail> {
     return this.request<SatelliteDetail>(`/api/satellites/${noradId}`);
+  }
+
+  /**
+   * GET /api/fishing/zones — cod-boundary + forbidden + zero fishing-regulation zones (GeoJSON). Returns
+   * 200 with an empty `zones` array + a `note` when the backend's FiskInfo source is unconfigured.
+   */
+  fishingZones(): Promise<FishingZonesResponse> {
+    return this.request<FishingZonesResponse>("/api/fishing/zones");
+  }
+
+  /**
+   * GET /api/fishing/lostgear — reported lost/ghost fishing gear (anonymised points). Returns 200 with an
+   * empty `gear` array + a `note` when the FiskInfo source is unconfigured.
+   */
+  lostGear(): Promise<LostGearResponse> {
+    return this.request<LostGearResponse>("/api/fishing/lostgear");
   }
 }

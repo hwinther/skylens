@@ -7,14 +7,29 @@
 import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import MapView, { Marker } from "react-native-maps";
+import MapView, { Marker, Polygon, Polyline } from "react-native-maps";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import type { AircraftDto, VesselDto } from "@/api/types";
+import type { AircraftDto, FishingZone, LostGear, VesselDto } from "@/api/types";
 import { useAircraftList } from "@/state/aircraftStore";
 import { useVesselList } from "@/state/vesselStore";
 import { useSettingsStore } from "@/state/settingsStore";
-import { DetailSheet, AircraftRadar, VesselDetailSheet } from "@/components";
+import { DetailSheet, AircraftRadar, VesselDetailSheet, useFishingLayers } from "@/components";
 import { iconForVessel } from "@/components/vesselIcon";
+import {
+  lineLatLngs,
+  pointLatLng,
+  polygonRings,
+  toLatLng,
+  toLatLngs,
+  type GeoGeometry,
+} from "@/components/webmap/geojson";
+import {
+  LOST_GEAR_COLOR,
+  LOST_GEAR_GLYPH,
+  lostGearDescription,
+  lostGearTitle,
+  zoneStyle,
+} from "@/components/webmap/fishingStyle";
 import { MapViewToggle, type MapView as MapViewMode } from "@/components/webmap/MapViewToggle";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl, getHomeLocation } from "@/api/config";
@@ -92,18 +107,89 @@ function VesselMarker({
   );
 }
 
+/**
+ * Fishing-regulation zones as translucent polygons (forbidden / zero) and polylines (cod boundaries).
+ * A MultiPolygon renders as one <Polygon> per member. Drawn as context — react-native-maps polygons
+ * have no callout primitive, so zones are non-interactive here (the web map exposes the `info` popup).
+ */
+function FishingZoneShapes({ zones }: { zones: FishingZone[] }) {
+  return (
+    <>
+      {zones.map((z, i) => {
+        const geom = z.geometry as GeoGeometry | null;
+        const style = zoneStyle(z.kind);
+        const polys = polygonRings(geom);
+        if (polys.length > 0) {
+          return polys.map((p, j) => (
+            <Polygon
+              key={`zone-poly-${i}-${j}`}
+              coordinates={toLatLngs(p.outer)}
+              holes={p.holes.map(toLatLngs)}
+              strokeColor={style.stroke}
+              strokeWidth={1.5}
+              fillColor={style.fill}
+            />
+          ));
+        }
+        const line = lineLatLngs(geom);
+        if (line.length > 0) {
+          return (
+            <Polyline
+              key={`zone-line-${i}`}
+              coordinates={toLatLngs(line)}
+              strokeColor={style.stroke}
+              strokeWidth={2}
+            />
+          );
+        }
+        return null;
+      })}
+    </>
+  );
+}
+
+/** Lost-gear points as hazard-orange markers; the native callout shows gear type + lost date + cause. */
+function LostGearMarkers({ gear }: { gear: LostGear[] }) {
+  return (
+    <>
+      {gear.map((g, i) => {
+        const pt = pointLatLng(g.geometry as GeoGeometry | null);
+        if (!pt) return null;
+        return (
+          <Marker
+            key={`gear-${i}`}
+            coordinate={toLatLng(pt)}
+            title={lostGearTitle(g)}
+            description={lostGearDescription(g)}
+            anchor={{ x: 0.5, y: 0.5 }}
+          >
+            <MaterialCommunityIcons name={LOST_GEAR_GLYPH} size={20} color={LOST_GEAR_COLOR} />
+          </Marker>
+        );
+      })}
+    </>
+  );
+}
+
 export default function MapScreen() {
   const aircraft = useAircraftList();
   const vessels = useVesselList();
   const demoMode = useSettingsStore((s) => s.demoMode);
   const showShips = useSettingsStore((s) => s.showShips);
   const showAton = useSettingsStore((s) => s.showAton);
+  const showFishingZones = useSettingsStore((s) => s.showFishingZones);
+  const showLostGear = useSettingsStore((s) => s.showLostGear);
   const radarRangeKm = useSettingsStore((s) => s.radarRangeKm);
   const setRadarRangeKm = useSettingsStore((s) => s.setRadarRangeKm);
   const [view, setView] = useState<MapViewMode>("radar");
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
   const [selectedMmsi, setSelectedMmsi] = useState<string | null>(null);
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
+  // Fishing overlays fetch only when at least one toggle is on; fail-soft to empty when unconfigured.
+  const { zones, gear } = useFishingLayers({
+    client,
+    enabled: showFishingZones || showLostGear,
+  });
   const observer = useMemo(
     () => (demoMode ? DEMO_HOME : (getHomeLocation() ?? DEMO_HOME)),
     [demoMode],
@@ -134,6 +220,9 @@ export default function MapScreen() {
             initialRegion={{ latitude: observer.lat, longitude: observer.lon, latitudeDelta: 1.2, longitudeDelta: 1.2 }}
             showsUserLocation
           >
+            {/* Fishing overlays first so aircraft/vessel markers draw on top of the zone fills. */}
+            {showFishingZones ? <FishingZoneShapes zones={zones} /> : null}
+            {showLostGear ? <LostGearMarkers gear={gear} /> : null}
             <Marker
               coordinate={{ latitude: observer.lat, longitude: observer.lon }}
               title="You"

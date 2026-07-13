@@ -83,6 +83,30 @@ export function VesselDetailSheet({ mmsi, vessel, onClose }: VesselDetailSheetPr
   // The merge keeps the local feed's "ais" source; only an away-mode vessel we don't track locally
   // carries "barentswatch". Either way the underlying observations are AIS.
   const fromBarentsWatch = metadata?.source === "barentswatch";
+  // Norwegian ship-register enrichment (FiskInfo). Each field is null off-register; length is a double.
+  const registerName = metadata?.registerName?.trim() || null;
+  const registerOwner = metadata?.registerOwner?.trim() || null;
+  const registerType = metadata?.registerType?.trim() || null;
+  const registerLength =
+    metadata?.registerLengthOverall != null
+      ? `${
+          Number.isInteger(metadata.registerLengthOverall)
+            ? metadata.registerLengthOverall
+            : metadata.registerLengthOverall.toFixed(1)
+        } m`
+      : null;
+  const hasRegister =
+    registerName != null ||
+    registerOwner != null ||
+    registerType != null ||
+    registerLength != null;
+  // Attribution credits the AIS source, BarentsWatch enrichment, and the ship register when any is present.
+  const attribution = [
+    fromBarentsWatch ? "AIS · Enriched via BarentsWatch (NLOD)" : "AIS",
+    hasRegister ? "Ship register: Norwegian Maritime Authority (NOR/NIS)" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <Modal visible={mmsi != null} transparent animationType="slide" onRequestClose={onClose}>
@@ -140,6 +164,11 @@ export function VesselDetailSheet({ mmsi, vessel, onClose }: VesselDetailSheetPr
             <View style={styles.section}>
               <Row label="Type" value={metadata.shipTypeText} />
               <Row label="Call sign" value={metadata.callSign} />
+              {/* Ship-register enrichment — each row hidden entirely when the field is absent (like IMO). */}
+              {registerName ? <Row label="Registered name" value={registerName} /> : null}
+              {registerOwner ? <Row label="Owner" value={registerOwner} /> : null}
+              {registerType ? <Row label="Register type" value={registerType} /> : null}
+              {registerLength ? <Row label="Length" value={registerLength} /> : null}
               {imo ? <Row label="IMO" value={imo} /> : null}
               <Row label="Destination" value={metadata.destination} />
               <Row label="ETA" value={metadata.eta} />
@@ -156,9 +185,7 @@ export function VesselDetailSheet({ mmsi, vessel, onClose }: VesselDetailSheetPr
           ) : null}
         </ScrollView>
 
-        <Text style={styles.attribution}>
-          {fromBarentsWatch ? "AIS · Enriched via BarentsWatch (NLOD)" : "AIS"}
-        </Text>
+        <Text style={styles.attribution}>{attribution}</Text>
         <Pressable style={styles.close} onPress={onClose}>
           <Text style={styles.closeText}>Close</Text>
         </Pressable>
