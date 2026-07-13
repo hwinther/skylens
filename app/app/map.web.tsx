@@ -23,6 +23,8 @@ export default function MapScreen() {
   const demoMode = useSettingsStore((s) => s.demoMode);
   const showShips = useSettingsStore((s) => s.showShips);
   const showAton = useSettingsStore((s) => s.showAton);
+  const radarRangeKm = useSettingsStore((s) => s.radarRangeKm);
+  const setRadarRangeKm = useSettingsStore((s) => s.setRadarRangeKm);
   const [view, setView] = useState<MapView>("radar");
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
   const [selectedMmsi, setSelectedMmsi] = useState<string | null>(null);
@@ -48,6 +50,8 @@ export default function MapScreen() {
             observer={observer}
             onSelect={setSelectedHex}
             onSelectVessel={setSelectedMmsi}
+            rangeKm={radarRangeKm}
+            onRangeChange={setRadarRangeKm}
           />
         ) : (
           <LeafletMap

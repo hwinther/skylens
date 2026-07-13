@@ -22,6 +22,8 @@ interface SettingsState {
   radiusKm: number;
   /** Demo mode: replay recorded feed + drag-to-look instead of camera/sensors. */
   demoMode: boolean;
+  /** Radar outer-ring range in km; `0` = auto-scale to the farthest blip (default). */
+  radarRangeKm: number;
   /** Show AIS ships on the map/radar/list. */
   showShips: boolean;
   /** Show AIS aids to navigation (lighthouses, beacons, buoys). */
@@ -39,6 +41,7 @@ interface SettingsState {
   setAzimuthTrim: (deg: number) => void;
   setHFov: (deg: number) => void;
   setRadiusKm: (km: number) => void;
+  setRadarRangeKm: (km: number) => void;
   setDemoMode: (on: boolean) => void;
   setShowShips: (on: boolean) => void;
   setShowAton: (on: boolean) => void;
@@ -86,6 +89,7 @@ export const useSettingsStore = create<SettingsState>()(
       azimuthTrimDeg: 0,
       hFovDeg: DEFAULT_HFOV_DEG,
       radiusKm: 60,
+      radarRangeKm: 0,
       demoMode: !forceLive,
       showShips: true,
       showAton: true,
@@ -97,6 +101,7 @@ export const useSettingsStore = create<SettingsState>()(
       setAzimuthTrim: (azimuthTrimDeg) => set({ azimuthTrimDeg }),
       setHFov: (hFovDeg) => set({ hFovDeg }),
       setRadiusKm: (radiusKm) => set({ radiusKm }),
+      setRadarRangeKm: (radarRangeKm) => set({ radarRangeKm }),
       setDemoMode: (demoMode) => set({ demoMode }),
       setShowShips: (showShips) => set({ showShips }),
       setShowAton: (showAton) => set({ showAton }),
