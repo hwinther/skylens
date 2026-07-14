@@ -15,6 +15,7 @@ export * from "./SatelliteLabel";
 export * from "./AirportArLabel";
 export * from "./PlanetLabel";
 export * from "./PlanetDetailSheet";
+export * from "./PolarisCalibrate";
 export * from "./RadioLabel";
 export * from "./RadioDetailSheet";
 export * from "./usePoseRefs";

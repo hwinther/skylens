@@ -26,6 +26,7 @@ import {
   ArOverlay,
   DetailSheet,
   PlanetDetailSheet,
+  PolarisCalibrate,
   RadioDetailSheet,
   SatelliteDetailSheet,
   StatusStrip,
@@ -54,6 +55,9 @@ export default function ArScreen() {
   const demoMode = useSettingsStore((s) => s.demoMode);
   const hFovDeg = useSettingsStore((s) => s.hFovDeg);
   const trimDeg = useSettingsStore((s) => s.azimuthTrimDeg);
+  const setAzimuthTrim = useSettingsStore((s) => s.setAzimuthTrim);
+  const polarisCalibrating = useSettingsStore((s) => s.polarisCalibrating);
+  const setPolarisCalibrating = useSettingsStore((s) => s.setPolarisCalibrating);
   const showShips = useSettingsStore((s) => s.showShips);
   const showAton = useSettingsStore((s) => s.showAton);
   const showSatellites = useSettingsStore((s) => s.showSatellites);
@@ -281,6 +285,18 @@ export default function ArScreen() {
       ) : (
         <View style={[StyleSheet.absoluteFill, styles.noCam]}>{overlay}</View>
       )}
+
+      {polarisCalibrating ? (
+        <PolarisCalibrate
+          poseRef={poseRef}
+          observer={demoMode ? DEMO_HOME : observer}
+          currentTrimDeg={trimDeg}
+          // A live sensor pose is anything that isn't the drag fallback (native DeviceMotion or web sensors).
+          sensorLive={!useDragPose}
+          onApplyTrim={setAzimuthTrim}
+          onClose={() => setPolarisCalibrating(false)}
+        />
+      ) : null}
 
       <SafeAreaView edges={["top"]} style={styles.top}>
         <StatusStrip

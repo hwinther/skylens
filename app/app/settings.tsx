@@ -9,6 +9,7 @@ import { alpha, color } from "@/theme";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useSettingsStore } from "@/state/settingsStore";
 import { useAuthStore } from "@/state/authStore";
@@ -49,6 +50,7 @@ export default function SettingsScreen() {
     showRadioSky,
     showSkyEvents,
     setAzimuthTrim,
+    setPolarisCalibrating,
     setHFov,
     setRadiusKm,
     setDemoMode,
@@ -259,6 +261,19 @@ export default function SettingsScreen() {
             max={45}
             onChange={setAzimuthTrim}
           />
+          <Button
+            label="Calibrate with Polaris"
+            testID="settings-polaris-calibrate"
+            onPress={() => {
+              // Arm calibrate mode, then jump to the AR tab where the overlay picks it up.
+              setPolarisCalibrating(true);
+              router.push("/");
+            }}
+          />
+          <Text style={styles.hint}>
+            Point the AR crosshair at Polaris (the North Star, due north at an altitude ≈ your latitude)
+            and confirm — the trim above is solved automatically.
+          </Text>
           <Stepper
             label="Horizontal FOV"
             value={hFovDeg}
@@ -497,13 +512,16 @@ function Button({
   label,
   onPress,
   tone,
+  testID,
 }: {
   label: string;
   onPress: () => void;
   tone?: "danger";
+  testID?: string;
 }) {
   return (
     <Pressable
+      testID={testID}
       style={[styles.button, tone === "danger" && styles.buttonDanger]}
       onPress={onPress}
     >

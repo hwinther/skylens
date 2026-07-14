@@ -16,6 +16,10 @@ import { DEFAULT_ELEVATION_MASK_DEG } from "@/ar/satellites";
 interface SettingsState {
   /** Manual azimuth trim in degrees, applied on top of declination. */
   azimuthTrimDeg: number;
+  /** Ephemeral: Polaris-calibration mode is armed (set from Settings, consumed + cleared by the AR
+   *  screen). Persisted incidentally but force-reset to false on rehydrate so a mid-calibration
+   *  force-quit never re-arms it on the next launch. */
+  polarisCalibrating: boolean;
   /** Horizontal field of view in degrees for the pinhole projection. */
   hFovDeg: number;
   /** Subscription radius in km sent to the hub's Subscribe(). */
@@ -63,6 +67,7 @@ interface SettingsState {
    *  value is always false until hydration completes). */
   _hydrated: boolean;
   setAzimuthTrim: (deg: number) => void;
+  setPolarisCalibrating: (on: boolean) => void;
   setHFov: (deg: number) => void;
   setRadiusKm: (km: number) => void;
   setRadarRangeKm: (km: number) => void;
@@ -121,6 +126,7 @@ export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
       azimuthTrimDeg: 0,
+      polarisCalibrating: false,
       hFovDeg: DEFAULT_HFOV_DEG,
       radiusKm: 60,
       radarRangeKm: 0,
@@ -151,6 +157,7 @@ export const useSettingsStore = create<SettingsState>()(
       onboarded: false,
       _hydrated: false,
       setAzimuthTrim: (azimuthTrimDeg) => set({ azimuthTrimDeg }),
+      setPolarisCalibrating: (polarisCalibrating) => set({ polarisCalibrating }),
       setHFov: (hFovDeg) => set({ hFovDeg }),
       setRadiusKm: (radiusKm) => set({ radiusKm }),
       setRadarRangeKm: (radarRangeKm) => set({ radarRangeKm }),
@@ -178,7 +185,8 @@ export const useSettingsStore = create<SettingsState>()(
       storage: createJSONStorage(() => secureStorage),
       // Flip the hydration flag once persisted settings load, so the onboarding gate can wait for it
       // and never flash the intro at a returning user. Fires even on a fresh install (empty storage).
-      onRehydrateStorage: () => () => useSettingsStore.setState({ _hydrated: true }),
+      onRehydrateStorage: () => () =>
+        useSettingsStore.setState({ _hydrated: true, polarisCalibrating: false }),
     },
   ),
 );
