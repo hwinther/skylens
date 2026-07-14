@@ -25,5 +25,6 @@ export * from "./useSatellites";
 export * from "./useSatelliteGroundTrack";
 export * from "./usePlanets";
 export * from "./useRadioSky";
+export * from "./useSkyEvents";
 export * from "./useFishingLayers";
 export * from "./useAirports";

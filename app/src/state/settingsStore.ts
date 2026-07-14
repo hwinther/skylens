@@ -50,6 +50,8 @@ interface SettingsState {
   showEcliptic: boolean;
   /** Draw the fixed radio-astronomy sources (Sgr A*, Cas A, Cyg A, Tau A) in the AR sky + Radio list. */
   showRadioSky: boolean;
+  /** Show the "Upcoming" sky-events feed (equinoxes, eclipses, oppositions, supermoons) in the List. */
+  showSkyEvents: boolean;
   /** Draw fishing-regulation zones (cod boundaries / forbidden / zero areas) on the geographic map. */
   showFishingZones: boolean;
   /** Draw reported lost/ghost fishing-gear points on the geographic map. */
@@ -78,6 +80,7 @@ interface SettingsState {
   setShowPlanets: (on: boolean) => void;
   setShowEcliptic: (on: boolean) => void;
   setShowRadioSky: (on: boolean) => void;
+  setShowSkyEvents: (on: boolean) => void;
   setShowFishingZones: (on: boolean) => void;
   setShowLostGear: (on: boolean) => void;
   setOnboarded: (on: boolean) => void;
@@ -140,6 +143,8 @@ export const useSettingsStore = create<SettingsState>()(
       showEcliptic: false,
       // Radio-astronomy targets are a niche SDR power-user layer (invisible to the eye), so opt-in.
       showRadioSky: false,
+      // The upcoming sky-events feed is cheap (computed once + hourly) and delightful, so on by default.
+      showSkyEvents: true,
       // Fishing overlays are opt-in — they only make sense over the fjord/coast map view, so default off.
       showFishingZones: false,
       showLostGear: false,
@@ -166,6 +171,7 @@ export const useSettingsStore = create<SettingsState>()(
       setShowPlanets: (showPlanets) => set({ showPlanets }),
       setShowEcliptic: (showEcliptic) => set({ showEcliptic }),
       setShowRadioSky: (showRadioSky) => set({ showRadioSky }),
+      setShowSkyEvents: (showSkyEvents) => set({ showSkyEvents }),
     }),
     {
       name: "skylens.settings.v1",

@@ -6,7 +6,7 @@
  */
 
 import { color } from "@/theme";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ComponentProps } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -24,14 +24,50 @@ import {
   usePlanets,
   useRadioSky,
   useSatellites,
+  useSkyEvents,
 } from "@/components";
 import { iconForCategory } from "@/components/aircraftIcon";
 import { iconForVessel } from "@/components/vesselIcon";
 import { compass8, relativePosition } from "@/components/webmap/relative";
-import { RADIO_SOURCES, satGroupsFromSettings } from "@/ar";
+import { RADIO_SOURCES, satGroupsFromSettings, type SkyEventKind } from "@/ar";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl, getHomeLocation } from "@/api/config";
 import { DEMO_HOME } from "@/mock/mockFeed";
+
+type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
+
+/** Per-kind glyph for an Upcoming row (all drawn in the gold sky family). Names verified against MCI. */
+const EVENT_ICON: Record<SkyEventKind, IconName> = {
+  equinox: "sun-clock",
+  solstice: "weather-sunny",
+  "lunar-eclipse": "weather-night",
+  "solar-eclipse": "weather-sunny-alert",
+  opposition: "circle-opacity",
+  elongation: "star-four-points-outline",
+  supermoon: "moon-full",
+};
+
+/** Event keys carry ISO colons/dots; flatten to an alphanumeric-safe testID suffix. */
+const safeId = (key: string) => key.replace(/[^a-zA-Z0-9]+/g, "-");
+
+/** Whole calendar days (local) from now to the event, for the "today / tomorrow / in N days" cue. */
+function daysUntil(date: Date, nowMs: number): number {
+  const d0 = new Date(date.getTime());
+  d0.setHours(0, 0, 0, 0);
+  const n0 = new Date(nowMs);
+  n0.setHours(0, 0, 0, 0);
+  return Math.round((d0.getTime() - n0.getTime()) / 86_400_000);
+}
+
+/** "today" / "tomorrow" / "in N days" from a whole-day count. */
+function countdownLabel(days: number): string {
+  if (days <= 0) return "today";
+  if (days === 1) return "tomorrow";
+  return `in ${days} days`;
+}
+
+/** Short calendar date for the row's right column, e.g. "4 Oct". */
+const shortDate = (date: Date) => date.toLocaleDateString([], { day: "numeric", month: "short" });
 
 export default function ListScreen() {
   const aircraft = useAircraftList();
@@ -46,6 +82,7 @@ export default function ListScreen() {
   const satElevationMaskDeg = useSettingsStore((s) => s.satElevationMaskDeg);
   const showPlanets = useSettingsStore((s) => s.showPlanets);
   const showRadioSky = useSettingsStore((s) => s.showRadioSky);
+  const showSkyEvents = useSettingsStore((s) => s.showSkyEvents);
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
   const [selectedMmsi, setSelectedMmsi] = useState<string | null>(null);
   const [selectedNoradId, setSelectedNoradId] = useState<number | null>(null);
@@ -96,6 +133,11 @@ export default function ListScreen() {
     () => [...radioViews].sort((a, b) => b.elevationDeg - a.elevationDeg),
     [radioViews],
   );
+
+  // Upcoming sky events: pure on-device astronomy like the Sky/Radio feeds, but computed once + hourly
+  // (not the spatial 30 s tick) — a chronological "what's next" list (equinoxes, eclipses, oppositions,
+  // supermoons), self-describing display rows (no detail sheet). Observer feeds the eclipse visibility.
+  const { events, computedAt } = useSkyEvents({ observer, enabled: showSkyEvents });
 
   // Aircraft and (toggle-permitted) vessels merged into one list, sorted nearest-first. A per-row
   // kind discriminates the render — aircraft carry FL/GS, ships carry SOG/COG and their flag.
@@ -313,6 +355,48 @@ export default function ListScreen() {
             )}
           </>
         )}
+
+        {showSkyEvents && (
+          <>
+            <View style={styles.headingLeft}>
+              <View style={[styles.headingDot, { backgroundColor: color.entity.sky }]} />
+              <Text testID="list-events-count" style={styles.heading}>
+                Upcoming ({events.length})
+              </Text>
+            </View>
+            {events.length === 0 ? (
+              <Text style={styles.emptyLine}>No upcoming sky events found.</Text>
+            ) : (
+              events.map((e) => {
+                // Display-only rows (no sheet): events are self-describing. Countdown is measured against
+                // computedAt (the hook's hourly clock read) — day-granular, so an hourly reference is exact
+                // and keeps this render pure (no Date.now() in render, per react-hooks/purity).
+                const days = daysUntil(e.date, computedAt);
+                return (
+                  <View key={e.key} testID={`list-event-${safeId(e.key)}`} style={styles.row}>
+                    <MaterialCommunityIcons
+                      name={EVENT_ICON[e.kind]}
+                      size={18}
+                      color={color.entity.sky}
+                    />
+                    <View style={styles.eventText}>
+                      <Text style={styles.eventTitle} numberOfLines={1}>
+                        {e.title}
+                      </Text>
+                      <Text style={styles.eventDetail} numberOfLines={1}>
+                        {e.detail}
+                      </Text>
+                    </View>
+                    <View style={styles.eventMeta}>
+                      <Text style={styles.eventDate}>{shortDate(e.date)}</Text>
+                      <Text style={styles.eventCountdown}>{countdownLabel(days)}</Text>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </>
+        )}
       </ScrollView>
       <DetailSheet hex={selectedHex} client={client} onClose={() => setSelectedHex(null)} />
       <VesselDetailSheet
@@ -381,4 +465,11 @@ const styles = StyleSheet.create({
   meta: { color: color.textDim, fontSize: 12, minWidth: 74, textAlign: "right" },
   satFreq: { color: "#C3A9E0", fontSize: 12, minWidth: 74, textAlign: "right" },
   emptyLine: { color: color.textMuted, fontSize: 13, paddingHorizontal: 16, paddingBottom: 12 },
+  // Upcoming (sky events): a two-line label (title + detail) with a right-aligned date + countdown.
+  eventText: { flex: 1 },
+  eventTitle: { color: color.text, fontSize: 14, fontWeight: "600" },
+  eventDetail: { color: color.textLabel, fontSize: 12, marginTop: 2 },
+  eventMeta: { alignItems: "flex-end", minWidth: 74 },
+  eventDate: { color: color.textDim, fontSize: 12, fontWeight: "600" },
+  eventCountdown: { color: color.textMuted, fontSize: 11, marginTop: 2 },
 });
