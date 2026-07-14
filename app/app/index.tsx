@@ -12,10 +12,12 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { ImageBackground, Platform, StyleSheet, View } from "react-native";
+import { ImageBackground, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { CameraView, useCameraPermissions } from "expo-camera";
+import { WebCameraView } from "@/components/WebCameraView";
+import { useWebArSensors } from "@/components/useWebArSensors";
 import {
   AirportDetailSheet,
   ArOverlay,
@@ -127,11 +129,25 @@ export default function ArScreen() {
 
   // Live sensor pose (only active when not in demo mode).
   const live = usePoseRefs({ trimDeg, enabled: !demoMode });
-  // Drag-to-look pose (demo mode, and web live — no orientation sensor there).
+  // Drag-to-look pose (demo mode, and web live without working sensors — the fallback).
   const demo = useDemoPose({ initialAzimuth: 90 });
+  // Web live AR: real rear camera + compass/gyro pose on a mobile browser. No-op on native
+  // and desktop web (returns "unavailable"), where the existing drag path is untouched.
+  const webAr = useWebArSensors({ enabled: !demoMode && Platform.OS === "web", trimDeg });
 
-  const useDragPose = demoMode || Platform.OS === "web";
-  const poseRef = useDragPose ? demo.poseRef : live.poseRef;
+  // The web AR pose only takes over once the browser sensor is actually streaming.
+  const webArActive = Platform.OS === "web" && !demoMode && webAr.status === "active";
+  // The camera turns on when sensors are active (Android) OR the moment the user taps Enable
+  // on iOS — the camera-permission prompt must ride the same user gesture as the compass one.
+  const [webArEnableTapped, setWebArEnableTapped] = useState(false);
+  const [webCamDenied, setWebCamDenied] = useState(false);
+  const webCamWanted =
+    Platform.OS === "web" && !demoMode && (webArActive || webArEnableTapped);
+  const webCamShown = webCamWanted && !webCamDenied;
+
+  // Web AR active → the sensor pose ref; otherwise demo (drag) on web/demo, live on native.
+  const useDragPose = demoMode || (Platform.OS === "web" && !webArActive);
+  const poseRef = webArActive ? webAr.poseRef : useDragPose ? demo.poseRef : live.poseRef;
   // usePoseRefs returns a fresh object each render, but setObserverPosition is a
   // stable useCallback — depend on it, not on `live`, or the effect re-runs every
   // render and thrashes setConnection.
@@ -186,8 +202,8 @@ export default function ArScreen() {
       hFovDeg={hFovDeg}
       onSelect={setSelectedHex}
       onSelectSatellite={setSelectedNoradId}
-      // No camera feed (web, or native without permission) → draw a synthetic horizon.
-      showHorizon={!demoMode && !cameraPermission?.granted}
+      // No camera feed (native without permission, or web without a working AR camera) → synthetic horizon.
+      showHorizon={!demoMode && !cameraPermission?.granted && !webCamShown}
     />
   );
 
@@ -200,10 +216,35 @@ export default function ArScreen() {
           </ImageBackground>
         </GestureDetector>
       ) : Platform.OS === "web" ? (
-        // Live on web: no camera preview and no compass/gyro — drag to look around the overlay.
-        <GestureDetector gesture={demo.gesture}>
-          <View style={[StyleSheet.absoluteFill, styles.noCam]}>{overlay}</View>
-        </GestureDetector>
+        // Live on web. On a mobile browser we can do real AR (rear camera + compass/gyro);
+        // desktop and unsupported/denied cases fall back to drag-to-look over a dark sky.
+        <>
+          {webCamWanted ? (
+            <WebCameraView active onStatus={(s) => setWebCamDenied(s === "denied")} />
+          ) : null}
+          {webArActive ? (
+            // Sensors drive the pose — no drag gesture, camera preview sits behind the overlay.
+            overlay
+          ) : (
+            <GestureDetector gesture={demo.gesture}>
+              <View style={[StyleSheet.absoluteFill, !webCamShown && styles.noCam]}>{overlay}</View>
+            </GestureDetector>
+          )}
+          {webAr.status === "needs-permission" ? (
+            <View style={styles.enableWrap} pointerEvents="box-none">
+              <Pressable
+                testID="web-ar-enable"
+                style={styles.enableButton}
+                onPress={() => {
+                  setWebArEnableTapped(true);
+                  void webAr.request();
+                }}
+              >
+                <Text style={styles.enableText}>Enable AR (camera + compass)</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </>
       ) : cameraPermission?.granted ? (
         // CameraView doesn't support children — the overlay is absoluteFill, so render it as a
         // sibling on top instead.
@@ -257,4 +298,23 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#0B1622" },
   top: { position: "absolute", top: 0, left: 0, right: 0, pointerEvents: "box-none" },
   noCam: { backgroundColor: "#0B1622" },
+  // Centered iOS "Enable AR" pill — the user gesture that unlocks camera + compass permission.
+  enableWrap: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  enableButton: {
+    backgroundColor: "rgba(11, 22, 34, 0.92)",
+    borderColor: "rgba(120, 200, 255, 0.6)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  enableText: { color: "#EAF6FF", fontSize: 15, fontWeight: "700" },
 });

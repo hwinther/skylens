@@ -34,7 +34,11 @@ module.exports = defineConfig([
     // pose stays in refs, never zustand"). The gesture callbacks run on the JS thread
     // via runOnJS, which the react-hooks/refs static check can't follow, so it wrongly
     // flags legitimate ref access. Disable it for just these bridge hooks.
-    files: ["src/components/useDemoPose.ts", "src/components/usePoseRefs.ts"],
+    files: [
+      "src/components/useDemoPose.ts",
+      "src/components/usePoseRefs.ts",
+      "src/components/useWebArSensors.web.ts",
+    ],
     rules: {
       "react-hooks/refs": "off",
     },
