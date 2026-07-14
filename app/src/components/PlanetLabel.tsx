@@ -111,8 +111,8 @@ const styles = StyleSheet.create({
   sub: { color: "#E7CE93", fontSize: 10 },
   leader: {
     position: "absolute",
-    width: StyleSheet.hairlineWidth,
-    backgroundColor: alpha(color.entity.sky, 0.5),
+    width: 1,
+    backgroundColor: alpha(color.entity.sky, 0.7),
     pointerEvents: "none",
   },
 });

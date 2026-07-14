@@ -11,7 +11,8 @@
 
 import { alpha, color } from "@/theme";
 import { useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Sheet } from "./Sheet";
 import {
   Body,
   bodyForKey,
@@ -68,11 +69,7 @@ export function PlanetDetailSheet({ body, view, observer, onClose }: PlanetDetai
   const name = view?.name?.trim() || body || "";
 
   return (
-    <Modal visible={body != null} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={styles.sheet}>
-        <View style={styles.handle} />
-
+    <Sheet visible={body != null} onClose={onClose} accent={color.entity.sky} maxHeightPct={82}>
         <View style={styles.header}>
           <Text testID="planet-detail-title" style={styles.title} numberOfLines={1}>
             {name}
@@ -169,12 +166,7 @@ export function PlanetDetailSheet({ body, view, observer, onClose }: PlanetDetai
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
           <Text style={styles.attribution}>Ephemeris: astronomy-engine (on-device)</Text>
         </ScrollView>
-
-        <Pressable style={styles.close} onPress={onClose}>
-          <Text style={styles.closeText}>Close</Text>
-        </Pressable>
-      </View>
-    </Modal>
+    </Sheet>
   );
 }
 
@@ -197,23 +189,6 @@ function EventRow({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
-  sheet: {
-    backgroundColor: color.bg,
-    padding: 20,
-    paddingBottom: 36,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-    maxHeight: "82%",
-  },
-  handle: {
-    alignSelf: "center",
-    width: 44,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#33506b",
-    marginBottom: 12,
-  },
   header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
   title: { color: "#FBEFD0", fontSize: 20, fontWeight: "700", flexShrink: 1 },
   chip: {
@@ -245,6 +220,4 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 0 },
   scrollContent: { paddingTop: 4 },
   attribution: { color: color.textMuted, fontSize: 11, marginTop: 12 },
-  close: { marginTop: 16, alignItems: "center" },
-  closeText: { color: color.entity.sky, fontSize: 16 },
 });
