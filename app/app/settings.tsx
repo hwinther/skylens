@@ -46,6 +46,7 @@ export default function SettingsScreen() {
     showLostGear,
     showPlanets,
     showEcliptic,
+    showRadioSky,
     setAzimuthTrim,
     setHFov,
     setRadiusKm,
@@ -64,6 +65,7 @@ export default function SettingsScreen() {
     setShowLostGear,
     setShowPlanets,
     setShowEcliptic,
+    setShowRadioSky,
   } = useSettingsStore();
   const status = useAuthStore((s) => s.status);
   const mockMode = useAuthStore((s) => s.mockMode);
@@ -221,9 +223,17 @@ export default function SettingsScreen() {
               onValueChange={setShowEcliptic}
             />
           </Row>
+          <Row label="Radio sky">
+            <Switch
+              testID="settings-show-radio-sky"
+              value={showRadioSky}
+              onValueChange={setShowRadioSky}
+            />
+          </Row>
           <Text style={styles.hint}>
             Sun, Moon and the naked-eye planets in the AR sky, plus the ecliptic — the arc they all
-            ride. Computed on-device; no network needed.
+            ride. Radio sky adds the fixed hydrogen-line targets (Sgr A*, Cas A, Cyg A, Tau A) for SDR
+            observing. Computed on-device; no network needed.
           </Text>
         </Section>
         </Group>

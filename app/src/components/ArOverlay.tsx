@@ -24,6 +24,7 @@ import {
   type GeoPoint,
   type PlanetView,
   type ProjectionConfig,
+  type RadioTargetView,
   type SatelliteView,
   type ScreenLabel,
 } from "@/ar";
@@ -32,6 +33,7 @@ import { AircraftLabel } from "./AircraftLabel";
 import { VesselLabel } from "./VesselLabel";
 import { SatelliteLabel } from "./SatelliteLabel";
 import { PlanetLabel } from "./PlanetLabel";
+import { RadioLabel } from "./RadioLabel";
 import { AirportArLabel } from "./AirportArLabel";
 import { airportArPriority } from "./webmap/airportStyle";
 import { deadReckon } from "@/ar/smoothing";
@@ -64,6 +66,12 @@ export interface ArOverlayProps {
   showEcliptic?: boolean;
   /** Tap handler for a planet label (opens the planet detail sheet). */
   onSelectPlanet?: (body: string) => void;
+  /** Fixed radio sources reduced to observer-relative az/el (computed at 30 s in useRadioSky). */
+  radioTargets?: RadioTargetView[];
+  /** Draw the radio (hydrogen-line target) sky pass. */
+  showRadioSky?: boolean;
+  /** Tap handler for a radio label (opens the radio detail sheet). */
+  onSelectRadio?: (key: string) => void;
   poseRef: React.MutableRefObject<CameraPose>;
   positionRef: React.MutableRefObject<GeoPoint | null>;
   hFovDeg: number;
@@ -116,6 +124,13 @@ interface RenderPlanet {
   anchorY: number;
 }
 
+interface RenderRadio {
+  target: RadioTargetView;
+  x: number;
+  y: number;
+  anchorY: number;
+}
+
 interface RenderAirport {
   airport: AirportDto;
   x: number;
@@ -135,17 +150,20 @@ const NO_VESSELS: RenderVessel[] = [];
 const NO_CLUSTERS: ClusterMark[] = [];
 const NO_SATELLITES: RenderSatellite[] = [];
 const NO_PLANETS: RenderPlanet[] = [];
+const NO_RADIO: RenderRadio[] = [];
 const NO_AIRPORTS_RENDER: RenderAirport[] = [];
 const NO_ECLIPTIC_MARKS: { x: number; y: number }[] = [];
 // Stable defaults for the optional list props so an omitted prop doesn't re-run the ref-sync effect.
 const NO_VESSELS_INPUT: VesselDto[] = [];
 const NO_SATELLITES_INPUT: SatelliteView[] = [];
 const NO_PLANETS_INPUT: PlanetView[] = [];
+const NO_RADIO_INPUT: RadioTargetView[] = [];
 const NO_AIRPORTS_INPUT: AirportDto[] = [];
 const NO_ECLIPTIC_INPUT: EclipticPoint[] = [];
 // Stable no-ops so an omitted select handler doesn't allocate a new callback (and re-memo labels) each render.
 const noopSelectSatellite = (_noradId: number) => {};
 const noopSelectPlanet = (_body: string) => {};
+const noopSelectRadio = (_key: string) => {};
 const noopSelectAirport = (_ident: string) => {};
 
 interface CardinalMark {
@@ -177,6 +195,9 @@ export function ArOverlay({
   ecliptic = NO_ECLIPTIC_INPUT,
   showEcliptic = false,
   onSelectPlanet,
+  radioTargets = NO_RADIO_INPUT,
+  showRadioSky = false,
+  onSelectRadio,
   airports = NO_AIRPORTS_INPUT,
   showAirports = false,
   onSelectAirport,
@@ -197,6 +218,8 @@ export function ArOverlay({
   const [satClusters, setSatClusters] = useState<ClusterMark[]>(NO_CLUSTERS);
   const [planetLabels, setPlanetLabels] = useState<RenderPlanet[]>(NO_PLANETS);
   const [planetClusters, setPlanetClusters] = useState<ClusterMark[]>(NO_CLUSTERS);
+  const [radioLabels, setRadioLabels] = useState<RenderRadio[]>(NO_RADIO);
+  const [radioClusters, setRadioClusters] = useState<ClusterMark[]>(NO_CLUSTERS);
   const [airportLabels, setAirportLabels] = useState<RenderAirport[]>(NO_AIRPORTS_RENDER);
   const [airportClusters, setAirportClusters] = useState<ClusterMark[]>(NO_CLUSTERS);
   const [eclipticMarks, setEclipticMarks] = useState<{ x: number; y: number }[]>(NO_ECLIPTIC_MARKS);
@@ -220,6 +243,8 @@ export function ArOverlay({
   const showSatellitesRef = useRef(showSatellites);
   const planetsRef = useRef(planets);
   const showPlanetsRef = useRef(showPlanets);
+  const radioTargetsRef = useRef(radioTargets);
+  const showRadioSkyRef = useRef(showRadioSky);
   const airportsRef = useRef(airports);
   const showAirportsRef = useRef(showAirports);
   const eclipticRef = useRef(ecliptic);
@@ -238,11 +263,13 @@ export function ArOverlay({
     showSatellitesRef.current = showSatellites;
     planetsRef.current = planets;
     showPlanetsRef.current = showPlanets;
+    radioTargetsRef.current = radioTargets;
+    showRadioSkyRef.current = showRadioSky;
     airportsRef.current = airports;
     showAirportsRef.current = showAirports;
     eclipticRef.current = ecliptic;
     showEclipticRef.current = showEcliptic;
-  }, [aircraft, snapshotAt, hFovDeg, showHorizon, vessels, vesselsSnapshotAt, showShips, showAton, satellites, satellitesSampledAt, showSatellites, planets, showPlanets, airports, showAirports, ecliptic, showEcliptic]);
+  }, [aircraft, snapshotAt, hFovDeg, showHorizon, vessels, vesselsSnapshotAt, showShips, showAton, satellites, satellitesSampledAt, showSatellites, planets, showPlanets, radioTargets, showRadioSky, airports, showAirports, ecliptic, showEcliptic]);
 
   useEffect(() => {
     let raf = 0;
@@ -500,6 +527,41 @@ export function ArOverlay({
         setPlanetClusters(NO_CLUSTERS);
       }
 
+      // --- Radio pass: fixed hydrogen-line sources at their computed az/el (useRadioSky, 30 s) ---
+      // Same real-elevation projection as the planets pass (the caller passes only above-horizon
+      // targets, so no elevation mask here). Own declutter pass so the other classes are untouched;
+      // higher-in-the-sky keeps its un-pushed spot (all four sources are of similar interest).
+      if (showRadioSkyRef.current && radioTargetsRef.current.length) {
+        const rScreenLabels: ScreenLabel[] = [];
+        const rRender: RenderRadio[] = [];
+        for (const t of radioTargetsRef.current) {
+          const proj = project({ azimuth: t.azimuthDeg, elevation: t.elevationDeg }, pose, config);
+          if (!proj.onScreen) continue;
+          const px = (proj.xNdc * width) / 2 + width / 2;
+          const py = height / 2 - (proj.yNdc * height) / 2;
+          rScreenLabels.push({ id: t.key, x: px, y: py, priority: t.elevationDeg });
+          rRender.push({ target: t, x: px, y: py, anchorY: py });
+        }
+        if (rRender.length === 0) {
+          setRadioLabels(NO_RADIO);
+          setRadioClusters(NO_CLUSTERS);
+        } else {
+          const { placed: rPlaced, clusters: rChips } = declutter(rScreenLabels);
+          const rById = new Map(rPlaced.map((rl) => [rl.id, rl]));
+          const rDecluttered = rRender
+            .filter((l) => rById.has(l.target.key))
+            .map((l) => {
+              const rl = rById.get(l.target.key)!;
+              return { ...l, y: rl.y, anchorY: rl.anchorY };
+            });
+          setRadioLabels(rDecluttered);
+          setRadioClusters(rChips.map((c) => ({ x: c.x, y: c.y, count: c.count })));
+        }
+      } else {
+        setRadioLabels(NO_RADIO);
+        setRadioClusters(NO_CLUSTERS);
+      }
+
       // --- Ecliptic arc: the faint great-circle the planets ride, as on-screen dots ---
       if (showEclipticRef.current && eclipticRef.current.length) {
         const marks: { x: number; y: number }[] = [];
@@ -625,6 +687,21 @@ export function ArOverlay({
           <Text style={styles.planetClusterText}>+{c.count}</Text>
         </View>
       ))}
+      {radioLabels.map((r) => (
+        <RadioLabel
+          key={r.target.key}
+          target={r.target}
+          x={r.x}
+          y={r.y}
+          anchorY={r.anchorY}
+          onPress={onSelectRadio ?? noopSelectRadio}
+        />
+      ))}
+      {radioClusters.map((c, i) => (
+        <View key={`rcl${i}`} style={[styles.radioCluster, { left: c.x, top: c.y }]}>
+          <Text style={styles.radioClusterText}>+{c.count}</Text>
+        </View>
+      ))}
       {labels.map((l) => (
         <AircraftLabel
           key={l.aircraft.hex}
@@ -742,6 +819,17 @@ const styles = StyleSheet.create({
     pointerEvents: "none",
   },
   planetClusterText: { color: "#241a05", fontSize: 11, fontWeight: "700" },
+  // Signal-lime "+N" chip for radio sources collapsed by the radio-pass declutter; non-interactive.
+  radioCluster: {
+    position: "absolute",
+    backgroundColor: alpha(color.entity.radio, 0.9),
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    transform: [{ translateX: -12 }, { translateY: -10 }],
+    pointerEvents: "none",
+  },
+  radioClusterText: { color: color.bg, fontSize: 11, fontWeight: "700" },
   // Steel-blue "+N" chip for airports collapsed by the airports-pass declutter; non-interactive.
   airportCluster: {
     position: "absolute",

@@ -18,15 +18,17 @@ import {
   DetailSheet,
   EmptyState,
   PlanetDetailSheet,
+  RadioDetailSheet,
   SatelliteDetailSheet,
   VesselDetailSheet,
   usePlanets,
+  useRadioSky,
   useSatellites,
 } from "@/components";
 import { iconForCategory } from "@/components/aircraftIcon";
 import { iconForVessel } from "@/components/vesselIcon";
 import { compass8, relativePosition } from "@/components/webmap/relative";
-import { satGroupsFromSettings } from "@/ar";
+import { RADIO_SOURCES, satGroupsFromSettings } from "@/ar";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl, getHomeLocation } from "@/api/config";
 import { DEMO_HOME } from "@/mock/mockFeed";
@@ -43,10 +45,12 @@ export default function ListScreen() {
   const satGnss = useSettingsStore((s) => s.satGnss);
   const satElevationMaskDeg = useSettingsStore((s) => s.satElevationMaskDeg);
   const showPlanets = useSettingsStore((s) => s.showPlanets);
+  const showRadioSky = useSettingsStore((s) => s.showRadioSky);
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
   const [selectedMmsi, setSelectedMmsi] = useState<string | null>(null);
   const [selectedNoradId, setSelectedNoradId] = useState<number | null>(null);
   const [selectedPlanet, setSelectedPlanet] = useState<string | null>(null);
+  const [selectedRadioKey, setSelectedRadioKey] = useState<string | null>(null);
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
   const observer = useMemo(
     () => (demoMode ? DEMO_HOME : (getHomeLocation() ?? DEMO_HOME)),
@@ -84,6 +88,13 @@ export default function ListScreen() {
   const sky = useMemo(
     () => [...planetViews].sort((a, b) => b.elevationDeg - a.elevationDeg),
     [planetViews],
+  );
+
+  // Radio sources: same pure on-device astronomy — a "Radio" section ordered highest-in-the-sky first.
+  const { visible: radioViews, byKey } = useRadioSky({ observer, enabled: showRadioSky });
+  const radioRows = useMemo(
+    () => [...radioViews].sort((a, b) => b.elevationDeg - a.elevationDeg),
+    [radioViews],
   );
 
   // Aircraft and (toggle-permitted) vessels merged into one list, sorted nearest-first. A per-row
@@ -271,6 +282,37 @@ export default function ListScreen() {
             )}
           </>
         )}
+
+        {showRadioSky && (
+          <>
+            <View style={styles.headingLeft}>
+              <View style={[styles.headingDot, { backgroundColor: color.entity.radio }]} />
+              <Text testID="list-radio-count" style={styles.heading}>
+                Radio ({radioRows.length})
+              </Text>
+            </View>
+            {radioRows.length === 0 ? (
+              <Text style={styles.emptyLine}>No radio sources above the horizon right now.</Text>
+            ) : (
+              radioRows.map((r) => (
+              <Pressable
+                key={`radio-${r.key}`}
+                testID={`list-radio-${r.key}`}
+                onPress={() => setSelectedRadioKey(r.key)}
+                style={styles.row}
+              >
+                <MaterialCommunityIcons name="radio-tower" size={18} color={color.entity.radio} />
+                <Text style={styles.callsign} numberOfLines={1}>
+                  {r.short}
+                </Text>
+                <Text style={styles.meta}>
+                  {Math.round(r.elevationDeg)}° {compass8(r.azimuthDeg)}
+                </Text>
+              </Pressable>
+            ))
+            )}
+          </>
+        )}
       </ScrollView>
       <DetailSheet hex={selectedHex} client={client} onClose={() => setSelectedHex(null)} />
       <VesselDetailSheet
@@ -290,6 +332,17 @@ export default function ListScreen() {
         view={selectedPlanet != null ? byBody.get(selectedPlanet) : undefined}
         observer={observer}
         onClose={() => setSelectedPlanet(null)}
+      />
+      <RadioDetailSheet
+        sourceKey={selectedRadioKey}
+        view={selectedRadioKey != null ? byKey.get(selectedRadioKey) : undefined}
+        source={
+          selectedRadioKey != null
+            ? RADIO_SOURCES.find((s) => s.key === selectedRadioKey)
+            : undefined
+        }
+        observer={observer}
+        onClose={() => setSelectedRadioKey(null)}
       />
     </SafeAreaView>
   );
