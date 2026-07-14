@@ -11,6 +11,7 @@
  */
 
 import { alpha, color } from "@/theme";
+import { textHalo } from "./textHalo";
 import { memo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
@@ -135,17 +136,13 @@ const styles = StyleSheet.create({
     color: "#CFF6EE",
     fontSize: 12,
     fontWeight: "600",
-    textShadowColor: "rgba(0, 0, 0, 0.9)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    ...textHalo,
   },
   atonTitle: { color: "#EDE0B8", fontSize: 10, fontWeight: "500" },
   sub: {
     color: "#B6E8DD",
     fontSize: 11,
-    textShadowColor: "rgba(0, 0, 0, 0.9)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    ...textHalo,
   },
   leader: {
     position: "absolute",

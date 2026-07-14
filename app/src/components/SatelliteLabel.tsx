@@ -9,6 +9,7 @@
  */
 
 import { alpha, color } from "@/theme";
+import { textHalo } from "./textHalo";
 import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
@@ -101,16 +102,12 @@ const styles = StyleSheet.create({
     color: "#EDE3FA",
     fontSize: 12,
     fontWeight: "600",
-    textShadowColor: "rgba(0, 0, 0, 0.9)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    ...textHalo,
   },
   sub: {
     color: "#D9C4EF",
     fontSize: 11,
-    textShadowColor: "rgba(0, 0, 0, 0.9)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    ...textHalo,
   },
   leader: {
     position: "absolute",
