@@ -9,6 +9,12 @@ export type VesselIconName = ComponentProps<typeof MaterialCommunityIcons>["name
 export interface VesselIcon {
   name: VesselIconName;
   color: string;
+  /**
+   * One-letter class tag (H/P/C/T) for the ferry-glyph family so passenger vs cargo vs tanker vs HSC
+   * read in greyscale — they share a glyph and otherwise separate on colour alone. Undefined for the
+   * glyph-distinct classes (fishing/tug/sailing) and AtoNs, which don't need it.
+   */
+  tag?: string;
 }
 
 /**
@@ -38,10 +44,10 @@ function iconForShip(shipType: number | null | undefined): VesselIcon {
   if (t === 30) return { name: "fish", color: FISHING }; // fishing
   if (t === 31 || t === 32 || t === 52) return { name: "ship-wheel", color: SPECIAL }; // towing / tug
   if (t === 36 || t === 37) return { name: "sail-boat", color: SAILING }; // sailing / pleasure craft
-  if (t >= 40 && t <= 49) return { name: "ferry", color: HIGH_SPEED }; // high-speed craft
-  if (t >= 60 && t <= 69) return { name: "ferry", color: SHIP }; // passenger
-  if (t >= 70 && t <= 79) return { name: "ferry", color: CARGO }; // cargo
-  if (t >= 80 && t <= 89) return { name: "ferry", color: TANKER }; // tanker
+  if (t >= 40 && t <= 49) return { name: "ferry", color: HIGH_SPEED, tag: "H" }; // high-speed craft
+  if (t >= 60 && t <= 69) return { name: "ferry", color: SHIP, tag: "P" }; // passenger
+  if (t >= 70 && t <= 79) return { name: "ferry", color: CARGO, tag: "C" }; // cargo
+  if (t >= 80 && t <= 89) return { name: "ferry", color: TANKER, tag: "T" }; // tanker
   return { name: "ferry", color: SHIP };
 }
 

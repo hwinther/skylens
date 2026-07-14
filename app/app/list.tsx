@@ -156,6 +156,11 @@ export default function ListScreen() {
                 <Text style={styles.shipName} numberOfLines={1}>
                   {row.v.name?.trim() || row.v.mmsi}
                 </Text>
+                {row.icon.tag ? (
+                  <Text style={[styles.classTag, { backgroundColor: row.icon.color }]}>
+                    {row.icon.tag}
+                  </Text>
+                ) : null}
                 {row.v.flag ? <Text style={styles.flag}>{row.v.flag}</Text> : null}
               </View>
               <Text style={styles.meta}>
@@ -286,6 +291,15 @@ const styles = StyleSheet.create({
   marineLabel: { flex: 1, flexDirection: "row", alignItems: "center", gap: 6 },
   shipName: { color: color.text, fontSize: 14, fontWeight: "600", flexShrink: 1 },
   flag: { color: color.textDim, fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
+  // Ship-class tag badge (H/P/C/T): same triple-coding as the AR label — hue + shape + letter.
+  classTag: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: color.bg,
+    borderRadius: 3,
+    paddingHorizontal: 3,
+    overflow: "hidden",
+  },
   meta: { color: color.textDim, fontSize: 12, minWidth: 74, textAlign: "right" },
   satFreq: { color: "#C3A9E0", fontSize: 12, minWidth: 74, textAlign: "right" },
   emptyLine: { color: color.textMuted, fontSize: 13, paddingHorizontal: 16, paddingBottom: 12 },

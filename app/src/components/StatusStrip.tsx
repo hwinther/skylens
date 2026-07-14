@@ -5,6 +5,7 @@
  */
 
 import { alpha, color } from "@/theme";
+import { textHalo } from "./textHalo";
 import { StyleSheet, Text, View } from "react-native";
 import type { ConnectionState, FeedSource } from "@/state/aircraftStore";
 import { CompassCalibration } from "./CompassCalibration";
@@ -84,16 +85,12 @@ const styles = StyleSheet.create({
     color: color.text,
     fontSize: 12,
     textTransform: "capitalize",
-    textShadowColor: "rgba(0, 0, 0, 0.9)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    ...textHalo,
   },
   gpsText: {
     color: color.text,
     fontSize: 12,
-    textShadowColor: "rgba(0, 0, 0, 0.9)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    ...textHalo,
   },
   count: { color: color.textDim, fontSize: 12 },
   badge: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },

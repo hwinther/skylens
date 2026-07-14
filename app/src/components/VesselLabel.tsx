@@ -11,6 +11,7 @@
  */
 
 import { alpha, color } from "@/theme";
+import { textHalo } from "./textHalo";
 import { memo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
@@ -30,8 +31,9 @@ export interface VesselLabelProps {
 }
 
 function VesselLabelBase({ vessel, x, y, anchorY, rangeKm }: VesselLabelProps) {
-  const { name: iconName, color } = iconForVessel(vessel);
+  const { name: iconName, color, tag } = iconForVessel(vessel);
   const isAton = vessel.kind === "aton";
+  const isVirtualAton = isAton && !!vessel.virtual;
   const title = vessel.name?.trim() || vessel.mmsi;
   const pushed = Math.abs(y - anchorY) > 1;
 
@@ -48,7 +50,12 @@ function VesselLabelBase({ vessel, x, y, anchorY, rangeKm }: VesselLabelProps) {
         {leader}
         <View
           testID={`ves-label-${vessel.mmsi}`}
-          style={[styles.label, styles.aton, { left: x, top: y, borderColor: color }]}
+          style={[
+            styles.label,
+            styles.aton,
+            { left: x, top: y, borderColor: color },
+            isVirtualAton && styles.atonVirtual,
+          ]}
         >
           <View style={styles.titleRow}>
             <MaterialCommunityIcons
@@ -92,6 +99,9 @@ function VesselLabelBase({ vessel, x, y, anchorY, rangeKm }: VesselLabelProps) {
           <Text style={styles.title} numberOfLines={1}>
             {title}
           </Text>
+          {tag ? (
+            <Text style={[styles.classTag, { backgroundColor: color }]}>{tag}</Text>
+          ) : null}
         </View>
         {sub ? (
           <Text style={styles.sub} numberOfLines={1}>
@@ -121,13 +131,14 @@ const styles = StyleSheet.create({
     maxWidth: 120,
     backgroundColor: "rgba(6, 26, 30, 0.85)",
   },
+  // sea = square — a colourblind-safe shape, distinct from the aircraft circle.
   tick: {
     position: "absolute",
     left: -4,
     top: -4,
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: 0,
   },
   titleRow: { flexDirection: "row", alignItems: "center" },
   icon: { marginRight: 3 },
@@ -135,17 +146,27 @@ const styles = StyleSheet.create({
     color: "#CFF6EE",
     fontSize: 12,
     fontWeight: "600",
-    textShadowColor: "rgba(0, 0, 0, 0.9)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    flexShrink: 1,
+    ...textHalo,
   },
   atonTitle: { color: "#EDE0B8", fontSize: 10, fontWeight: "500" },
+  // Virtual AtoN: a dashed chip vs the physical aid's solid border — shape redundancy so the phantom
+  // mark survives greyscale, not the magenta hue alone.
+  atonVirtual: { borderStyle: "dashed" },
+  // Ship-class tag badge (H/P/C/T): triple-codes the ferry family — hue + square tick + letter.
+  classTag: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: color.bg,
+    borderRadius: 3,
+    paddingHorizontal: 3,
+    marginLeft: 4,
+    overflow: "hidden",
+  },
   sub: {
     color: "#B6E8DD",
     fontSize: 11,
-    textShadowColor: "rgba(0, 0, 0, 0.9)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    ...textHalo,
   },
   leader: {
     position: "absolute",

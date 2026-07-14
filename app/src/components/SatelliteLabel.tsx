@@ -9,6 +9,7 @@
  */
 
 import { alpha, color } from "@/theme";
+import { textHalo } from "./textHalo";
 import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
@@ -86,14 +87,16 @@ const styles = StyleSheet.create({
   gnss: {
     opacity: 0.55,
   },
+  // orbit = diamond (45°-rotated square) — a colourblind-safe shape, distinct from the aircraft circle.
   tick: {
     position: "absolute",
     left: -4,
     top: -4,
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: 0,
     backgroundColor: color.entity.orbit,
+    transform: [{ rotate: "45deg" }],
   },
   titleRow: { flexDirection: "row", alignItems: "center" },
   icon: { marginRight: 3 },
@@ -101,16 +104,12 @@ const styles = StyleSheet.create({
     color: "#EDE3FA",
     fontSize: 12,
     fontWeight: "600",
-    textShadowColor: "rgba(0, 0, 0, 0.9)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    ...textHalo,
   },
   sub: {
     color: "#D9C4EF",
     fontSize: 11,
-    textShadowColor: "rgba(0, 0, 0, 0.9)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    ...textHalo,
   },
   leader: {
     position: "absolute",
