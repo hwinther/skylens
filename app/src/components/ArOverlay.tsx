@@ -26,11 +26,13 @@ import {
   type SatelliteView,
   type ScreenLabel,
 } from "@/ar";
-import type { AircraftDto, VesselDto } from "@/api/types";
+import type { AircraftDto, AirportDto, VesselDto } from "@/api/types";
 import { AircraftLabel } from "./AircraftLabel";
 import { VesselLabel } from "./VesselLabel";
 import { SatelliteLabel } from "./SatelliteLabel";
 import { PlanetLabel } from "./PlanetLabel";
+import { AirportArLabel } from "./AirportArLabel";
+import { airportArPriority } from "./webmap/airportStyle";
 import { deadReckon } from "@/ar/smoothing";
 
 export interface ArOverlayProps {
@@ -67,6 +69,12 @@ export interface ArOverlayProps {
   onSelect: (hex: string) => void;
   /** Tap handler for a satellite label (opens the Phase 5 detail sheet). */
   onSelectSatellite?: (noradId: number) => void;
+  /** Airports (already filtered by the small-airfields toggle) for the fixed-infrastructure pass. */
+  airports?: AirportDto[];
+  /** Draw the airports pass. */
+  showAirports?: boolean;
+  /** Tap handler for an airport label (opens the airport detail sheet). */
+  onSelectAirport?: (ident: string) => void;
   /** Draw synthetic orientation aids — horizon, ground plane, and cardinal (N/E/S/W) hints —
    *  when there's no camera feed to orient against. */
   showHorizon?: boolean;
@@ -107,6 +115,13 @@ interface RenderPlanet {
   anchorY: number;
 }
 
+interface RenderAirport {
+  airport: AirportDto;
+  x: number;
+  y: number;
+  anchorY: number;
+}
+
 interface ClusterMark {
   x: number;
   y: number;
@@ -119,15 +134,18 @@ const NO_VESSELS: RenderVessel[] = [];
 const NO_CLUSTERS: ClusterMark[] = [];
 const NO_SATELLITES: RenderSatellite[] = [];
 const NO_PLANETS: RenderPlanet[] = [];
+const NO_AIRPORTS_RENDER: RenderAirport[] = [];
 const NO_ECLIPTIC_MARKS: { x: number; y: number }[] = [];
 // Stable defaults for the optional list props so an omitted prop doesn't re-run the ref-sync effect.
 const NO_VESSELS_INPUT: VesselDto[] = [];
 const NO_SATELLITES_INPUT: SatelliteView[] = [];
 const NO_PLANETS_INPUT: PlanetView[] = [];
+const NO_AIRPORTS_INPUT: AirportDto[] = [];
 const NO_ECLIPTIC_INPUT: EclipticPoint[] = [];
 // Stable no-ops so an omitted select handler doesn't allocate a new callback (and re-memo labels) each render.
 const noopSelectSatellite = (_noradId: number) => {};
 const noopSelectPlanet = (_body: string) => {};
+const noopSelectAirport = (_ident: string) => {};
 
 interface CardinalMark {
   label: string;
@@ -158,6 +176,9 @@ export function ArOverlay({
   ecliptic = NO_ECLIPTIC_INPUT,
   showEcliptic = false,
   onSelectPlanet,
+  airports = NO_AIRPORTS_INPUT,
+  showAirports = false,
+  onSelectAirport,
   poseRef,
   positionRef,
   hFovDeg,
@@ -175,6 +196,8 @@ export function ArOverlay({
   const [satClusters, setSatClusters] = useState<ClusterMark[]>(NO_CLUSTERS);
   const [planetLabels, setPlanetLabels] = useState<RenderPlanet[]>(NO_PLANETS);
   const [planetClusters, setPlanetClusters] = useState<ClusterMark[]>(NO_CLUSTERS);
+  const [airportLabels, setAirportLabels] = useState<RenderAirport[]>(NO_AIRPORTS_RENDER);
+  const [airportClusters, setAirportClusters] = useState<ClusterMark[]>(NO_CLUSTERS);
   const [eclipticMarks, setEclipticMarks] = useState<{ x: number; y: number }[]>(NO_ECLIPTIC_MARKS);
   // Screen y (px) of the elevation-0 horizon at the current pose; null when not shown.
   const [horizonY, setHorizonY] = useState<number | null>(null);
@@ -196,6 +219,8 @@ export function ArOverlay({
   const showSatellitesRef = useRef(showSatellites);
   const planetsRef = useRef(planets);
   const showPlanetsRef = useRef(showPlanets);
+  const airportsRef = useRef(airports);
+  const showAirportsRef = useRef(showAirports);
   const eclipticRef = useRef(ecliptic);
   const showEclipticRef = useRef(showEcliptic);
   useEffect(() => {
@@ -212,9 +237,11 @@ export function ArOverlay({
     showSatellitesRef.current = showSatellites;
     planetsRef.current = planets;
     showPlanetsRef.current = showPlanets;
+    airportsRef.current = airports;
+    showAirportsRef.current = showAirports;
     eclipticRef.current = ecliptic;
     showEclipticRef.current = showEcliptic;
-  }, [aircraft, snapshotAt, hFovDeg, showHorizon, vessels, vesselsSnapshotAt, showShips, showAton, satellites, satellitesSampledAt, showSatellites, planets, showPlanets, ecliptic, showEcliptic]);
+  }, [aircraft, snapshotAt, hFovDeg, showHorizon, vessels, vesselsSnapshotAt, showShips, showAton, satellites, satellitesSampledAt, showSatellites, planets, showPlanets, airports, showAirports, ecliptic, showEcliptic]);
 
   useEffect(() => {
     let raf = 0;
@@ -351,6 +378,47 @@ export function ArOverlay({
       } else {
         setVesselLabels(NO_VESSELS);
         setVesselClusters(NO_CLUSTERS);
+      }
+
+      // --- Airports pass: fixed ground infrastructure at their true az/el ---
+      // Airports sit at ground level, so — unlike the vessel band's forced horizon — we keep each one's
+      // REAL elevation (lat/lon + field elevation through the same look-angle math as aircraft). At
+      // distance that places them on or just under the horizon; we never elevation-mask them. Own
+      // declutter pass so aircraft/vessel/satellite placement is untouched; the busier classes (large >
+      // medium) keep their un-pushed spot. No edge arrows — off-screen airports simply don't draw. The
+      // set is already filtered by the small-airfields toggle upstream, so this just projects what it's given.
+      if (observer && showAirportsRef.current && airportsRef.current.length) {
+        const aScreenLabels: ScreenLabel[] = [];
+        const aRender: RenderAirport[] = [];
+        for (const ap of airportsRef.current) {
+          const alt = (ap.elevationFt ?? 0) * 0.3048; // ft → m; unknown elevation → sea level
+          const angles = lookAngles(observer, { lat: ap.lat, lon: ap.lon, alt });
+          const proj = project({ azimuth: angles.azimuth, elevation: angles.elevation }, pose, config);
+          if (!proj.onScreen) continue;
+          const px = (proj.xNdc * width) / 2 + width / 2;
+          const py = height / 2 - (proj.yNdc * height) / 2;
+          aScreenLabels.push({ id: ap.ident, x: px, y: py, priority: airportArPriority(ap.type) });
+          aRender.push({ airport: ap, x: px, y: py, anchorY: py });
+        }
+
+        if (aRender.length === 0) {
+          setAirportLabels(NO_AIRPORTS_RENDER);
+          setAirportClusters(NO_CLUSTERS);
+        } else {
+          const { placed: aPlaced, clusters: aChips } = declutter(aScreenLabels);
+          const aById = new Map(aPlaced.map((p) => [p.id, p]));
+          const aDecluttered = aRender
+            .filter((l) => aById.has(l.airport.ident))
+            .map((l) => {
+              const p = aById.get(l.airport.ident)!;
+              return { ...l, y: p.y, anchorY: p.anchorY };
+            });
+          setAirportLabels(aDecluttered);
+          setAirportClusters(aChips.map((c) => ({ x: c.x, y: c.y, count: c.count })));
+        }
+      } else {
+        setAirportLabels(NO_AIRPORTS_RENDER);
+        setAirportClusters(NO_CLUSTERS);
       }
 
       // --- Orbital pass: satellites at their precomputed az/el, extrapolated to "now" ---
@@ -493,6 +561,21 @@ export function ArOverlay({
           ))}
         </>
       )}
+      {airportLabels.map((a) => (
+        <AirportArLabel
+          key={a.airport.ident}
+          airport={a.airport}
+          x={a.x}
+          y={a.y}
+          anchorY={a.anchorY}
+          onPress={onSelectAirport ?? noopSelectAirport}
+        />
+      ))}
+      {airportClusters.map((c, i) => (
+        <View key={`acl${i}`} style={[styles.airportCluster, { left: c.x, top: c.y }]}>
+          <Text style={styles.airportClusterText}>+{c.count}</Text>
+        </View>
+      ))}
       {vesselLabels.map((v) => (
         <VesselLabel
           key={v.vessel.mmsi}
@@ -658,6 +741,17 @@ const styles = StyleSheet.create({
     pointerEvents: "none",
   },
   planetClusterText: { color: "#241a05", fontSize: 11, fontWeight: "700" },
+  // Steel-blue "+N" chip for airports collapsed by the airports-pass declutter; non-interactive.
+  airportCluster: {
+    position: "absolute",
+    backgroundColor: "rgba(127, 166, 196, 0.85)",
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    transform: [{ translateX: -12 }, { translateY: -10 }],
+    pointerEvents: "none",
+  },
+  airportClusterText: { color: "#0b1622", fontSize: 11, fontWeight: "700" },
   // Faint gold dot marking a sampled point on the ecliptic arc.
   eclipticDot: {
     position: "absolute",

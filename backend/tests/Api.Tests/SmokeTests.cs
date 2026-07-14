@@ -143,6 +143,38 @@ public sealed class SmokeTests
     }
 
     [Fact]
+    public async Task Swagger_doc_advertises_the_authelia_oidc_security_scheme()
+    {
+        using var client = _factory.CreateClient();
+
+        // The OpenAPI doc is served pre-auth (the docs stay anonymous) and must advertise the Authelia
+        // OIDC authorization-code + PKCE scheme so "Authorize" in Swagger UI can do a real login and call
+        // the auth-gated endpoints. The authority is bound from config (a deterministic default here), so
+        // the endpoint URLs are stable.
+        using var resp = await client.GetAsync("/swagger/v1/swagger.json", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+
+        var scheme = root.GetProperty("components").GetProperty("securitySchemes").GetProperty("oidc");
+        Assert.Equal("oauth2", scheme.GetProperty("type").GetString());
+
+        var flow = scheme.GetProperty("flows").GetProperty("authorizationCode");
+        Assert.Equal("https://auth.wsh.no/api/oidc/authorization",
+            flow.GetProperty("authorizationUrl").GetString());
+        Assert.Equal("https://auth.wsh.no/api/oidc/token",
+            flow.GetProperty("tokenUrl").GetString());
+        Assert.True(flow.GetProperty("scopes").TryGetProperty("openid", out _));
+
+        // A global security requirement references the scheme so the gated endpoints show the padlock.
+        var requiresOidc = root.GetProperty("security").EnumerateArray()
+                               .Any(req => req.TryGetProperty("oidc", out _));
+        Assert.True(requiresOidc, "the global security requirement must reference the oidc scheme");
+    }
+
+    [Fact]
     public async Task Api_me_requires_authentication()
     {
         using var client = _factory.CreateClient();
@@ -430,6 +462,94 @@ public sealed class SmokeTests
         Assert.Equal(JsonValueKind.Array, gear.ValueKind);
         Assert.Equal(0, gear.GetArrayLength());
         Assert.Equal("fiskinfo-unconfigured", root.GetProperty("note").GetString());
+    }
+
+    [Fact]
+    public async Task Api_airports_requires_authentication()
+    {
+        using var client = _factory.CreateClient();
+
+        using var resp = await client.GetAsync(
+            "/api/airports?lat=58.2&lon=8.1", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task Api_airports_returns_nearby_airports_with_runways_and_frequencies_when_authenticated()
+    {
+        using var client = _authFactory.CreateClient();
+
+        // DevAuthFactory runs in Development, so the Airports:* CSV fixtures load (no network). Await the
+        // background load so the assertion isn't racing the parse (the service exposes its load task).
+        var db = _authFactory.Services.GetRequiredService<Skylens.Api.Enrichment.AirportDbService>();
+        if (db.LoadTask is { } load)
+            await load;
+
+        using var resp = await client.GetAsync(
+            "/api/airports?lat=58.204&lon=8.085&radiusKm=100", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+
+        Assert.True(root.TryGetProperty("fetchedAt", out _));
+        var airports = root.GetProperty("airports");
+        Assert.Equal(JsonValueKind.Array, airports.ValueKind);
+        Assert.True(airports.GetArrayLength() > 0, "expected at least one nearby airport from the fixtures");
+
+        // ENCN is present with its IATA code and nested runways + frequencies (TWR + ATIS).
+        JsonElement encn = default;
+        var found = false;
+        foreach (var a in airports.EnumerateArray())
+        {
+            if (a.GetProperty("ident").GetString() == "ENCN")
+            {
+                encn = a;
+                found = true;
+                break;
+            }
+        }
+
+        Assert.True(found, "ENCN missing from the airports list");
+        Assert.Equal("KRS", encn.GetProperty("iata").GetString());
+        Assert.True(encn.GetProperty("runways").GetArrayLength() >= 1, "ENCN should carry its open runway");
+        var freqTypes = encn.GetProperty("frequencies").EnumerateArray()
+                            .Select(f => f.GetProperty("type").GetString())
+                            .ToArray();
+        Assert.Contains("TWR", freqTypes);
+        Assert.Contains("ATIS", freqTypes);
+
+        // The closed airport (ENXX) must never surface.
+        foreach (var a in airports.EnumerateArray())
+            Assert.NotEqual("ENXX", a.GetProperty("ident").GetString());
+    }
+
+    [Fact]
+    public async Task Healthz_includes_the_airport_fields()
+    {
+        // The airports vertical extends healthz ADDITIVELY, like the AIS and satellite fields. On
+        // SkylensFactory (Testing env) the baked /app/data CSVs are absent, so it reports the empty shape.
+        foreach (var factory in new WebApplicationFactory<Program>[] { _factory, _authFactory })
+        {
+            using var client = factory.CreateClient();
+            using var resp = await client.GetAsync("/healthz", TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+
+            var body = await resp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+
+            Assert.True(root.TryGetProperty("airportCount", out var airportCount));
+            Assert.True(root.TryGetProperty("airportsLoaded", out _));
+
+            if (ReferenceEquals(factory, _factory))
+            {
+                Assert.Equal(0, airportCount.GetInt32());
+                Assert.False(root.GetProperty("airportsLoaded").GetBoolean());
+            }
+        }
     }
 
     [Fact]

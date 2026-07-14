@@ -473,6 +473,54 @@
           }
         }
       }
+    },
+    "/api/airports": {
+      "get": {
+        "tags": [
+          "Skylens.Api, Version=0.0.0.1, Culture=neutral, PublicKeyToken=null"
+        ],
+        "operationId": "Airports",
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          {
+            "name": "radiusKm",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Skylens.Api.Enrichment.AirportsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -711,6 +759,13 @@
           },
           "tleStale": {
             "type": "boolean"
+          },
+          "airportCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "airportsLoaded": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false
@@ -743,6 +798,94 @@
           },
           "source": {
             "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Skylens.Api.Enrichment.AirportDto": {
+        "type": "object",
+        "properties": {
+          "ident": {
+            "type": "string",
+            "nullable": true
+          },
+          "iata": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "lat": {
+            "type": "number",
+            "format": "double"
+          },
+          "lon": {
+            "type": "number",
+            "format": "double"
+          },
+          "elevationFt": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "municipality": {
+            "type": "string",
+            "nullable": true
+          },
+          "runways": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Skylens.Api.Enrichment.RunwayDto"
+            },
+            "nullable": true
+          },
+          "frequencies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Skylens.Api.Enrichment.AirportFrequencyDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Skylens.Api.Enrichment.AirportFrequencyDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "mhz": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Skylens.Api.Enrichment.AirportsResponse": {
+        "type": "object",
+        "properties": {
+          "fetchedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "airports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Skylens.Api.Enrichment.AirportDto"
+            },
             "nullable": true
           }
         },
@@ -901,6 +1044,49 @@
           "MEAN_MOTION_DDOT": {
             "type": "number",
             "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Skylens.Api.Enrichment.RunwayDto": {
+        "type": "object",
+        "properties": {
+          "leIdent": {
+            "type": "string",
+            "nullable": true
+          },
+          "heIdent": {
+            "type": "string",
+            "nullable": true
+          },
+          "lengthFt": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "surface": {
+            "type": "string",
+            "nullable": true
+          },
+          "leLat": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "leLon": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "heLat": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "heLon": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -1208,8 +1394,38 @@
         },
         "additionalProperties": false
       }
+    },
+    "securitySchemes": {
+      "oidc": {
+        "type": "oauth2",
+        "description": "Authelia OIDC — authorization-code flow with PKCE (public client, no secret).",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "https://auth.wsh.no/api/oidc/authorization",
+            "tokenUrl": "https://auth.wsh.no/api/oidc/token",
+            "scopes": {
+              "openid": "OpenID Connect sign-in (required)",
+              "profile": "Basic profile claims",
+              "email": "Email address",
+              "groups": "Group membership (backend authorization)",
+              "offline_access": "Refresh token"
+            }
+          }
+        }
+      }
     }
   },
+  "security": [
+    {
+      "oidc": [
+        "openid",
+        "profile",
+        "email",
+        "groups",
+        "offline_access"
+      ]
+    }
+  ],
   "tags": [
     {
       "name": "Skylens.Api, Version=0.0.0.1, Culture=neutral, PublicKeyToken=null"

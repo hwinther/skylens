@@ -49,6 +49,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          fetch-depth: 0            # full history + tags, so the version fallback can read the latest tag
           persist-credentials: false
 
       - name: Setup Node
@@ -69,14 +70,17 @@ jobs:
         id: ver
         run: |
           # Version source: the explicit input (dispatch / tag-and-release), else the tag
-          # (app-v0.15.0 or a v1.2.3 release tag), else app.json.
+          # (app-v0.15.0 or a v1.2.3 release tag), else the latest reachable release tag, else app.json.
           if [ -n "$INPUT_VERSION" ]; then
             version="$INPUT_VERSION"
           elif [ "$GITHUB_REF_TYPE" = "tag" ]; then
             version="${GITHUB_REF_NAME#app-v}"   # app-v0.15.0 -> 0.15.0
             version="${version#v}"               # or a v1.2.3 release tag -> 1.2.3
           else
-            version="$(node -p "require('./app.json').expo.version")"
+            # Ad-hoc branch dispatch, no version input: use the newest release tag so the build
+            # doesn't fall back to the stale app.json version.
+            version="$(git describe --tags --abbrev=0 2>/dev/null)"; version="${version#v}"
+            [ -n "$version" ] || version="$(node -p "require('./app.json').expo.version")"
           fi
           # Encode major.minor.patch -> versionCode: 2 digits major, 3 minor, 2 patch (0.15.0 -> 1500).
           core="${version%%[-+]*}"                        # drop any -prerelease / +build suffix

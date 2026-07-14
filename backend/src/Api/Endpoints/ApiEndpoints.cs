@@ -337,6 +337,20 @@ public static class ApiEndpoints
                    })
            .WithName("FishingLostGear");
 
+        // GET /api/airports?lat=&lon=&radiusKm= — airports (with runways + TWR/ATIS frequencies) from the
+        // bundled offline OurAirports dataset, within a radius of the point, nearest-first and capped at
+        // 200. radiusKm is clamped to [1, 500] (default 150). No upstream calls — the dataset is baked into
+        // the image and loaded in the background at startup, so this stays on the group's "global" limit.
+        api.MapGet("/airports",
+                   Ok<AirportsResponse> (AirportDbService airports, TimeProvider time,
+                                         double lat, double lon, double? radiusKm) =>
+                   {
+                       var r = Math.Clamp(radiusKm ?? 150, 1, 500);
+                       var near = airports.Nearby(lat, lon, r, 200);
+                       return TypedResults.Ok(new AirportsResponse(time.GetUtcNow(), near));
+                   })
+           .WithName("Airports");
+
         return app;
     }
 

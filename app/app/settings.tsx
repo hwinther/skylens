@@ -30,6 +30,8 @@ export default function SettingsScreen() {
     showShips,
     showAton,
     showCourseVectors,
+    showAirports,
+    showSmallAirfields,
     showSatellites,
     satAmateurStations,
     satWeather,
@@ -46,6 +48,8 @@ export default function SettingsScreen() {
     setShowShips,
     setShowAton,
     setShowCourseVectors,
+    setShowAirports,
+    setShowSmallAirfields,
     setShowSatellites,
     setSatAmateurStations,
     setSatWeather,
@@ -165,6 +169,28 @@ export default function SettingsScreen() {
           <Text style={styles.hint}>
             Draw a short predicted-track leader ahead of each moving aircraft (2 min) and ship (15
             min).
+          </Text>
+        </Section>
+
+        <Section title="Airports">
+          <Row label="Show airports">
+            <Switch
+              testID="settings-show-airports"
+              value={showAirports}
+              onValueChange={setShowAirports}
+            />
+          </Row>
+          <Row label="Small airfields & heliports">
+            <Switch
+              testID="settings-show-small-airfields"
+              value={showSmallAirfields}
+              onValueChange={setShowSmallAirfields}
+            />
+          </Row>
+          <Text style={styles.hint}>
+            Airports as reference points — markers + runways on the Map, dim diamonds on the Radar. Large
+            and medium airports always show; the second toggle adds small airfields, heliports and
+            seaplane bases.
           </Text>
         </Section>
 

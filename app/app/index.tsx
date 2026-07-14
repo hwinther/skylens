@@ -17,17 +17,20 @@ import { GestureDetector } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import {
+  AirportDetailSheet,
   ArOverlay,
   DetailSheet,
   PlanetDetailSheet,
   SatelliteDetailSheet,
   StatusStrip,
+  useAirports,
   useDemoPose,
   useObserverLocation,
   usePlanets,
   usePoseRefs,
   useSatellites,
 } from "@/components";
+import { airportFilter } from "@/components/webmap/airportStyle";
 import { satGroupsFromSettings } from "@/ar";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
@@ -52,10 +55,13 @@ export default function ArScreen() {
   const satElevationMaskDeg = useSettingsStore((s) => s.satElevationMaskDeg);
   const showPlanets = useSettingsStore((s) => s.showPlanets);
   const showEcliptic = useSettingsStore((s) => s.showEcliptic);
+  const showAirports = useSettingsStore((s) => s.showAirports);
+  const showSmallAirfields = useSettingsStore((s) => s.showSmallAirfields);
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
   const [selectedPlanet, setSelectedPlanet] = useState<string | null>(null);
+  const [selectedAirportIdent, setSelectedAirportIdent] = useState<string | null>(null);
   // Selected satellite for the Phase 5 detail sheet. Captured now so the overlay's tap wiring is
   // complete; the sheet itself mounts in Phase 5 (see the placeholder near <DetailSheet/> below).
   const [selectedNoradId, setSelectedNoradId] = useState<number | null>(null);
@@ -105,6 +111,19 @@ export default function ArScreen() {
     observer: demoMode ? DEMO_HOME : observer,
     enabled: showPlanets || showEcliptic,
   });
+
+  // Airports render in both demo and live (static reference data, independent of the hub), gated only on
+  // the toggle. Observer = demo home in demo mode, else the live fix — same as satellites/planets.
+  const airports = useAirports({
+    client,
+    observer: demoMode ? DEMO_HOME : observer,
+    enabled: showAirports,
+  });
+  // Apply the small-airfields toggle (the same memo the map screens use) before handing the set to the overlay.
+  const shownAirports = useMemo(
+    () => airports.filter((a) => airportFilter(a.type, showSmallAirfields)),
+    [airports, showSmallAirfields],
+  );
 
   // Live sensor pose (only active when not in demo mode).
   const live = usePoseRefs({ trimDeg, enabled: !demoMode });
@@ -159,6 +178,9 @@ export default function ArScreen() {
       ecliptic={planetHook.ecliptic}
       showEcliptic={showEcliptic}
       onSelectPlanet={setSelectedPlanet}
+      airports={shownAirports}
+      showAirports={showAirports}
+      onSelectAirport={setSelectedAirportIdent}
       poseRef={poseRef}
       positionRef={live.positionRef}
       hFovDeg={hFovDeg}
@@ -217,6 +239,15 @@ export default function ArScreen() {
         view={selectedPlanet != null ? planetHook.byBody.get(selectedPlanet) : undefined}
         observer={demoMode ? DEMO_HOME : observer}
         onClose={() => setSelectedPlanet(null)}
+      />
+      <AirportDetailSheet
+        ident={selectedAirportIdent}
+        airport={
+          selectedAirportIdent != null
+            ? airports.find((a) => a.ident === selectedAirportIdent)
+            : undefined
+        }
+        onClose={() => setSelectedAirportIdent(null)}
       />
     </View>
   );

@@ -1,0 +1,11 @@
+"id","airport_ref","airport_ident","type","description","frequency_mhz"
+55795,2572,"ENCN","TWR","Kristiansand Tower",118.1
+55794,2572,"ENCN","ATIS","Kristiansand ATIS",124.475
+900020,29927,"ENGK","AF","Gullknapp Radio",122.3
+56000,2600,"ENGM","TWR","Gardermoen Tower",118.3
+56001,2600,"ENGM","ATIS","Gardermoen ATIS",127.125
+56002,2600,"ENGM","APP","Oslo Approach",120.45
+55807,2582,"ENKJ","CTAF","Kjeller Traffic",119.1
+55834,2592,"ENRY","APP","APP",122.1
+55835,2592,"ENRY","ARR","ARRIVAL",120.3
+55836,2592,"ENRY","TWR","TWR",119.5

@@ -11,11 +11,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import type { AircraftDto, VesselDto } from "@/api/types";
+import type { AircraftDto, AirportDto, VesselDto } from "@/api/types";
 import { iconForCategory } from "./aircraftIcon";
 import { iconForVessel } from "./vesselIcon";
 import { isAutoRange, zoomIn, zoomOut } from "./radarRange";
 import { relativePosition, type Observer } from "./webmap/relative";
+import { AIRPORT_COLOR } from "./webmap/airportStyle";
 import {
   leadDistanceKm,
   AIRCRAFT_LEAD_SECONDS,
@@ -33,6 +34,10 @@ export interface AircraftRadarProps {
   vessels?: VesselDto[];
   /** Tap handler for a vessel blip (opens the vessel detail sheet). Blips are inert when omitted. */
   onSelectVessel?: (mmsi: string) => void;
+  /** Airports to plot as fixed reference diamonds; already filtered by the caller. */
+  airports?: AirportDto[];
+  /** Tap handler for an airport diamond (opens the airport detail sheet). Diamonds inert when omitted. */
+  onSelectAirport?: (ident: string) => void;
   /** Fixed outer-ring range in km; `0`/undefined = auto-scale to the farthest blip. */
   rangeKm?: number;
   /** Called with the new range when the user zooms; omit to hide the zoom control (read-only radar). */
@@ -99,6 +104,8 @@ export function AircraftRadar({
   onSelect,
   vessels = [],
   onSelectVessel,
+  airports = [],
+  onSelectAirport,
   rangeKm,
   onRangeChange,
   showCourseVectors = false,
@@ -115,6 +122,8 @@ export function AircraftRadar({
   const vesselRel = vessels
     .filter((v) => v.lat != null && v.lon != null)
     .map((v) => ({ v, ...relativePosition(observer, v.lat!, v.lon!) }));
+  // Airports are fixed references, so they never drive the auto range (only live traffic does).
+  const airportRel = airports.map((ap) => ({ ap, ...relativePosition(observer, ap.lat, ap.lon) }));
   // The auto range: scaled to the farthest thing on screen — aircraft or ship — so nothing clips it.
   const autoRange = niceMax(
     Math.max(
@@ -182,6 +191,27 @@ export function AircraftRadar({
           <Text style={[styles.cardinal, { left: cx - R - 15, top: cy - 8 }]}>W</Text>
 
           <View style={[styles.observer, { left: cx - 4, top: cy - 4 }]} />
+
+          {/* Airport reference diamonds, drawn before the traffic blips. In-range only — a fixed reference
+              is never pinned to the rim (that would lie about where it is). */}
+          {airportRel.map(({ ap, distanceKm, bearingDeg }) => {
+            if (distanceKm > maxRange) return null;
+            const rr = Math.min(distanceKm / maxRange, 1) * R;
+            const rad = (bearingDeg * Math.PI) / 180;
+            const x = cx + rr * Math.sin(rad);
+            const y = cy - rr * Math.cos(rad);
+            return (
+              <Pressable
+                key={`apt-${ap.ident}`}
+                testID={`map-airport-${ap.ident}`}
+                onPress={() => onSelectAirport?.(ap.ident)}
+                style={[styles.airport, { left: x - 12, top: y - 12 }]}
+                hitSlop={6}
+              >
+                <View style={styles.airportDiamond} />
+              </Pressable>
+            );
+          })}
 
           {/* Course leaders under the blips: same physical km lead as the geographic maps, in px. */}
           {showCourseVectors &&
@@ -323,6 +353,16 @@ const styles = StyleSheet.create({
   blip: { position: "absolute", width: 24, height: 24, alignItems: "center", justifyContent: "center" },
   // Beyond the fixed range: pinned to the outer ring at true bearing, dimmed so it reads as clamped.
   blipBeyond: { opacity: 0.4 },
+  // Airport reference: a small hollow steel-blue diamond (a rotated square), dimmer than the traffic blips.
+  airport: { position: "absolute", width: 24, height: 24, alignItems: "center", justifyContent: "center" },
+  airportDiamond: {
+    width: 10,
+    height: 10,
+    borderWidth: 1.5,
+    borderColor: AIRPORT_COLOR,
+    opacity: 0.7,
+    transform: [{ rotate: "45deg" }],
+  },
   zoomControl: { position: "absolute", top: 4, right: 4, alignItems: "center", gap: 4 },
   rangeChip: {
     paddingHorizontal: 8,

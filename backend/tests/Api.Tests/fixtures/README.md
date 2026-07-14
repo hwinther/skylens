@@ -41,6 +41,21 @@ exercised (e.g. AO-85's transmitters are all inactive → no summary).
 **Data credits:** TLE/OMM data from [CelesTrak](https://celestrak.org/). Transmitter data from the
 [SatNOGS DB](https://db.satnogs.org/), licensed **CC BY-SA**.
 
+## `airports.csv` / `runways.csv` / `airport-frequencies.csv` — OurAirports fixtures (airports layer)
+
+Hand-written TINY slices of the public-domain [OurAirports](https://ourairports.com/data/) dataset in the
+real column order, used two ways: `AirportDbServiceTests` loads them by `AppContext.BaseDirectory` path
+(copied to the test output), and the DevAuth endpoint test loads the same files via
+`appsettings.Development.json` (relative to the Api content root). They deliberately exercise the loader's
+edges: **ENCN** (Kristiansand, `medium_airport`, IATA KRS) with a TWR + an ATIS frequency and one open
+runway **plus a `closed=1` runway that must be dropped**; **ENGK** (Gullknapp, `small_airport`) with a
+runway whose high-end coordinates are blank (kept, but no drawable segment); a **heliport** (ENOH); a
+`type=closed` row (**ENXX**, must be excluded); and **ENQC** whose name `Somewhere, "Nice" Field` carries
+both a comma and doubled-quote escapes — the RFC-4180 quoted-field parser must keep it intact.
+
+Being tiny hand-written fixtures they need no refresh; the real dataset is pinned + baked into the image
+by the `airportsdb` Dockerfile stage (git commit + sha256), never fetched at runtime.
+
 ## `aircraft.json` — real capture
 
 A real `aircraft.json` snapshot captured from the live feed. `Dump1090ParserRealCaptureTests` runs only

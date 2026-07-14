@@ -9,10 +9,18 @@ import { useEffect, useMemo, useRef } from "react";
 import L from "leaflet";
 import { MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, useMap } from "react-leaflet";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import type { AircraftDto, FishingZone, LostGear, VesselDto } from "@/api/types";
+import type { AircraftDto, AirportDto, FishingZone, LostGear, VesselDto } from "@/api/types";
 import { iconForCategory } from "@/components/aircraftIcon";
 import { iconForVessel } from "@/components/vesselIcon";
 import { lineLatLngs, pointLatLng, polygonRings, type GeoGeometry, type LatLngTuple } from "./geojson";
+import {
+  AIRPORT_COLOR,
+  AIRPORT_GLYPH,
+  RUNWAY_COLOR,
+  airportGlyphSize,
+  airportSubtitle,
+  airportTitle,
+} from "./airportStyle";
 import {
   aircraftCourseVector,
   vesselCourseVector,
@@ -41,6 +49,10 @@ export interface LeafletMapProps {
   zones?: FishingZone[];
   /** Lost/ghost fishing-gear points to draw; already gated by the caller (empty = nothing). */
   gear?: LostGear[];
+  /** Airports to plot as reference markers + runway segments; already filtered by the caller. */
+  airports?: AirportDto[];
+  /** Tap handler for an airport marker (opens the airport detail sheet). Markers inert when omitted. */
+  onSelectAirport?: (ident: string) => void;
   /** Satellite ground-track segments ([lat,lng] tuples, antimeridian-split); empty = no track drawn. */
   trackSegments?: LatLngTuple[][];
   /** Current sub-satellite point ([lat,lng]) for the live marker, or null when no track is shown. */
@@ -91,6 +103,19 @@ function vesselMarkerIcon(v: VesselDto): L.DivIcon {
     html: `<span style="font-family:'${iconFont}';font-size:20px;line-height:20px;color:${color};text-shadow:0 0 3px #000;display:inline-block;transform:rotate(${rot}deg)">${glyph}</span>`,
     iconSize: [20, 20],
     iconAnchor: [10, 10],
+  });
+}
+
+/** Airport marker: the MCI "airport" glyph in steel-blue, class-sized (same divIcon path as traffic). */
+function airportIcon(type: string): L.DivIcon {
+  const code = glyphMap[AIRPORT_GLYPH];
+  const glyph = code != null ? String.fromCodePoint(code) : "";
+  const size = airportGlyphSize(type);
+  return L.divIcon({
+    className: "",
+    html: `<span style="font-family:'${iconFont}';font-size:${size}px;line-height:${size}px;color:${AIRPORT_COLOR};text-shadow:0 0 3px #000">${glyph}</span>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
   });
 }
 
@@ -190,6 +215,60 @@ function LostGearMarkers({ gear }: { gear: LostGear[] }) {
   );
 }
 
+/**
+ * Airport reference layer: real runway segments (drawn only when BOTH ends carry coordinates) under
+ * steel-blue, class-sized markers. A click opens the airport detail sheet; a Popup names it on hover.
+ * Drawn under the traffic markers so aircraft/vessels stay on top and tappable.
+ */
+function Airports({
+  airports,
+  onSelectAirport,
+}: {
+  airports: AirportDto[];
+  onSelectAirport?: (ident: string) => void;
+}) {
+  return (
+    <>
+      {airports.map((a) =>
+        a.runways.map((r, j) =>
+          r.leLat != null && r.leLon != null && r.heLat != null && r.heLon != null ? (
+            <Polyline
+              key={`rwy-${a.ident}-${j}`}
+              positions={[
+                [r.leLat, r.leLon],
+                [r.heLat, r.heLon],
+              ]}
+              pathOptions={{ color: RUNWAY_COLOR, weight: 3 }}
+            />
+          ) : null,
+        ),
+      )}
+      {airports.map((a) => {
+        const subtitle = airportSubtitle(a);
+        return (
+          <Marker
+            key={`apt-${a.ident}`}
+            position={[a.lat, a.lon]}
+            icon={airportIcon(a.type)}
+            title={airportTitle(a)}
+            eventHandlers={{ click: () => onSelectAirport?.(a.ident) }}
+          >
+            <Popup>
+              {airportTitle(a)}
+              {subtitle ? (
+                <>
+                  <br />
+                  {subtitle}
+                </>
+              ) : null}
+            </Popup>
+          </Marker>
+        );
+      })}
+    </>
+  );
+}
+
 /** Frame the initial view to fit the observer + traffic once, then leave panning to the user. */
 function FitBounds({ points }: { points: [number, number][] }) {
   const map = useMap();
@@ -228,6 +307,8 @@ export function LeafletMap({
   onSelectVessel,
   zones = [],
   gear = [],
+  airports = [],
+  onSelectAirport,
   trackSegments = [],
   trackSubPoint = null,
   trackName = null,
@@ -257,6 +338,8 @@ export function LeafletMap({
       {/* Fishing overlays render first (overlay pane) so aircraft/vessel markers stay on top. */}
       <FishingZones zones={zones} />
       <LostGearMarkers gear={gear} />
+      {/* Airport reference layer under the traffic markers (runways + steel-blue class-sized markers). */}
+      <Airports airports={airports} onSelectAirport={onSelectAirport} />
       <Marker position={[observer.lat, observer.lon]} icon={observerIcon} />
       {positioned.map((a) => (
         <Marker
