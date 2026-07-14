@@ -54,6 +54,7 @@ function PlanetLabelBase({ planet, x, y, anchorY, onPress }: PlanetLabelProps) {
         style={[styles.label, { left: x, top: y }]}
         hitSlop={8}
       >
+        <View style={styles.tick} />
         <View style={styles.titleRow}>
           <MaterialCommunityIcons
             testID={`planet-icon-${planet.body}`}
@@ -88,6 +89,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 3,
     maxWidth: 150,
+  },
+  // sky = triangle — a colourblind-safe shape, distinct from aircraft circle / vessel square / sat diamond.
+  tick: {
+    position: "absolute",
+    left: -5,
+    top: -6,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 5,
+    borderRightWidth: 5,
+    borderBottomWidth: 9,
+    borderLeftColor: "transparent",
+    borderRightColor: "transparent",
+    borderBottomColor: color.entity.sky,
+    backgroundColor: "transparent",
   },
   titleRow: { flexDirection: "row", alignItems: "center" },
   icon: { marginRight: 4 },

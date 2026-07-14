@@ -87,14 +87,16 @@ const styles = StyleSheet.create({
   gnss: {
     opacity: 0.55,
   },
+  // orbit = diamond (45°-rotated square) — a colourblind-safe shape, distinct from the aircraft circle.
   tick: {
     position: "absolute",
     left: -4,
     top: -4,
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: 0,
     backgroundColor: color.entity.orbit,
+    transform: [{ rotate: "45deg" }],
   },
   titleRow: { flexDirection: "row", alignItems: "center" },
   icon: { marginRight: 3 },
