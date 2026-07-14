@@ -13,12 +13,15 @@ import { useSettingsStore } from "@/state/settingsStore";
 import {
   DetailSheet,
   AircraftRadar,
+  AirportDetailSheet,
   VesselDetailSheet,
+  useAirports,
   useFishingLayers,
   useSatelliteGroundTrack,
 } from "@/components";
 import { MapViewToggle, type MapView } from "@/components/webmap/MapViewToggle";
 import { LeafletMap } from "@/components/webmap/LeafletMap";
+import { airportFilter } from "@/components/webmap/airportStyle";
 import type { LatLngTuple } from "@/components/webmap/geojson";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl, getHomeLocation } from "@/api/config";
@@ -34,6 +37,8 @@ export default function MapScreen() {
   const showShips = useSettingsStore((s) => s.showShips);
   const showAton = useSettingsStore((s) => s.showAton);
   const showCourseVectors = useSettingsStore((s) => s.showCourseVectors);
+  const showAirports = useSettingsStore((s) => s.showAirports);
+  const showSmallAirfields = useSettingsStore((s) => s.showSmallAirfields);
   const showFishingZones = useSettingsStore((s) => s.showFishingZones);
   const showLostGear = useSettingsStore((s) => s.showLostGear);
   const radarRangeKm = useSettingsStore((s) => s.radarRangeKm);
@@ -46,6 +51,7 @@ export default function MapScreen() {
   const [view, setView] = useState<MapView>(track.trackedNoradId != null ? "map" : "radar");
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
   const [selectedMmsi, setSelectedMmsi] = useState<string | null>(null);
+  const [selectedAirportIdent, setSelectedAirportIdent] = useState<string | null>(null);
   // Snap to the map view whenever a track is (re)selected — a track only renders there, and expo-router
   // keeps this tab mounted across a re-navigation from the sheet, so the mount-time default alone can't
   // catch a selection made while the tab already sits on radar. Guard runs via a named function to stay
@@ -77,6 +83,12 @@ export default function MapScreen() {
   const positionedVessels = vessels.filter(
     (v) => v.lat != null && v.lon != null && (v.kind === "aton" ? showAton : showShips),
   );
+  // Airports: fetched once (static) when the layer is on, then filtered by the small-airfields toggle.
+  const airports = useAirports({ client, observer, enabled: showAirports });
+  const shownAirports = useMemo(
+    () => airports.filter((a) => airportFilter(a.type, showSmallAirfields)),
+    [airports, showSmallAirfields],
+  );
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -86,9 +98,11 @@ export default function MapScreen() {
           <AircraftRadar
             aircraft={positioned}
             vessels={positionedVessels}
+            airports={shownAirports}
             observer={observer}
             onSelect={setSelectedHex}
             onSelectVessel={setSelectedMmsi}
+            onSelectAirport={setSelectedAirportIdent}
             rangeKm={radarRangeKm}
             onRangeChange={setRadarRangeKm}
             showCourseVectors={showCourseVectors}
@@ -102,6 +116,8 @@ export default function MapScreen() {
             onSelectVessel={setSelectedMmsi}
             zones={showFishingZones ? zones : []}
             gear={showLostGear ? gear : []}
+            airports={shownAirports}
+            onSelectAirport={setSelectedAirportIdent}
             trackSegments={trackSegments}
             trackSubPoint={trackSubPoint}
             trackName={track.name}
@@ -121,6 +137,15 @@ export default function MapScreen() {
         mmsi={selectedMmsi}
         vessel={selectedMmsi != null ? vessels.find((v) => v.mmsi === selectedMmsi) : undefined}
         onClose={() => setSelectedMmsi(null)}
+      />
+      <AirportDetailSheet
+        ident={selectedAirportIdent}
+        airport={
+          selectedAirportIdent != null
+            ? airports.find((a) => a.ident === selectedAirportIdent)
+            : undefined
+        }
+        onClose={() => setSelectedAirportIdent(null)}
       />
     </SafeAreaView>
   );

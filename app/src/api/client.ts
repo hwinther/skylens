@@ -11,6 +11,7 @@ import { flushClientLog, reportClientFailure } from "./clientLog";
 import type {
   AircraftDetail,
   AircraftDto,
+  AirportsResponse,
   FishingZonesResponse,
   HealthResponse,
   LostGearResponse,
@@ -190,5 +191,15 @@ export class ApiClient {
    */
   lostGear(): Promise<LostGearResponse> {
     return this.request<LostGearResponse>("/api/fishing/lostgear");
+  }
+
+  /**
+   * GET /api/airports — airports (with runways + TWR/ATIS frequencies) from the bundled offline
+   * OurAirports dataset within `radiusKm` of the point, nearest-first (capped at 200). No upstream calls.
+   */
+  airports(lat: number, lon: number, radiusKm: number): Promise<AirportsResponse> {
+    return this.request<AirportsResponse>(
+      `/api/airports?lat=${lat}&lon=${lon}&radiusKm=${radiusKm}`,
+    );
   }
 }

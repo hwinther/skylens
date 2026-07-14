@@ -16,7 +16,8 @@ public static class HealthEndpoints
     public static IEndpointRouteBuilder MapHealthEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/healthz", Ok<HealthResponse> (IngestStatus status, VesselIngestStatus vesselStatus,
-                                                   CelestrakTleService tle, TimeProvider time) =>
+                                                   CelestrakTleService tle, AirportDbService airports,
+                                                   TimeProvider time) =>
            {
                var now = time.GetUtcNow();
                var last = status.LastMessageAt;
@@ -49,7 +50,9 @@ public static class HealthEndpoints
                    AisStale: !vesselStatus.IsFresh(now),
                    SatelliteCount: tle.Count,
                    TleAgeSeconds: tleAgeSeconds,
-                   TleStale: tleStale));
+                   TleStale: tleStale,
+                   AirportCount: airports.Count,
+                   AirportsLoaded: airports.Loaded));
            })
            .AllowAnonymous()
            .WithName("Healthz");
@@ -65,7 +68,9 @@ public static class HealthEndpoints
     ///     is older than 30 s (or none yet) — unchanged, and deliberately independent of the AIS and
     ///     satellite fields. The <c>Ais*</c> fields report the vessel feed additively (<c>AisStale</c> uses a
     ///     15-min threshold); the <c>Satellite*</c>/<c>Tle*</c> fields report CelesTrak freshness additively
-    ///     (<c>TleStale</c> uses a 12-hour threshold and is true before the first fetch).
+    ///     (<c>TleStale</c> uses a 12-hour threshold and is true before the first fetch). The
+    ///     <c>Airport*</c> fields report the bundled offline OurAirports dataset additively
+    ///     (<c>AirportsLoaded</c> is false until the background load finishes or if the files are missing).
     /// </summary>
     public sealed record HealthResponse(
         string Status,
@@ -80,5 +85,7 @@ public static class HealthEndpoints
         bool AisStale,
         int SatelliteCount,
         double? TleAgeSeconds,
-        bool TleStale);
+        bool TleStale,
+        int AirportCount,
+        bool AirportsLoaded);
 }

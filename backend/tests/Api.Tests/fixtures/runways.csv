@@ -1,0 +1,4 @@
+"id","airport_ref","airport_ident","length_ft","width_ft","surface","lighted","closed","le_ident","le_latitude_deg","le_longitude_deg","le_elevation_ft","le_heading_degT","le_displaced_threshold_ft","he_ident","he_latitude_deg","he_longitude_deg","he_elevation_ft","he_heading_degT","he_displaced_threshold_ft"
+237947,2572,"ENCN",6677,148,"ASP",1,0,"03",58.196701,8.07541,41,35,394,"21",58.2117,8.09527,52,215,623
+237948,2572,"ENCN",4000,100,"ASP",1,1,"09",58.20,8.07,40,90,0,"27",58.20,8.10,40,270,0
+900010,29927,"ENGK",3000,60,"ASP",1,0,"12",58.515,8.695,380,120,0,"30",,,,300,0

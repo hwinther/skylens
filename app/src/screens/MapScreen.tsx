@@ -9,14 +9,16 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import MapView, { Marker, Polygon, Polyline } from "react-native-maps";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import type { AircraftDto, FishingZone, LostGear, VesselDto } from "@/api/types";
+import type { AircraftDto, AirportDto, FishingZone, LostGear, VesselDto } from "@/api/types";
 import { useAircraftList } from "@/state/aircraftStore";
 import { useVesselList } from "@/state/vesselStore";
 import { useSettingsStore } from "@/state/settingsStore";
 import {
   DetailSheet,
   AircraftRadar,
+  AirportDetailSheet,
   VesselDetailSheet,
+  useAirports,
   useFishingLayers,
   useSatelliteGroundTrack,
 } from "@/components";
@@ -42,6 +44,15 @@ import {
   lostGearTitle,
   zoneStyle,
 } from "@/components/webmap/fishingStyle";
+import {
+  AIRPORT_COLOR,
+  AIRPORT_GLYPH,
+  RUNWAY_COLOR,
+  airportFilter,
+  airportGlyphSize,
+  airportSubtitle,
+  airportTitle,
+} from "@/components/webmap/airportStyle";
 import { MapViewToggle, type MapView as MapViewMode } from "@/components/webmap/MapViewToggle";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl, getHomeLocation } from "@/api/config";
@@ -186,6 +197,60 @@ function LostGearMarkers({ gear }: { gear: LostGear[] }) {
   );
 }
 
+/**
+ * One airport as its steel-blue MCI glyph, laid flat and upright (NOT rotated — it's a fixed reference,
+ * not a moving target), sized by class. Same tracksViewChanges freeze as the traffic markers so 1 Hz
+ * re-renders don't re-rasterise. Tapping it opens the airport detail sheet.
+ */
+function AirportMarker({
+  airport: a,
+  onSelect,
+}: {
+  airport: AirportDto;
+  onSelect: (ident: string) => void;
+}) {
+  const [tracksViewChanges, setTracksViewChanges] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setTracksViewChanges(false), 800);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <Marker
+      coordinate={{ latitude: a.lat, longitude: a.lon }}
+      title={airportTitle(a)}
+      description={airportSubtitle(a)}
+      onPress={() => onSelect(a.ident)}
+      anchor={{ x: 0.5, y: 0.5 }}
+      tracksViewChanges={tracksViewChanges}
+    >
+      <MaterialCommunityIcons name={AIRPORT_GLYPH} size={airportGlyphSize(a.type)} color={AIRPORT_COLOR} />
+    </Marker>
+  );
+}
+
+/** Real runway segments per airport — one steel-blue Polyline per runway whose BOTH ends carry coords. */
+function AirportRunways({ airports }: { airports: AirportDto[] }) {
+  return (
+    <>
+      {airports.map((a) =>
+        a.runways.map((r, j) =>
+          r.leLat != null && r.leLon != null && r.heLat != null && r.heLon != null ? (
+            <Polyline
+              key={`rwy-${a.ident}-${j}`}
+              coordinates={[
+                { latitude: r.leLat, longitude: r.leLon },
+                { latitude: r.heLat, longitude: r.heLon },
+              ]}
+              strokeColor={RUNWAY_COLOR}
+              strokeWidth={3}
+            />
+          ) : null,
+        ),
+      )}
+    </>
+  );
+}
+
 export default function MapScreen() {
   const aircraft = useAircraftList();
   const vessels = useVesselList();
@@ -193,6 +258,8 @@ export default function MapScreen() {
   const showShips = useSettingsStore((s) => s.showShips);
   const showAton = useSettingsStore((s) => s.showAton);
   const showCourseVectors = useSettingsStore((s) => s.showCourseVectors);
+  const showAirports = useSettingsStore((s) => s.showAirports);
+  const showSmallAirfields = useSettingsStore((s) => s.showSmallAirfields);
   const showFishingZones = useSettingsStore((s) => s.showFishingZones);
   const showLostGear = useSettingsStore((s) => s.showLostGear);
   const radarRangeKm = useSettingsStore((s) => s.radarRangeKm);
@@ -205,6 +272,7 @@ export default function MapScreen() {
   const [view, setView] = useState<MapViewMode>(track.trackedNoradId != null ? "map" : "radar");
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
   const [selectedMmsi, setSelectedMmsi] = useState<string | null>(null);
+  const [selectedAirportIdent, setSelectedAirportIdent] = useState<string | null>(null);
   const mapRef = useRef<MapView>(null);
   const fittedFor = useRef<number | null>(null);
   // Fishing overlays fetch only when at least one toggle is on; fail-soft to empty when unconfigured.
@@ -247,6 +315,12 @@ export default function MapScreen() {
   const positionedVessels = vessels.filter(
     (v) => v.lat != null && v.lon != null && (v.kind === "aton" ? showAton : showShips),
   );
+  // Airports: fetched once (static) when the layer is on, then filtered by the small-airfields toggle.
+  const airports = useAirports({ client, observer, enabled: showAirports });
+  const shownAirports = useMemo(
+    () => airports.filter((a) => airportFilter(a.type, showSmallAirfields)),
+    [airports, showSmallAirfields],
+  );
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -256,9 +330,11 @@ export default function MapScreen() {
           <AircraftRadar
             aircraft={positioned}
             vessels={positionedVessels}
+            airports={shownAirports}
             observer={observer}
             onSelect={setSelectedHex}
             onSelectVessel={setSelectedMmsi}
+            onSelectAirport={setSelectedAirportIdent}
             rangeKm={radarRangeKm}
             onRangeChange={setRadarRangeKm}
             showCourseVectors={showCourseVectors}
@@ -273,6 +349,14 @@ export default function MapScreen() {
             {/* Fishing overlays first so aircraft/vessel markers draw on top of the zone fills. */}
             {showFishingZones ? <FishingZoneShapes zones={zones} /> : null}
             {showLostGear ? <LostGearMarkers gear={gear} /> : null}
+            {/* Airports: runway segments drawn just before the (upright, class-sized) airport markers,
+                both under the traffic markers so aircraft/vessels stay on top. */}
+            {showAirports ? <AirportRunways airports={shownAirports} /> : null}
+            {showAirports
+              ? shownAirports.map((a) => (
+                  <AirportMarker key={a.ident} airport={a} onSelect={setSelectedAirportIdent} />
+                ))
+              : null}
             {/* Course leaders: dashed, under the solid violet track and the markers. */}
             {showCourseVectors &&
               positioned.map((a) => {
@@ -344,6 +428,15 @@ export default function MapScreen() {
         mmsi={selectedMmsi}
         vessel={selectedMmsi != null ? vessels.find((v) => v.mmsi === selectedMmsi) : undefined}
         onClose={() => setSelectedMmsi(null)}
+      />
+      <AirportDetailSheet
+        ident={selectedAirportIdent}
+        airport={
+          selectedAirportIdent != null
+            ? airports.find((a) => a.ident === selectedAirportIdent)
+            : undefined
+        }
+        onClose={() => setSelectedAirportIdent(null)}
       />
     </SafeAreaView>
   );

@@ -113,4 +113,16 @@ describe("ApiClient", () => {
     expect(url).toBe("http://x/api/fishing/lostgear");
     expect(res.note).toBe("fiskinfo-unconfigured");
   });
+
+  it("builds the airports query string", async () => {
+    let url = "";
+    const fetchImpl = (async (u: string) => {
+      url = String(u);
+      return jsonResponse({ fetchedAt: "2026-01-01T00:00:00Z", airports: [] });
+    }) as unknown as typeof fetch;
+    const client = new ApiClient({ baseUrl: "http://x", getToken: () => null, fetchImpl });
+    const res = await client.airports(58.2, 8.08, 150);
+    expect(url).toBe("http://x/api/airports?lat=58.2&lon=8.08&radiusKm=150");
+    expect(res.airports).toEqual([]);
+  });
 });

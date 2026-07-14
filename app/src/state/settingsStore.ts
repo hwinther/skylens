@@ -30,6 +30,10 @@ interface SettingsState {
   showAton: boolean;
   /** Draw a short predicted-track (course/heading) leader ahead of moving aircraft & ships. */
   showCourseVectors: boolean;
+  /** Show airports as reference points (markers + runways on the map, diamonds on the radar). */
+  showAirports: boolean;
+  /** Include the smaller fields (small airports / heliports / seaplane bases); large + medium always show. */
+  showSmallAirfields: boolean;
   /** Draw the orbital (satellite) pass in the AR overlay. */
   showSatellites: boolean;
   /** Include the crewed "stations" + "amateur" satellite groups. */
@@ -56,6 +60,8 @@ interface SettingsState {
   setShowShips: (on: boolean) => void;
   setShowAton: (on: boolean) => void;
   setShowCourseVectors: (on: boolean) => void;
+  setShowAirports: (on: boolean) => void;
+  setShowSmallAirfields: (on: boolean) => void;
   setShowSatellites: (on: boolean) => void;
   setSatAmateurStations: (on: boolean) => void;
   setSatWeather: (on: boolean) => void;
@@ -109,6 +115,10 @@ export const useSettingsStore = create<SettingsState>()(
       showShips: true,
       showAton: true,
       showCourseVectors: true,
+      // Airports are baked-in reference data, so they're on by default; the smaller fields declutter with
+      // a second toggle (large + medium airports always show while showAirports is on).
+      showAirports: true,
+      showSmallAirfields: true,
       showSatellites: true,
       satAmateurStations: true,
       satWeather: true,
@@ -129,6 +139,8 @@ export const useSettingsStore = create<SettingsState>()(
       setShowShips: (showShips) => set({ showShips }),
       setShowAton: (showAton) => set({ showAton }),
       setShowCourseVectors: (showCourseVectors) => set({ showCourseVectors }),
+      setShowAirports: (showAirports) => set({ showAirports }),
+      setShowSmallAirfields: (showSmallAirfields) => set({ showSmallAirfields }),
       setShowSatellites: (showSatellites) => set({ showSatellites }),
       setSatAmateurStations: (satAmateurStations) => set({ satAmateurStations }),
       setSatWeather: (satWeather) => set({ satWeather }),

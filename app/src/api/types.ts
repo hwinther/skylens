@@ -51,6 +51,36 @@ export type LostGear = Schemas["Skylens.Api.Enrichment.LostGear"];
 /** GET /api/fishing/lostgear — lost gear points (empty + `note` when unconfigured). */
 export type LostGearResponse = Schemas["Skylens.Api.Endpoints.ApiEndpoints.LostGearResponse"];
 
+/**
+ * Airports layer (bundled OurAirports dataset). One airport with its joined runways + frequencies.
+ * `ident`/`name`/`type`/`lat`/`lon`/`runways`/`frequencies` are tightened like the vessel/satellite
+ * DTOs — the endpoint always sets them, but the .NET generator marks them nullable/optional (an NRT quirk).
+ */
+export type AirportDto = Omit<
+  Schemas["Skylens.Api.Enrichment.AirportDto"],
+  "ident" | "name" | "type" | "lat" | "lon" | "runways" | "frequencies"
+> & {
+  ident: string;
+  name: string;
+  type: string;
+  lat: number;
+  lon: number;
+  runways: RunwayDto[];
+  frequencies: AirportFrequencyDto[];
+};
+
+/** One runway on an airport; the low/high-end (le/he) coordinates are null when absent upstream. */
+export type RunwayDto = Schemas["Skylens.Api.Enrichment.RunwayDto"];
+
+/** One airport radio frequency (an airband-SDR companion): type code (TWR/ATIS/GND/…), description, MHz. */
+export type AirportFrequencyDto = Schemas["Skylens.Api.Enrichment.AirportFrequencyDto"];
+
+/** GET /api/airports — nearby airports (nearest-first) + the dataset load time. */
+export type AirportsResponse = Omit<
+  Schemas["Skylens.Api.Enrichment.AirportsResponse"],
+  "airports"
+> & { airports: AirportDto[] };
+
 /** GET /api/aircraft/{hex}/route — AeroAPI route by callsign. */
 export type RouteResponse = Schemas["Skylens.Api.Enrichment.FlightRoute"];
 

@@ -1,0 +1,4 @@
+"id","airport_ref","airport_ident","type","description","frequency_mhz"
+55795,2572,"ENCN","TWR","Kristiansand Tower",118.1
+55794,2572,"ENCN","ATIS","Kristiansand ATIS",124.475
+900020,29927,"ENGK","AF","Gullknapp Radio",122.3

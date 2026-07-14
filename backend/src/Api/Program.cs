@@ -30,6 +30,7 @@ builder.Services.AddOptions<OpenSkyOptions>().Bind(configuration.GetSection(Open
 builder.Services.AddOptions<AdsbxOptions>().Bind(configuration.GetSection(AdsbxOptions.SectionName));
 builder.Services.AddOptions<AeroApiOptions>().Bind(configuration.GetSection(AeroApiOptions.SectionName));
 builder.Services.AddOptions<AircraftDbOptions>().Bind(configuration.GetSection(AircraftDbOptions.SectionName));
+builder.Services.AddOptions<AirportsOptions>().Bind(configuration.GetSection(AirportsOptions.SectionName));
 builder.Services.AddOptions<BarentsWatchOptions>().Bind(configuration.GetSection(BarentsWatchOptions.SectionName));
 builder.Services.AddOptions<FiskInfoOptions>().Bind(configuration.GetSection(FiskInfoOptions.SectionName));
 builder.Services.AddOptions<SatellitesOptions>().Bind(configuration.GetSection(SatellitesOptions.SectionName));
@@ -168,6 +169,10 @@ builder.Services.AddSingleton<EnrichmentCache>();
 // Offline aircraft DB (FrozenDictionary loaded in the background at startup).
 builder.Services.AddSingleton<AircraftDbService>();
 builder.Services.AddHostedService(static sp => sp.GetRequiredService<AircraftDbService>());
+
+// Offline airports DB (OurAirports CSVs joined into an immutable array in the background at startup).
+builder.Services.AddSingleton<AirportDbService>();
+builder.Services.AddHostedService(static sp => sp.GetRequiredService<AirportDbService>());
 
 // Per-provider budgets: ADSBx monthly, AeroAPI daily. Keyed so the clients pull the right one.
 builder.Services.AddKeyedSingleton("adsbx", static (sp, _) =>
