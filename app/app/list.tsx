@@ -8,12 +8,14 @@
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useAircraftList } from "@/state/aircraftStore";
 import { useVesselList } from "@/state/vesselStore";
 import { useSettingsStore } from "@/state/settingsStore";
 import {
   DetailSheet,
+  EmptyState,
   PlanetDetailSheet,
   SatelliteDetailSheet,
   VesselDetailSheet,
@@ -117,8 +119,17 @@ export default function ListScreen() {
         Traffic ({rows.length})
       </Text>
       <ScrollView testID="list-scroll">
-        {rows.map((row) =>
-          row.kind === "aircraft" ? (
+        {rows.length === 0 ? (
+          <EmptyState
+            icon="radar"
+            title="No traffic in range"
+            message="No aircraft or ships are being received right now. They'll appear here the moment they're picked up."
+            actionLabel="Check data sources"
+            onAction={() => router.push("/settings")}
+          />
+        ) : (
+          rows.map((row) =>
+            row.kind === "aircraft" ? (
             <Pressable
               key={row.key}
               testID={`list-ac-${row.a.hex}`}
@@ -158,6 +169,7 @@ export default function ListScreen() {
               <Text style={styles.meta}>{row.v.cog != null ? `${Math.round(row.v.cog)}°` : "—"}</Text>
             </Pressable>
           ),
+          )
         )}
 
         {showSatellites && (
@@ -165,7 +177,10 @@ export default function ListScreen() {
             <Text testID="list-sat-count" style={styles.heading}>
               Overhead ({overhead.length})
             </Text>
-            {overhead.map((s) => (
+            {overhead.length === 0 ? (
+              <Text style={styles.emptyLine}>No passes overhead right now.</Text>
+            ) : (
+              overhead.map((s) => (
               <Pressable
                 key={`sat-${s.noradId}`}
                 testID={`list-sat-${s.noradId}`}
@@ -197,7 +212,8 @@ export default function ListScreen() {
                   <Text style={styles.meta}>—</Text>
                 )}
               </Pressable>
-            ))}
+            ))
+            )}
           </>
         )}
 
@@ -206,7 +222,10 @@ export default function ListScreen() {
             <Text testID="list-sky-count" style={styles.heading}>
               Sky ({sky.length})
             </Text>
-            {sky.map((p) => (
+            {sky.length === 0 ? (
+              <Text style={styles.emptyLine}>No planets above the horizon right now.</Text>
+            ) : (
+              sky.map((p) => (
               <Pressable
                 key={`planet-${p.body}`}
                 testID={`list-planet-${p.body}`}
@@ -227,7 +246,8 @@ export default function ListScreen() {
                   {p.constellation ?? ""}
                 </Text>
               </Pressable>
-            ))}
+            ))
+            )}
           </>
         )}
       </ScrollView>
@@ -272,4 +292,5 @@ const styles = StyleSheet.create({
   flag: { color: "#9FC7E0", fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
   meta: { color: "#9FC7E0", fontSize: 12, minWidth: 74, textAlign: "right" },
   satFreq: { color: "#C3A9E0", fontSize: 12, minWidth: 74, textAlign: "right" },
+  emptyLine: { color: "#5C7A94", fontSize: 13, paddingHorizontal: 16, paddingBottom: 12 },
 });

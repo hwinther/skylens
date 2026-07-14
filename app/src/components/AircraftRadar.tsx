@@ -14,6 +14,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { AircraftDto, AirportDto, VesselDto } from "@/api/types";
 import { iconForCategory } from "./aircraftIcon";
 import { iconForVessel } from "./vesselIcon";
+import { EmptyState } from "./EmptyState";
 import { isAutoRange, zoomIn, zoomOut } from "./radarRange";
 import { relativePosition, type Observer } from "./webmap/relative";
 import { AIRPORT_COLOR } from "./webmap/airportStyle";
@@ -124,6 +125,8 @@ export function AircraftRadar({
     .map((v) => ({ v, ...relativePosition(observer, v.lat!, v.lon!) }));
   // Airports are fixed references, so they never drive the auto range (only live traffic does).
   const airportRel = airports.map((ap) => ({ ap, ...relativePosition(observer, ap.lat, ap.lon) }));
+  // Nothing on the scope at all — show a quiet centred caption over the rings (see below).
+  const scopeEmpty = rel.length === 0 && vesselRel.length === 0 && airportRel.length === 0;
   // The auto range: scaled to the farthest thing on screen — aircraft or ship — so nothing clips it.
   const autoRange = niceMax(
     Math.max(
@@ -336,6 +339,12 @@ export function AircraftRadar({
               </Pressable>
             </View>
           )}
+
+          {/* Empty scope: a compact centred caption over the rings. absoluteFill + box-none, so it
+              never eats a blip tap when traffic is present. */}
+          {scopeEmpty ? (
+            <EmptyState compact icon="radar" title="No traffic in range" />
+          ) : null}
         </View>
       )}
     </View>
