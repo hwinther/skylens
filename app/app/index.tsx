@@ -28,6 +28,7 @@ import {
   PlanetDetailSheet,
   SatelliteDetailSheet,
   StatusStrip,
+  TrustLegend,
   useAirports,
   useDemoPose,
   useObserverLocation,
@@ -70,6 +71,8 @@ export default function ArScreen() {
   // Selected satellite for the Phase 5 detail sheet. Captured now so the overlay's tap wiring is
   // complete; the sheet itself mounts in Phase 5 (see the placeholder near <DetailSheet/> below).
   const [selectedNoradId, setSelectedNoradId] = useState<number | null>(null);
+  // Trust-indicator legend overlay, opened from the status strip's info glyph.
+  const [showLegend, setShowLegend] = useState(false);
 
   const baseUrl = useMemo(() => getApiBaseUrl(), []);
   // Live-mode observer: baked home coords, else a one-shot device/browser geolocation fix
@@ -273,6 +276,7 @@ export default function ArScreen() {
           source={source}
           connection={connection}
           aircraftCount={aircraft.filter((a) => a.lat != null).length}
+          onInfo={() => setShowLegend(true)}
         />
       </SafeAreaView>
 
@@ -318,6 +322,20 @@ export default function ArScreen() {
         }
         onClose={() => setSelectedAirportIdent(null)}
       />
+
+      {showLegend ? (
+        <Pressable
+          style={styles.legendBackdrop}
+          onPress={() => setShowLegend(false)}
+          testID="legend-backdrop"
+        >
+          {/* Inner Pressable captures taps on the card so they don't dismiss the overlay. */}
+          <Pressable style={styles.legendCard} onPress={() => {}}>
+            <TrustLegend />
+            <Text style={styles.legendHint}>Tap outside to close</Text>
+          </Pressable>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -375,4 +393,19 @@ const styles = StyleSheet.create({
   },
   acquireText: { color: color.text, fontSize: 14, fontWeight: "700" },
   acquireSub: { color: color.textDim, fontSize: 12 },
+  // Trust-legend overlay: a dim scrim with a centred card; tap the backdrop to dismiss.
+  legendBackdrop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: alpha(color.bg, 0.8),
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+    zIndex: 10,
+  },
+  legendCard: { width: "100%", maxWidth: 380, gap: 10 },
+  legendHint: { color: color.textDim, fontSize: 12, textAlign: "center" },
 });

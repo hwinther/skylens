@@ -52,6 +52,12 @@ interface SettingsState {
   showFishingZones: boolean;
   /** Draw reported lost/ghost fishing-gear points on the geographic map. */
   showLostGear: boolean;
+  /** First-run onboarding completed (or skipped). Gates the one-time intro flow. */
+  onboarded: boolean;
+  /** True once persisted settings have finished rehydrating — the onboarding gate waits for this so a
+   *  returning user never flashes the intro. Transient; its persisted value is irrelevant (the initial
+   *  value is always false until hydration completes). */
+  _hydrated: boolean;
   setAzimuthTrim: (deg: number) => void;
   setHFov: (deg: number) => void;
   setRadiusKm: (km: number) => void;
@@ -71,6 +77,7 @@ interface SettingsState {
   setShowEcliptic: (on: boolean) => void;
   setShowFishingZones: (on: boolean) => void;
   setShowLostGear: (on: boolean) => void;
+  setOnboarded: (on: boolean) => void;
 }
 
 // Opt-in override so the web build / Playwright E2E can boot straight into live mode (which talks to
@@ -131,6 +138,8 @@ export const useSettingsStore = create<SettingsState>()(
       // Fishing overlays are opt-in — they only make sense over the fjord/coast map view, so default off.
       showFishingZones: false,
       showLostGear: false,
+      onboarded: false,
+      _hydrated: false,
       setAzimuthTrim: (azimuthTrimDeg) => set({ azimuthTrimDeg }),
       setHFov: (hFovDeg) => set({ hFovDeg }),
       setRadiusKm: (radiusKm) => set({ radiusKm }),
@@ -148,12 +157,16 @@ export const useSettingsStore = create<SettingsState>()(
       setSatElevationMaskDeg: (satElevationMaskDeg) => set({ satElevationMaskDeg }),
       setShowFishingZones: (showFishingZones) => set({ showFishingZones }),
       setShowLostGear: (showLostGear) => set({ showLostGear }),
+      setOnboarded: (onboarded) => set({ onboarded }),
       setShowPlanets: (showPlanets) => set({ showPlanets }),
       setShowEcliptic: (showEcliptic) => set({ showEcliptic }),
     }),
     {
       name: "skylens.settings.v1",
       storage: createJSONStorage(() => secureStorage),
+      // Flip the hydration flag once persisted settings load, so the onboarding gate can wait for it
+      // and never flash the intro at a returning user. Fires even on a fresh install (empty storage).
+      onRehydrateStorage: () => () => useSettingsStore.setState({ _hydrated: true }),
     },
   ),
 );
