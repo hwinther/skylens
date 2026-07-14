@@ -1,16 +1,28 @@
 /**
- * Web OAuth redirect target. `makeRedirectUri({ scheme: "skylens", path: "oauth" })`
- * resolves to `${window.location.origin}/oauth` on web, so Authelia redirects the sign-in
- * popup here after the user authenticates. The root layout's module-scope
- * `WebBrowser.maybeCompleteAuthSession()` posts the auth response back to the opener window
- * and closes this popup; this screen is only the brief "please wait" the user sees while
- * that happens. It is hidden from the tab bar (`href: null` in _layout) and is a no-op on
- * native, where the OAuth flow never navigates to a route.
+ * OAuth redirect target for `makeRedirectUri({ scheme: "skylens", path: "oauth" })`.
+ *
+ * Web: Authelia redirects the sign-in popup to `${origin}/oauth`; the root layout's
+ * module-scope `WebBrowser.maybeCompleteAuthSession()` posts the response back to the opener
+ * and closes the popup, so this screen is just the brief "please wait" shown inside it.
+ *
+ * Native: `AuthSession.promptAsync()` already catches the `skylens://oauth?code=…` redirect,
+ * exchanges the code, and marks the session authenticated (see `useAuth.signIn`). But on a
+ * standalone build the OS ALSO delivers that custom-scheme URL to the app as a deep link, and
+ * expo-router renders this route on top — stranding the user on "Completing sign-in…" while the
+ * app is actually signed in behind it. So on native we immediately bounce home; the exchange is
+ * driven by promptAsync independently of the route, so nothing here needs the code/verifier.
  */
 
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { useEffect } from "react";
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
+import { useRouter } from "expo-router";
 
 export default function OAuthRedirectScreen() {
+  const router = useRouter();
+  useEffect(() => {
+    if (Platform.OS !== "web") router.replace("/");
+  }, [router]);
+
   return (
     <View style={styles.root}>
       <ActivityIndicator color="#78C8FF" />
