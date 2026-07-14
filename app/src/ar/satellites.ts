@@ -28,6 +28,7 @@ import {
 } from "satellite.js";
 import type { SatelliteDto } from "@/api/types";
 import { angleDiff, deg2rad, normalizeAzimuth, rad2deg } from "./geo";
+import { isObserverDark, isSatSunlitFromSunHat, sunUnitVector } from "./visibility";
 
 /** The four normalised satellite groups the backend collapses CelesTrak's many lists into. */
 export type SatGroup = "stations" | "amateur" | "weather" | "gnss";
@@ -113,6 +114,12 @@ export interface SatelliteView {
   subLat: number;
   /** Sub-satellite point longitude in degrees, normalised to [-180, 180). 0 when non-finite (see subLat). */
   subLon: number;
+  /**
+   * Naked-eye "look up now" flag: the satellite is sunlit AND the observer's sky is dark at the sample
+   * instant. NOT elevation-masked here (the Overhead list only renders above-mask rows), so it means
+   * exactly sunlit ∧ dark. Absent on fabricated (non-propagated) views. See visibility.ts.
+   */
+  visibleNow?: boolean;
   freqSummary?: string;
 }
 
@@ -199,6 +206,13 @@ export function propagateAll(
   const date2 = new Date(date.getTime() + RATE_SAMPLE_S * 1000);
   const gmst2 = gstime(date2);
 
+  // Naked-eye visibility for the Overhead list's "look up now" eye. Both the observer-dark check and the
+  // Sun direction are computed ONCE per call (never per satellite): when the sky isn't dark nothing is
+  // visible, so we skip the Sun vector entirely and every view is flagged false. When it IS dark,
+  // isSatSunlitFromSunHat is pure, cheap vector math against the shared sunHat for each satellite.
+  const observerDark = isObserverDark(observer, date);
+  const sunHat = observerDark ? sunUnitVector(date) : null;
+
   const views: SatelliteView[] = [];
   for (const entry of entries) {
     const pv = propagate(entry.satrec, date);
@@ -273,6 +287,7 @@ export function propagateAll(
       rangeRateKmS: Number.isFinite(rangeRateKmS) ? rangeRateKmS : 0,
       subLat,
       subLon,
+      visibleNow: sunHat != null && isSatSunlitFromSunHat(positionEci, sunHat),
       ...(entry.freqSummary != null ? { freqSummary: entry.freqSummary } : {}),
     });
   }
