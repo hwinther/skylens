@@ -4,6 +4,7 @@
  * MapScreen.web.tsx on web; native gets MapScreen.tsx (imported via the thin app/map.tsx route). The flat list lives in its own List tab now.
  */
 
+import { alpha, color } from "@/theme";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -26,9 +27,6 @@ import type { LatLngTuple } from "@/components/webmap/geojson";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl, getHomeLocation } from "@/api/config";
 import { DEMO_HOME } from "@/mock/mockFeed";
-
-// Violet family — matches the satellite marker / detail sheet; distinct from the other overlays.
-const SAT_VIOLET = "#C792EA";
 
 export default function MapScreen() {
   const aircraft = useAircraftList();
@@ -152,18 +150,18 @@ export default function MapScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#0B1622" },
+  root: { flex: 1, backgroundColor: color.bg },
   body: { flex: 1 },
   clearTrack: {
     position: "absolute",
     top: 12,
     right: 12,
-    backgroundColor: "rgba(11, 22, 34, 0.9)",
-    borderColor: SAT_VIOLET,
+    backgroundColor: alpha(color.bg, 0.9),
+    borderColor: color.entity.orbit,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
-  clearTrackText: { color: SAT_VIOLET, fontSize: 13, fontWeight: "700" },
+  clearTrackText: { color: color.entity.orbit, fontSize: 13, fontWeight: "700" },
 });

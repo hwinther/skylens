@@ -10,6 +10,7 @@
  * from the aircraft labels / camera behind them. Tap-to-open stays on the roomier list/map surfaces.
  */
 
+import { alpha, color } from "@/theme";
 import { memo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
@@ -149,7 +150,7 @@ const styles = StyleSheet.create({
   leader: {
     position: "absolute",
     width: 1,
-    backgroundColor: "rgba(63, 201, 176, 0.7)",
+    backgroundColor: alpha(color.entity.sea, 0.7),
     pointerEvents: "none",
   },
 });

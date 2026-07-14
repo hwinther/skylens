@@ -1,6 +1,7 @@
 /** Segmented switch between the two spatial Map renderings — Radar (offline, you-centric) and the
  *  real geographic Map — plus the live aircraft count. */
 
+import { color } from "@/theme";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 export type MapView = "radar" | "map";
@@ -45,8 +46,8 @@ const styles = StyleSheet.create({
   },
   segment: { flexDirection: "row", backgroundColor: "#12283d", borderRadius: 8, padding: 2 },
   seg: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 6 },
-  segActive: { backgroundColor: "#12507a" },
-  segText: { color: "#9FC7E0", fontSize: 13, fontWeight: "600" },
-  segTextActive: { color: "#EAF6FF" },
-  count: { color: "#9FC7E0", fontSize: 12 },
+  segActive: { backgroundColor: color.accentFill },
+  segText: { color: color.textDim, fontSize: 13, fontWeight: "600" },
+  segTextActive: { color: color.text },
+  count: { color: color.textDim, fontSize: 12 },
 });

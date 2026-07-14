@@ -8,13 +8,11 @@
  * stations you can actually work stay visually dominant.
  */
 
+import { alpha, color } from "@/theme";
 import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { SatelliteView } from "@/ar";
-
-// Violet family — a third accent distinct from aircraft blue (#78C8FF) and vessel teal (#3FC9B0).
-const SAT_VIOLET = "#C792EA";
 
 export interface SatelliteLabelProps {
   satellite: SatelliteView;
@@ -56,7 +54,7 @@ function SatelliteLabelBase({ satellite, x, y, anchorY, onPress }: SatelliteLabe
             testID={`sat-icon-${satellite.noradId}`}
             name="satellite-variant"
             size={13}
-            color={SAT_VIOLET}
+            color={color.entity.orbit}
             style={styles.icon}
           />
           <Text style={styles.title} numberOfLines={1}>
@@ -77,7 +75,7 @@ const styles = StyleSheet.create({
     transform: [{ translateX: -6 }, { translateY: -6 }],
     // Dark, faintly violet-tinted backing so the orbital labels sit apart from the blue/teal chips.
     backgroundColor: "rgba(20, 12, 32, 0.9)",
-    borderColor: SAT_VIOLET,
+    borderColor: color.entity.orbit,
     borderWidth: 1,
     borderRadius: 6,
     paddingHorizontal: 6,
@@ -95,7 +93,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: SAT_VIOLET,
+    backgroundColor: color.entity.orbit,
   },
   titleRow: { flexDirection: "row", alignItems: "center" },
   icon: { marginRight: 3 },
@@ -117,7 +115,7 @@ const styles = StyleSheet.create({
   leader: {
     position: "absolute",
     width: 1,
-    backgroundColor: "rgba(199, 146, 234, 0.7)",
+    backgroundColor: alpha(color.entity.orbit, 0.7),
     pointerEvents: "none",
   },
 });

@@ -6,6 +6,7 @@
  * the aircraft list is passed in (updated at 1 Hz) and the pose comes from refs.
  */
 
+import { alpha, color } from "@/theme";
 import { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import {
@@ -682,7 +683,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 2,
-    backgroundColor: "rgba(120, 200, 255, 0.6)",
+    backgroundColor: alpha(color.entity.air, 0.6),
     pointerEvents: "none",
   },
   // Light cardinal hints on the horizon; N/S emphasised over E/W.
@@ -690,13 +691,13 @@ const styles = StyleSheet.create({
     position: "absolute",
     width: 20,
     textAlign: "center",
-    color: "rgba(234, 246, 255, 0.5)",
+    color: alpha(color.text, 0.5),
     fontSize: 12,
     fontWeight: "600",
     pointerEvents: "none",
   },
   cardinalPrimary: {
-    color: "rgba(234, 246, 255, 0.92)",
+    color: alpha(color.text, 0.92),
     fontSize: 13,
     fontWeight: "800",
   },
@@ -712,7 +713,7 @@ const styles = StyleSheet.create({
   // Marine-tinted "+N" chip for vessels collapsed by the band declutter; non-interactive.
   vesselCluster: {
     position: "absolute",
-    backgroundColor: "rgba(63, 201, 176, 0.85)",
+    backgroundColor: alpha(color.entity.sea, 0.85),
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -723,7 +724,7 @@ const styles = StyleSheet.create({
   // Violet "+N" chip for satellites collapsed by the orbital-pass declutter; non-interactive.
   satCluster: {
     position: "absolute",
-    backgroundColor: "rgba(199, 146, 234, 0.85)",
+    backgroundColor: alpha(color.entity.orbit, 0.85),
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -733,7 +734,7 @@ const styles = StyleSheet.create({
   satClusterText: { color: "#1a0f26", fontSize: 11, fontWeight: "700" },
   planetCluster: {
     position: "absolute",
-    backgroundColor: "rgba(255, 207, 92, 0.9)",
+    backgroundColor: alpha(color.entity.sky, 0.9),
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -744,23 +745,23 @@ const styles = StyleSheet.create({
   // Steel-blue "+N" chip for airports collapsed by the airports-pass declutter; non-interactive.
   airportCluster: {
     position: "absolute",
-    backgroundColor: "rgba(127, 166, 196, 0.85)",
+    backgroundColor: alpha(color.airport, 0.85),
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 2,
     transform: [{ translateX: -12 }, { translateY: -10 }],
     pointerEvents: "none",
   },
-  airportClusterText: { color: "#0b1622", fontSize: 11, fontWeight: "700" },
+  airportClusterText: { color: color.bg, fontSize: 11, fontWeight: "700" },
   // Faint gold dot marking a sampled point on the ecliptic arc.
   eclipticDot: {
     position: "absolute",
     width: 3,
     height: 3,
     borderRadius: 1.5,
-    backgroundColor: "rgba(255, 207, 92, 0.4)",
+    backgroundColor: alpha(color.entity.sky, 0.4),
     pointerEvents: "none",
   },
   arrow: { position: "absolute", width: 24, height: 24, alignItems: "center", justifyContent: "center", pointerEvents: "none" },
-  arrowText: { color: "rgba(120, 200, 255, 0.9)", fontSize: 18 },
+  arrowText: { color: alpha(color.entity.air, 0.9), fontSize: 18 },
 });

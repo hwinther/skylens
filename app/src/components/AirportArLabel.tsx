@@ -9,6 +9,7 @@
  * word for code-less community fields) — the roomier detail sheet carries the rest.
  */
 
+import { alpha, color } from "@/theme";
 import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
@@ -70,7 +71,7 @@ const styles = StyleSheet.create({
     // Dimmer/smaller than the traffic chips — infrastructure, not a target. Steel-blue-tinted backing.
     opacity: 0.82,
     backgroundColor: "rgba(10, 20, 30, 0.66)",
-    borderColor: "rgba(127, 166, 196, 0.7)",
+    borderColor: alpha(color.airport, 0.7),
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 5,
     paddingHorizontal: 5,
@@ -91,7 +92,7 @@ const styles = StyleSheet.create({
   leader: {
     position: "absolute",
     width: StyleSheet.hairlineWidth,
-    backgroundColor: "rgba(127, 166, 196, 0.45)",
+    backgroundColor: alpha(color.airport, 0.45),
     pointerEvents: "none",
   },
 });

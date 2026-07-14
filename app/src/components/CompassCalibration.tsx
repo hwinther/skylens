@@ -5,6 +5,7 @@
  * low-pass + this align step is how we get labels onto the right plane.
  */
 
+import { color } from "@/theme";
 import { StyleSheet, Text, View } from "react-native";
 
 export interface CompassCalibrationProps {
@@ -20,10 +21,10 @@ export function CompassCalibration({
   azimuthTrimDeg,
 }: CompassCalibrationProps) {
   const bucket = Math.max(0, Math.min(3, Math.round(headingAccuracy)));
-  const color = bucket >= 2 ? "#7CFC9A" : bucket === 1 ? "#FFD37C" : "#FF8A80";
+  const dotColor = bucket >= 2 ? color.status.ok : bucket === 1 ? color.status.warn : color.status.error;
   return (
     <View style={styles.wrap}>
-      <View style={[styles.dot, { backgroundColor: color }]} />
+      <View style={[styles.dot, { backgroundColor: dotColor }]} />
       <Text style={styles.text}>
         Compass: {ACCURACY_LABELS[bucket]}
         {azimuthTrimDeg !== 0 ? `  (trim ${azimuthTrimDeg > 0 ? "+" : ""}${azimuthTrimDeg}°)` : ""}
@@ -35,5 +36,5 @@ export function CompassCalibration({
 const styles = StyleSheet.create({
   wrap: { flexDirection: "row", alignItems: "center" },
   dot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
-  text: { color: "#EAF6FF", fontSize: 12 },
+  text: { color: color.text, fontSize: 12 },
 });

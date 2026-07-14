@@ -8,6 +8,7 @@
  */
 
 import type { FishingZone, LostGear } from "@/api/types";
+import { alpha, color } from "@/theme";
 
 export type ZoneKind = "cod" | "forbidden" | "zero";
 
@@ -26,11 +27,11 @@ export interface ZoneStyle {
  */
 export const ZONE_STYLES: Record<ZoneKind, ZoneStyle> = {
   // No-fishing / forbidden areas — prohibition red.
-  forbidden: { stroke: "#E4483B", fill: "rgba(228, 72, 59, 0.15)", fillOpacity: 0.15 },
+  forbidden: { stroke: color.fishing.forbidden, fill: alpha(color.fishing.forbidden, 0.15), fillOpacity: 0.15 },
   // Coastal "zero" / special-restriction areas — warm amber, distinct from the red.
-  zero: { stroke: "#F0A63C", fill: "rgba(240, 166, 60, 0.15)", fillOpacity: 0.15 },
+  zero: { stroke: color.fishing.zero, fill: alpha(color.fishing.zero, 0.15), fillOpacity: 0.15 },
   // Cod spawning-ground boundary lines — magenta (no fill; it's a LineString).
-  cod: { stroke: "#E85CC0", fill: "rgba(232, 92, 192, 0.15)", fillOpacity: 0.15 },
+  cod: { stroke: color.fishing.cod, fill: alpha(color.fishing.cod, 0.15), fillOpacity: 0.15 },
 };
 
 /** Fall back to the forbidden style for any unexpected/absent kind so a zone is never invisible. */
@@ -40,7 +41,7 @@ export function zoneStyle(kind: string | null | undefined): ZoneStyle {
 
 /** Lost/ghost fishing gear — a snag hazard. A warning "hook" glyph in hazard orange (MCI-verified). */
 export const LOST_GEAR_GLYPH = "hook" as const;
-export const LOST_GEAR_COLOR = "#FF8A3D";
+export const LOST_GEAR_COLOR = color.fishing.lostGear;
 
 /** Marker line 1 (title): gear type + count, e.g. "Lost gear · GILLNET ×3". */
 export function lostGearTitle(g: LostGear): string {

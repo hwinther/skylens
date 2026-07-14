@@ -10,6 +10,7 @@
  * static transmitter data keeps showing regardless.
  */
 
+import { alpha, color } from "@/theme";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -38,9 +39,6 @@ import {
 } from "@/ar";
 import { useSatelliteTrackStore } from "@/state/satelliteTrackStore";
 import { compass8 } from "./webmap/relative";
-
-// Violet family — matches SatelliteLabel; a third accent distinct from aircraft blue and vessel teal.
-const SAT_VIOLET = "#C792EA";
 
 export interface SatelliteDetailSheetProps {
   /** Selected NORAD id, or null when nothing is selected (keeps the Modal mounted so it can animate). */
@@ -231,7 +229,7 @@ export function SatelliteDetailSheet({
         ) : null}
 
         <ScrollView style={styles.txScroll} contentContainerStyle={styles.txContent}>
-          {loading && <ActivityIndicator color={SAT_VIOLET} />}
+          {loading && <ActivityIndicator color={color.entity.orbit} />}
           {error && <Text style={styles.error}>{error}</Text>}
           {detail && transmitters.length === 0 && (
             <Text testID="sat-detail-empty" style={styles.empty}>
@@ -292,7 +290,7 @@ function LiveRow({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
   sheet: {
-    backgroundColor: "#0B1622",
+    backgroundColor: color.bg,
     padding: 20,
     paddingBottom: 36,
     borderTopLeftRadius: 18,
@@ -310,37 +308,37 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
   title: { color: "#EDE3FA", fontSize: 20, fontWeight: "700", flexShrink: 1 },
   chip: {
-    backgroundColor: "rgba(199, 146, 234, 0.16)",
-    borderColor: "rgba(199, 146, 234, 0.8)",
+    backgroundColor: alpha(color.entity.orbit, 0.16),
+    borderColor: alpha(color.entity.orbit, 0.8),
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 6,
     paddingHorizontal: 7,
     paddingVertical: 2,
   },
-  chipText: { color: SAT_VIOLET, fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
-  norad: { color: "#7fa6c4", fontSize: 13, fontWeight: "600", marginLeft: "auto" },
+  chipText: { color: color.entity.orbit, fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
+  norad: { color: color.textLabel, fontSize: 13, fontWeight: "600", marginLeft: "auto" },
   liveRows: { gap: 2, marginBottom: 8 },
-  belowMask: { color: "#7fa6c4", fontSize: 13, fontStyle: "italic", marginBottom: 8 },
+  belowMask: { color: color.textLabel, fontSize: 13, fontStyle: "italic", marginBottom: 8 },
   passSection: {
-    borderTopColor: "#16283a",
+    borderTopColor: color.surface2,
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: 8,
     marginBottom: 4,
     gap: 2,
   },
-  passHeading: { color: SAT_VIOLET, fontSize: 12, fontWeight: "700", textTransform: "uppercase" },
+  passHeading: { color: color.entity.orbit, fontSize: 12, fontWeight: "700", textTransform: "uppercase" },
   passLine: { color: "#EDE3FA", fontSize: 14, fontWeight: "600" },
-  passSub: { color: "#9FC7E0", fontSize: 12 },
-  passMuted: { color: "#7fa6c4", fontSize: 13, fontStyle: "italic" },
+  passSub: { color: color.textDim, fontSize: 12 },
+  passMuted: { color: color.textLabel, fontSize: 13, fontStyle: "italic" },
   // "👁 visible" pill — violet family like the group chip; the naked-eye "look up" cue for a visible pass.
   visibleBadge: {
     alignSelf: "flex-start",
     marginTop: 4,
-    color: SAT_VIOLET,
+    color: color.entity.orbit,
     fontSize: 12,
     fontWeight: "700",
-    backgroundColor: "rgba(199, 146, 234, 0.16)",
-    borderColor: SAT_VIOLET,
+    backgroundColor: alpha(color.entity.orbit, 0.16),
+    borderColor: color.entity.orbit,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 6,
     paddingHorizontal: 7,
@@ -352,18 +350,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: "rgba(199, 146, 234, 0.16)",
-    borderColor: SAT_VIOLET,
+    backgroundColor: alpha(color.entity.orbit, 0.16),
+    borderColor: color.entity.orbit,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  trackButtonText: { color: SAT_VIOLET, fontSize: 15, fontWeight: "700" },
+  trackButtonText: { color: color.entity.orbit, fontSize: 15, fontWeight: "700" },
   row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
-  rowLabel: { color: "#7fa6c4", fontSize: 14 },
-  rowValue: { color: "#EAF6FF", fontSize: 14, fontWeight: "500" },
+  rowLabel: { color: color.textLabel, fontSize: 14 },
+  rowValue: { color: color.text, fontSize: 14, fontWeight: "500" },
   txScroll: { flexGrow: 0 },
   txContent: { paddingTop: 4, gap: 8 },
   tx: {
-    borderTopColor: "#16283a",
+    borderTopColor: color.surface2,
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: 8,
     gap: 2,
@@ -372,13 +370,13 @@ const styles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4 },
   dotActive: { backgroundColor: "#4FD08A" },
   dotIdle: { backgroundColor: "#3a4a5a" },
-  txDesc: { color: "#EAF6FF", fontSize: 14, fontWeight: "600", flexShrink: 1 },
-  txMeta: { color: "#9FC7E0", fontSize: 12, marginLeft: 16 },
+  txDesc: { color: color.text, fontSize: 14, fontWeight: "600", flexShrink: 1 },
+  txMeta: { color: color.textDim, fontSize: 12, marginLeft: 16 },
   txDown: { color: "#EDE3FA", fontSize: 13, fontWeight: "500", marginLeft: 16 },
-  txDoppler: { color: SAT_VIOLET, fontSize: 13, fontWeight: "700", marginLeft: 16 },
-  error: { color: "#ff8a80", marginVertical: 8 },
-  empty: { color: "#7fa6c4", fontSize: 14, paddingVertical: 8 },
-  attribution: { color: "#5c7a94", fontSize: 11, marginTop: 12 },
+  txDoppler: { color: color.entity.orbit, fontSize: 13, fontWeight: "700", marginLeft: 16 },
+  error: { color: color.status.error, marginVertical: 8 },
+  empty: { color: color.textLabel, fontSize: 14, paddingVertical: 8 },
+  attribution: { color: color.textMuted, fontSize: 11, marginTop: 12 },
   close: { marginTop: 16, alignItems: "center" },
-  closeText: { color: SAT_VIOLET, fontSize: 16 },
+  closeText: { color: color.entity.orbit, fontSize: 16 },
 });

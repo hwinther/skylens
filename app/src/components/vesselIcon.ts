@@ -1,6 +1,7 @@
 import type { ComponentProps } from "react";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { VesselDto } from "@/api/types";
+import { color } from "@/theme";
 
 export type VesselIconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 
@@ -16,15 +17,15 @@ export interface VesselIcon {
  * glyphs, so several classes share the "ferry" glyph and are told apart by colour); AtoNs are a
  * single navigation amber.
  */
-const SHIP = "#3FC9B0"; // generic / passenger
-const CARGO = "#4FB477"; // dry cargo
-const TANKER = "#E0725C"; // tanker (warm — hazardous cargo)
-const HIGH_SPEED = "#48B7D8"; // high-speed craft
-const FISHING = "#5EC26A"; // fishing
-const SPECIAL = "#E0A94E"; // tug / towing / special craft
-const SAILING = "#7FD1E8"; // sailing / pleasure craft
-const ATON = "#F2C14E"; // physical aids to navigation (lights, beacons, buoys)
-const VIRTUAL_ATON = "#C77DBB"; // virtual/phantom aid — muted magenta, echoing chart convention
+const SHIP = color.vessel.ship; // generic / passenger
+const CARGO = color.vessel.cargo; // dry cargo
+const TANKER = color.vessel.tanker; // tanker (warm — hazardous cargo)
+const HIGH_SPEED = color.vessel.highSpeed; // high-speed craft
+const FISHING = color.vessel.fishing; // fishing
+const SPECIAL = color.vessel.special; // tug / towing / special craft
+const SAILING = color.vessel.sailing; // sailing / pleasure craft
+const ATON = color.aton.physical; // physical aids to navigation (lights, beacons, buoys)
+const VIRTUAL_ATON = color.aton.virtual; // virtual/phantom aid — muted magenta, echoing chart convention
 
 /**
  * Icon + colour for a moving ship, keyed off the AIS `shipType` int (ITU-R M.1371). The mapping is

@@ -5,6 +5,7 @@
  * it must be an explicit user action, never automatic.
  */
 
+import { color } from "@/theme";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -73,7 +74,7 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
       <Pressable style={styles.backdrop} onPress={onClose} />
       <View style={styles.sheet}>
         <View style={styles.handle} />
-        {loading && <ActivityIndicator color="#78C8FF" />}
+        {loading && <ActivityIndicator color={color.entity.air} />}
         {error && <Text style={styles.error}>{error}</Text>}
         {detail && (
           <>
@@ -136,7 +137,7 @@ function Row({ label, value }: { label: string; value: string | null | undefined
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
   sheet: {
-    backgroundColor: "#0B1622",
+    backgroundColor: color.bg,
     padding: 20,
     paddingBottom: 36,
     borderTopLeftRadius: 18,
@@ -150,22 +151,22 @@ const styles = StyleSheet.create({
     backgroundColor: "#33506b",
     marginBottom: 12,
   },
-  title: { color: "#EAF6FF", fontSize: 20, fontWeight: "700", marginBottom: 12 },
+  title: { color: color.text, fontSize: 20, fontWeight: "700", marginBottom: 12 },
   row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
-  rowLabel: { color: "#7fa6c4", fontSize: 14 },
-  rowValue: { color: "#EAF6FF", fontSize: 14, fontWeight: "500" },
-  error: { color: "#ff8a80", marginVertical: 8 },
+  rowLabel: { color: color.textLabel, fontSize: 14 },
+  rowValue: { color: color.text, fontSize: 14, fontWeight: "500" },
+  error: { color: color.status.error, marginVertical: 8 },
   routeBtn: {
     marginTop: 16,
-    backgroundColor: "#12507a",
+    backgroundColor: color.accentFill,
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: "center",
   },
-  routeBtnText: { color: "#EAF6FF", fontWeight: "600" },
+  routeBtnText: { color: color.text, fontWeight: "600" },
   route: { marginTop: 12 },
-  routeText: { color: "#EAF6FF", fontSize: 16, fontWeight: "600" },
-  routeSub: { color: "#9FC7E0", fontSize: 12, marginTop: 2 },
+  routeText: { color: color.text, fontSize: 16, fontWeight: "600" },
+  routeSub: { color: color.textDim, fontSize: 12, marginTop: 2 },
   close: { marginTop: 20, alignItems: "center" },
-  closeText: { color: "#78C8FF", fontSize: 16 },
+  closeText: { color: color.entity.air, fontSize: 16 },
 });

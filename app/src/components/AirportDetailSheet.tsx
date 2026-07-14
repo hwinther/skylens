@@ -8,6 +8,7 @@
  * the sheet then just shows the ident it was opened with.
  */
 
+import { alpha, color } from "@/theme";
 import {
   Modal,
   Pressable,
@@ -135,7 +136,7 @@ function Row({ label, value }: { label: string; value: string | null | undefined
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
   sheet: {
-    backgroundColor: "#0B1622",
+    backgroundColor: color.bg,
     padding: 20,
     paddingBottom: 36,
     borderTopLeftRadius: 18,
@@ -153,15 +154,15 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
   title: { color: "#E6F0F8", fontSize: 20, fontWeight: "700", flexShrink: 1 },
   chip: {
-    backgroundColor: "rgba(127, 166, 196, 0.16)",
-    borderColor: "rgba(127, 166, 196, 0.8)",
+    backgroundColor: alpha(color.airport, 0.16),
+    borderColor: alpha(color.airport, 0.8),
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 6,
     paddingHorizontal: 7,
     paddingVertical: 2,
   },
   chipText: { color: AIRPORT_COLOR, fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
-  ident: { color: "#7fa6c4", fontSize: 13, fontWeight: "600", marginLeft: "auto" },
+  ident: { color: color.textLabel, fontSize: 13, fontWeight: "600", marginLeft: "auto" },
   scroll: { flexGrow: 0 },
   scrollContent: { paddingTop: 2, gap: 12 },
   section: { gap: 2 },
@@ -173,10 +174,10 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
-  rowLabel: { color: "#7fa6c4", fontSize: 14 },
-  rowValue: { color: "#EAF6FF", fontSize: 14, fontWeight: "500" },
-  empty: { color: "#7fa6c4", fontSize: 14, paddingVertical: 8 },
-  attribution: { color: "#5c7a94", fontSize: 11, marginTop: 12 },
+  rowLabel: { color: color.textLabel, fontSize: 14 },
+  rowValue: { color: color.text, fontSize: 14, fontWeight: "500" },
+  empty: { color: color.textLabel, fontSize: 14, paddingVertical: 8 },
+  attribution: { color: color.textMuted, fontSize: 11, marginTop: 12 },
   close: { marginTop: 16, alignItems: "center" },
   closeText: { color: AIRPORT_COLOR, fontSize: 16 },
 });

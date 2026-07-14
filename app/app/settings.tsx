@@ -5,6 +5,7 @@
  * to avoid an extra native dependency; the values feed straight into the AR pipeline.
  */
 
+import { color } from "@/theme";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -402,22 +403,22 @@ function Button({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#0B1622" },
+  root: { flex: 1, backgroundColor: color.bg },
   content: { padding: 16, gap: 8 },
-  title: { color: "#EAF6FF", fontSize: 24, fontWeight: "700", marginBottom: 8 },
+  title: { color: color.text, fontSize: 24, fontWeight: "700", marginBottom: 8 },
   section: {
-    backgroundColor: "#0f1e2e",
+    backgroundColor: color.surface,
     borderRadius: 12,
     padding: 14,
     marginBottom: 12,
     gap: 10,
   },
-  sectionTitle: { color: "#78C8FF", fontSize: 13, fontWeight: "700", textTransform: "uppercase" },
+  sectionTitle: { color: color.entity.air, fontSize: 13, fontWeight: "700", textTransform: "uppercase" },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  rowLabel: { color: "#EAF6FF", fontSize: 15 },
-  rowValue: { color: "#9FC7E0", fontSize: 15, textTransform: "capitalize" },
-  aboutValue: { color: "#9FC7E0", fontSize: 15, flexShrink: 1, textAlign: "right", marginLeft: 12 },
-  hint: { color: "#5c7a94", fontSize: 12 },
+  rowLabel: { color: color.text, fontSize: 15 },
+  rowValue: { color: color.textDim, fontSize: 15, textTransform: "capitalize" },
+  aboutValue: { color: color.textDim, fontSize: 15, flexShrink: 1, textAlign: "right", marginLeft: 12 },
+  hint: { color: color.textMuted, fontSize: 12 },
   stepper: { gap: 8 },
   stepperHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   stepperControls: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
@@ -425,18 +426,18 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 8,
-    backgroundColor: "#16283a",
+    backgroundColor: color.surface2,
     alignItems: "center",
     justifyContent: "center",
   },
-  stepBtnText: { color: "#EAF6FF", fontSize: 22, fontWeight: "600" },
-  stepValue: { color: "#EAF6FF", fontSize: 18, fontWeight: "600", minWidth: 90, textAlign: "center" },
+  stepBtnText: { color: color.text, fontSize: 22, fontWeight: "600" },
+  stepValue: { color: color.text, fontSize: 18, fontWeight: "600", minWidth: 90, textAlign: "center" },
   button: {
-    backgroundColor: "#12507a",
+    backgroundColor: color.accentFill,
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: "center",
   },
   buttonDanger: { backgroundColor: "#5a1f26" },
-  buttonText: { color: "#EAF6FF", fontSize: 16, fontWeight: "600" },
+  buttonText: { color: color.text, fontSize: 16, fontWeight: "600" },
 });

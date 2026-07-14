@@ -5,12 +5,13 @@
  */
 
 import type { AirportDto } from "@/api/types";
+import { color } from "@/theme";
 
 /** Airport marker/glyph colour — steel-blue, dimmer than the aircraft blue so it reads as infrastructure. */
-export const AIRPORT_COLOR = "#7FA6C4";
+export const AIRPORT_COLOR = color.airport;
 
 /** Runway segment colour — a lighter steel so runways sit just above their airport marker's tone. */
-export const RUNWAY_COLOR = "#9FB6CC";
+export const RUNWAY_COLOR = color.runway;
 
 /** MCI glyph for an airport marker (tsc validates the name against the icon-font union at each usage). */
 export const AIRPORT_GLYPH = "airport" as const;

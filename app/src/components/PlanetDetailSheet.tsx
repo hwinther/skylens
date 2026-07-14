@@ -9,6 +9,7 @@
  * hidden once the body dips below the horizon (no `view`), while the static facts keep showing.
  */
 
+import { alpha, color } from "@/theme";
 import { useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import {
@@ -20,9 +21,6 @@ import {
   type PlanetView,
 } from "@/ar";
 import { compass8 } from "./webmap/relative";
-
-// Gold family — matches PlanetLabel; a warm accent distinct from aircraft blue / vessel teal / sat violet.
-const PLANET_GOLD = "#FFCF5C";
 
 export interface PlanetDetailSheetProps {
   /** Selected body key, or null when nothing is selected (keeps the Modal mounted so it can animate). */
@@ -201,7 +199,7 @@ function EventRow({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
   sheet: {
-    backgroundColor: "#0B1622",
+    backgroundColor: color.bg,
     padding: 20,
     paddingBottom: 36,
     borderTopLeftRadius: 18,
@@ -219,34 +217,34 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
   title: { color: "#FBEFD0", fontSize: 20, fontWeight: "700", flexShrink: 1 },
   chip: {
-    backgroundColor: "rgba(255, 207, 92, 0.16)",
-    borderColor: "rgba(255, 207, 92, 0.8)",
+    backgroundColor: alpha(color.entity.sky, 0.16),
+    borderColor: alpha(color.entity.sky, 0.8),
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 6,
     paddingHorizontal: 7,
     paddingVertical: 2,
     marginLeft: "auto",
   },
-  chipText: { color: PLANET_GOLD, fontSize: 11, fontWeight: "700" },
+  chipText: { color: color.entity.sky, fontSize: 11, fontWeight: "700" },
   liveRows: { gap: 2, marginBottom: 8 },
-  belowMask: { color: "#7fa6c4", fontSize: 13, fontStyle: "italic", marginBottom: 8 },
+  belowMask: { color: color.textLabel, fontSize: 13, fontStyle: "italic", marginBottom: 8 },
   eventSection: {
-    borderTopColor: "#16283a",
+    borderTopColor: color.surface2,
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: 8,
     marginBottom: 4,
     gap: 2,
   },
-  eventHeading: { color: PLANET_GOLD, fontSize: 12, fontWeight: "700", textTransform: "uppercase" },
+  eventHeading: { color: color.entity.sky, fontSize: 12, fontWeight: "700", textTransform: "uppercase" },
   eventValue: { color: "#FBEFD0", fontSize: 14, fontWeight: "600" },
-  eventMuted: { color: "#7fa6c4", fontSize: 13, fontStyle: "italic" },
-  eventNote: { color: "#9FC7E0", fontSize: 12, fontStyle: "italic", marginTop: 2 },
+  eventMuted: { color: color.textLabel, fontSize: 13, fontStyle: "italic" },
+  eventNote: { color: color.textDim, fontSize: 12, fontStyle: "italic", marginTop: 2 },
   row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
-  rowLabel: { color: "#7fa6c4", fontSize: 14 },
-  rowValue: { color: "#EAF6FF", fontSize: 14, fontWeight: "500" },
+  rowLabel: { color: color.textLabel, fontSize: 14 },
+  rowValue: { color: color.text, fontSize: 14, fontWeight: "500" },
   scroll: { flexGrow: 0 },
   scrollContent: { paddingTop: 4 },
-  attribution: { color: "#5c7a94", fontSize: 11, marginTop: 12 },
+  attribution: { color: color.textMuted, fontSize: 11, marginTop: 12 },
   close: { marginTop: 16, alignItems: "center" },
-  closeText: { color: PLANET_GOLD, fontSize: 16 },
+  closeText: { color: color.entity.sky, fontSize: 16 },
 });

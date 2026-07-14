@@ -8,6 +8,7 @@
  * those blips separate; targets beyond the ring pin to its edge (dimmed) at their true bearing.
  */
 
+import { alpha, color } from "@/theme";
 import { useEffect, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
@@ -282,7 +283,7 @@ export function AircraftRadar({
                 style={[styles.blip, beyond && styles.blipBeyond, { left: x - 12, top: y - 12 }]}
                 hitSlop={6}
               >
-                <MaterialCommunityIcons name={iconForCategory(a.cat)} size={18} color="rgba(120, 200, 255, 0.95)" />
+                <MaterialCommunityIcons name={iconForCategory(a.cat)} size={18} color={alpha(color.entity.air, 0.95)} />
               </Pressable>
             );
           })}
@@ -353,12 +354,12 @@ export function AircraftRadar({
 
 const styles = StyleSheet.create({
   root: { flex: 1, alignItems: "center", justifyContent: "center", padding: 8 },
-  ring: { position: "absolute", borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(120, 200, 255, 0.28)", pointerEvents: "none" },
-  axis: { position: "absolute", backgroundColor: "rgba(120, 200, 255, 0.18)", pointerEvents: "none" },
-  rangeLabel: { position: "absolute", color: "rgba(159, 199, 224, 0.75)", fontSize: 10, pointerEvents: "none" },
-  cardinal: { position: "absolute", color: "rgba(234, 246, 255, 0.5)", fontSize: 12, fontWeight: "600", pointerEvents: "none" },
-  cardinalPrimary: { color: "rgba(234, 246, 255, 0.9)", fontWeight: "800" },
-  observer: { position: "absolute", width: 8, height: 8, borderRadius: 4, backgroundColor: "#7CFC9A", pointerEvents: "none" },
+  ring: { position: "absolute", borderWidth: StyleSheet.hairlineWidth, borderColor: alpha(color.entity.air, 0.28), pointerEvents: "none" },
+  axis: { position: "absolute", backgroundColor: alpha(color.entity.air, 0.18), pointerEvents: "none" },
+  rangeLabel: { position: "absolute", color: alpha(color.textDim, 0.75), fontSize: 10, pointerEvents: "none" },
+  cardinal: { position: "absolute", color: alpha(color.text, 0.5), fontSize: 12, fontWeight: "600", pointerEvents: "none" },
+  cardinalPrimary: { color: alpha(color.text, 0.9), fontWeight: "800" },
+  observer: { position: "absolute", width: 8, height: 8, borderRadius: 4, backgroundColor: color.status.ok, pointerEvents: "none" },
   blip: { position: "absolute", width: 24, height: 24, alignItems: "center", justifyContent: "center" },
   // Beyond the fixed range: pinned to the outer ring at true bearing, dimmed so it reads as clamped.
   blipBeyond: { opacity: 0.4 },
@@ -378,20 +379,20 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 6,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(120, 200, 255, 0.35)",
+    borderColor: alpha(color.entity.air, 0.35),
     backgroundColor: "rgba(18, 40, 61, 0.55)",
   },
-  rangeChipText: { color: "rgba(159, 199, 224, 0.95)", fontSize: 11, fontWeight: "600" },
+  rangeChipText: { color: alpha(color.textDim, 0.95), fontSize: 11, fontWeight: "600" },
   zoomBtn: {
     width: 30,
     height: 30,
     borderRadius: 6,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(120, 200, 255, 0.35)",
+    borderColor: alpha(color.entity.air, 0.35),
     backgroundColor: "rgba(18, 40, 61, 0.55)",
     alignItems: "center",
     justifyContent: "center",
   },
   zoomBtnDisabled: { opacity: 0.35 },
-  zoomBtnText: { color: "rgba(234, 246, 255, 0.9)", fontSize: 20, fontWeight: "700", lineHeight: 22 },
+  zoomBtnText: { color: alpha(color.text, 0.9), fontSize: 20, fontWeight: "700", lineHeight: 22 },
 });
