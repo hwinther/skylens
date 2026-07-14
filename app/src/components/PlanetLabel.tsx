@@ -8,14 +8,11 @@
  * size (brighter = larger, via planetDotSize) give a quick read of what and how bright before the text.
  */
 
+import { alpha, color } from "@/theme";
 import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { planetDotSize, type PlanetView } from "@/ar";
-
-// Gold family — a warm accent distinct from aircraft blue (#78C8FF), vessel teal (#3FC9B0),
-// satellite violet (#C792EA) and AtoN amber.
-const PLANET_GOLD = "#FFCF5C";
 
 /** MaterialCommunityIcons glyph for each body: sun, moon, or a filled dot for the planets. */
 function glyphForBody(body: string): keyof typeof MaterialCommunityIcons.glyphMap {
@@ -62,7 +59,7 @@ function PlanetLabelBase({ planet, x, y, anchorY, onPress }: PlanetLabelProps) {
             testID={`planet-icon-${planet.body}`}
             name={glyphForBody(planet.body)}
             size={dot}
-            color={PLANET_GOLD}
+            color={color.entity.sky}
             style={styles.icon}
           />
           <Text style={styles.title} numberOfLines={1}>
@@ -85,7 +82,7 @@ const styles = StyleSheet.create({
     transform: [{ translateX: -6 }, { translateY: -6 }],
     // Dark, faintly gold-tinted backing so the sky labels sit apart from the blue/teal/violet chips.
     backgroundColor: "rgba(30, 24, 8, 0.72)",
-    borderColor: "rgba(255, 207, 92, 0.8)",
+    borderColor: alpha(color.entity.sky, 0.8),
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 6,
     paddingHorizontal: 6,
@@ -99,7 +96,7 @@ const styles = StyleSheet.create({
   leader: {
     position: "absolute",
     width: StyleSheet.hairlineWidth,
-    backgroundColor: "rgba(255, 207, 92, 0.5)",
+    backgroundColor: alpha(color.entity.sky, 0.5),
     pointerEvents: "none",
   },
 });

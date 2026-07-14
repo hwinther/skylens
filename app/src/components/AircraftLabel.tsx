@@ -4,6 +4,7 @@
  * overlay). Tapping it opens the detail sheet.
  */
 
+import { alpha, color } from "@/theme";
 import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
@@ -51,7 +52,7 @@ function AircraftLabelBase({ aircraft, x, y, anchorY, rangeKm, onPress }: Aircra
             testID={`ac-icon-${aircraft.hex}`}
             name={iconForCategory(aircraft.cat)}
             size={13}
-            color="rgba(120, 200, 255, 0.95)"
+            color={alpha(color.entity.air, 0.95)}
             style={styles.icon}
           />
           <Text style={styles.title} numberOfLines={1}>
@@ -72,7 +73,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     transform: [{ translateX: -6 }, { translateY: -6 }],
     backgroundColor: "rgba(6, 13, 22, 0.9)",
-    borderColor: "#78C8FF",
+    borderColor: color.entity.air,
     borderWidth: 1,
     borderRadius: 6,
     paddingHorizontal: 6,
@@ -86,12 +87,12 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "rgba(120, 200, 255, 0.95)",
+    backgroundColor: alpha(color.entity.air, 0.95),
   },
   titleRow: { flexDirection: "row", alignItems: "center" },
   icon: { marginRight: 3 },
   title: {
-    color: "#EAF6FF",
+    color: color.text,
     fontSize: 12,
     fontWeight: "600",
     textShadowColor: "rgba(0, 0, 0, 0.9)",
@@ -108,7 +109,7 @@ const styles = StyleSheet.create({
   leader: {
     position: "absolute",
     width: 1,
-    backgroundColor: "rgba(120, 200, 255, 0.7)",
+    backgroundColor: alpha(color.entity.air, 0.7),
     pointerEvents: "none",
   },
 });

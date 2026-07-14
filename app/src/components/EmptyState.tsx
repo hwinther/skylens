@@ -7,6 +7,7 @@
  * Static styling only; safe over the rAF overlay.
  */
 
+import { alpha, color } from "@/theme";
 import type { ComponentProps } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
@@ -34,7 +35,7 @@ export function EmptyState({
       <MaterialCommunityIcons
         name={icon}
         size={compact ? 22 : 30}
-        color="rgba(120, 200, 255, 0.55)"
+        color={alpha(color.entity.air, 0.55)}
       />
       <Text style={styles.title}>{title}</Text>
       {!compact && message ? <Text style={styles.message}>{message}</Text> : null}
@@ -51,14 +52,14 @@ const styles = StyleSheet.create({
   wrap: { alignItems: "center", justifyContent: "center", paddingHorizontal: 32, paddingVertical: 64, gap: 12 },
   compact: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, paddingVertical: 0, gap: 6 },
   title: { color: "#DCEBF7", fontSize: 15, fontWeight: "600", textAlign: "center" },
-  message: { color: "#7FA6C4", fontSize: 13, lineHeight: 19, textAlign: "center", maxWidth: 320 },
+  message: { color: color.textLabel, fontSize: 13, lineHeight: 19, textAlign: "center", maxWidth: 320 },
   action: {
     marginTop: 6,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(120, 200, 255, 0.4)",
+    borderColor: alpha(color.entity.air, 0.4),
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
-  actionText: { color: "#78C8FF", fontSize: 13, fontWeight: "600" },
+  actionText: { color: color.entity.air, fontSize: 13, fontWeight: "600" },
 });

@@ -13,6 +13,7 @@
  * driven by promptAsync independently of the route, so nothing here needs the code/verifier.
  */
 
+import { color } from "@/theme";
 import { useEffect } from "react";
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
@@ -25,7 +26,7 @@ export default function OAuthRedirectScreen() {
 
   return (
     <View style={styles.root}>
-      <ActivityIndicator color="#78C8FF" />
+      <ActivityIndicator color={color.entity.air} />
       <Text style={styles.text}>Completing sign-in…</Text>
     </View>
   );
@@ -34,11 +35,11 @@ export default function OAuthRedirectScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#0B1622",
+    backgroundColor: color.bg,
     alignItems: "center",
     justifyContent: "center",
     gap: 16,
     padding: 24,
   },
-  text: { color: "#9FC7E0", fontSize: 15 },
+  text: { color: color.textDim, fontSize: 15 },
 });

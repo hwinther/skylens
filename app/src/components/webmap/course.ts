@@ -10,6 +10,7 @@
 
 import type { AircraftDto, VesselDto } from "@/api/types";
 import type { LatLngTuple } from "./geojson";
+import { course } from "@/theme";
 
 /** Lead time for aircraft (2 min) — short, because they cover a lot of ground fast. */
 export const AIRCRAFT_LEAD_SECONDS = 120;
@@ -19,9 +20,9 @@ export const SHIP_LEAD_SECONDS = 900;
 export const MIN_COURSE_SPEED_KN = 1;
 
 /** Aircraft leader colour (blue — matches aircraft everywhere). */
-export const AIRCRAFT_COURSE_COLOR = "#78C8FF";
+export const AIRCRAFT_COURSE_COLOR = course.aircraft;
 /** Vessel leader colour (teal — matches vessels everywhere). */
-export const SHIP_COURSE_COLOR = "#3FC9B0";
+export const SHIP_COURSE_COLOR = course.ship;
 
 /** Distance a target covers in `leadSeconds` at `speedKn`, in km (1 knot = 1.852 km/h). */
 export function leadDistanceKm(speedKn: number, leadSeconds: number): number {

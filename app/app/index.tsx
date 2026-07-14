@@ -11,6 +11,7 @@
  * zustand) and is consumed by the overlay's rAF loop.
  */
 
+import { alpha, color } from "@/theme";
 import { useEffect, useMemo, useState } from "react";
 import { ImageBackground, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
@@ -278,7 +279,7 @@ export default function ArScreen() {
       {cameraDenied ? (
         <SafeAreaView edges={["top"]} style={styles.bannerWrap} pointerEvents="box-none">
           <Pressable style={styles.banner} onPress={() => router.push("/settings")} hitSlop={6}>
-            <MaterialCommunityIcons name="camera-off" size={16} color="#FFD37C" />
+            <MaterialCommunityIcons name="camera-off" size={16} color={color.status.warn} />
             <Text style={styles.bannerText}>Camera off — showing synthetic horizon. Tap to enable.</Text>
           </Pressable>
         </SafeAreaView>
@@ -287,7 +288,7 @@ export default function ArScreen() {
       {acquiringFix ? (
         <View style={styles.acquireWrap} pointerEvents="box-none">
           <View style={styles.acquirePill}>
-            <MaterialCommunityIcons name="crosshairs-gps" size={16} color="#78C8FF" />
+            <MaterialCommunityIcons name="crosshairs-gps" size={16} color={color.entity.air} />
             <Text style={styles.acquireText}>Acquiring position…</Text>
           </View>
           <Text style={styles.acquireSub}>Step outside for a clear view of the sky.</Text>
@@ -322,9 +323,9 @@ export default function ArScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#0B1622" },
+  root: { flex: 1, backgroundColor: color.bg },
   top: { position: "absolute", top: 0, left: 0, right: 0, pointerEvents: "box-none" },
-  noCam: { backgroundColor: "#0B1622" },
+  noCam: { backgroundColor: color.bg },
   // Centered iOS "Enable AR" pill — the user gesture that unlocks camera + compass permission.
   enableWrap: {
     position: "absolute",
@@ -336,14 +337,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   enableButton: {
-    backgroundColor: "rgba(11, 22, 34, 0.92)",
-    borderColor: "rgba(120, 200, 255, 0.6)",
+    backgroundColor: alpha(color.bg, 0.92),
+    borderColor: alpha(color.entity.air, 0.6),
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 24,
     paddingHorizontal: 20,
     paddingVertical: 12,
   },
-  enableText: { color: "#EAF6FF", fontSize: 15, fontWeight: "700" },
+  enableText: { color: color.text, fontSize: 15, fontWeight: "700" },
   // Camera-denied banner: sits just under the status strip, routes to Settings.
   bannerWrap: { position: "absolute", top: 0, left: 0, right: 0, alignItems: "center" },
   banner: {
@@ -351,27 +352,27 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "rgba(11, 22, 34, 0.9)",
-    borderColor: "rgba(255, 211, 124, 0.5)",
+    backgroundColor: alpha(color.bg, 0.9),
+    borderColor: alpha(color.status.warn, 0.5),
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
-  bannerText: { color: "#EAF6FF", fontSize: 12, fontWeight: "600" },
+  bannerText: { color: color.text, fontSize: 12, fontWeight: "600" },
   // Acquiring-position hint: centred over the synthetic horizon while waiting for the first GPS fix.
   acquireWrap: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center", gap: 8 },
   acquirePill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "rgba(11, 22, 34, 0.9)",
-    borderColor: "rgba(120, 200, 255, 0.5)",
+    backgroundColor: alpha(color.bg, 0.9),
+    borderColor: alpha(color.entity.air, 0.5),
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
-  acquireText: { color: "#EAF6FF", fontSize: 14, fontWeight: "700" },
-  acquireSub: { color: "#9FC7E0", fontSize: 12 },
+  acquireText: { color: color.text, fontSize: 14, fontWeight: "700" },
+  acquireSub: { color: color.textDim, fontSize: 12 },
 });

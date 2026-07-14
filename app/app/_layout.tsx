@@ -4,6 +4,7 @@
  * (AR / Map / Settings). The sign-in screen is a modal route outside the tabs.
  */
 
+import { color } from "@/theme";
 import { useEffect, useMemo } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -51,9 +52,9 @@ export default function RootLayout() {
         <Tabs
           screenOptions={{
             headerShown: false,
-            tabBarStyle: { backgroundColor: "#0B1622", borderTopColor: "#16283a" },
-            tabBarActiveTintColor: "#78C8FF",
-            tabBarInactiveTintColor: "#5c7a94",
+            tabBarStyle: { backgroundColor: color.bg, borderTopColor: color.surface2 },
+            tabBarActiveTintColor: color.entity.air,
+            tabBarInactiveTintColor: color.textMuted,
           }}
         >
           <Tabs.Screen

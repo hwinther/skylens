@@ -11,6 +11,7 @@
  * `vessel` may be undefined if the target has aged out of the list; the fetched static data still shows.
  */
 
+import { alpha, color } from "@/theme";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -28,7 +29,6 @@ import { aidTypeLabel, formatDimensions, navStatusText } from "./vesselFormat";
 
 // Teal family — matches VesselLabel / iconForVessel; a maritime accent distinct from aircraft blue
 // and satellite violet.
-const VESSEL_TEAL = "#3FC9B0";
 
 export interface VesselDetailSheetProps {
   /** Selected MMSI, or null when nothing is selected (keeps the Modal mounted so it can animate). */
@@ -126,7 +126,7 @@ export function VesselDetailSheet({ mmsi, vessel, onClose }: VesselDetailSheetPr
         </View>
 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-          {loading && <ActivityIndicator color={VESSEL_TEAL} />}
+          {loading && <ActivityIndicator color={color.entity.sea} />}
           {error && <Text style={styles.error}>{error}</Text>}
 
           <View style={styles.section}>
@@ -206,7 +206,7 @@ function Row({ label, value }: { label: string; value: string | null | undefined
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
   sheet: {
-    backgroundColor: "#0B1622",
+    backgroundColor: color.bg,
     padding: 20,
     paddingBottom: 36,
     borderTopLeftRadius: 18,
@@ -224,25 +224,25 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
   title: { color: "#CFF6EE", fontSize: 20, fontWeight: "700", flexShrink: 1 },
   chip: {
-    backgroundColor: "rgba(63, 201, 176, 0.16)",
-    borderColor: "rgba(63, 201, 176, 0.8)",
+    backgroundColor: alpha(color.entity.sea, 0.16),
+    borderColor: alpha(color.entity.sea, 0.8),
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 6,
     paddingHorizontal: 7,
     paddingVertical: 2,
   },
-  chipText: { color: VESSEL_TEAL, fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
+  chipText: { color: color.entity.sea, fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
   flag: { color: "#8FD3C6", fontSize: 12, fontWeight: "700", textTransform: "uppercase" },
-  mmsi: { color: "#7fa6c4", fontSize: 13, fontWeight: "600", marginLeft: "auto" },
+  mmsi: { color: color.textLabel, fontSize: 13, fontWeight: "600", marginLeft: "auto" },
   scroll: { flexGrow: 0 },
   scrollContent: { paddingTop: 2, gap: 12 },
   section: { gap: 2 },
   row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
-  rowLabel: { color: "#7fa6c4", fontSize: 14 },
-  rowValue: { color: "#EAF6FF", fontSize: 14, fontWeight: "500" },
-  error: { color: "#ff8a80", marginVertical: 8 },
-  empty: { color: "#7fa6c4", fontSize: 14, paddingVertical: 8 },
-  attribution: { color: "#5c7a94", fontSize: 11, marginTop: 12 },
+  rowLabel: { color: color.textLabel, fontSize: 14 },
+  rowValue: { color: color.text, fontSize: 14, fontWeight: "500" },
+  error: { color: color.status.error, marginVertical: 8 },
+  empty: { color: color.textLabel, fontSize: 14, paddingVertical: 8 },
+  attribution: { color: color.textMuted, fontSize: 11, marginTop: 12 },
   close: { marginTop: 16, alignItems: "center" },
-  closeText: { color: VESSEL_TEAL, fontSize: 16 },
+  closeText: { color: color.entity.sea, fontSize: 16 },
 });

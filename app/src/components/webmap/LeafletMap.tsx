@@ -4,6 +4,7 @@
  * (which needs the DOM) never reaches the native bundle. Native's Map uses react-native-maps.
  */
 
+import { color } from "@/theme";
 import "leaflet/dist/leaflet.css";
 import { useEffect, useMemo, useRef } from "react";
 import L from "leaflet";
@@ -67,10 +68,6 @@ export interface LeafletMapProps {
   showCourseVectors?: boolean;
 }
 
-// Violet family — matches the satellite label / list / detail sheet, distinct from aircraft blue,
-// vessel teal, and the magenta fishing lines.
-const SAT_VIOLET = "#C792EA";
-
 // Reach the icon-font statics (not in the public types) so Leaflet's raw-HTML markers render the same
 // MaterialCommunityIcons glyphs the radar/list use, instead of a generic shape.
 const iconFont = (MaterialCommunityIcons as unknown as { getFontFamily(): string }).getFontFamily();
@@ -132,7 +129,7 @@ const satelliteIcon: L.DivIcon = (() => {
   const glyph = code != null ? String.fromCodePoint(code) : "";
   return L.divIcon({
     className: "",
-    html: `<span style="font-family:'${iconFont}';font-size:22px;line-height:22px;color:${SAT_VIOLET};text-shadow:0 0 3px #000">${glyph}</span>`,
+    html: `<span style="font-family:'${iconFont}';font-size:22px;line-height:22px;color:${color.entity.orbit};text-shadow:0 0 3px #000">${glyph}</span>`,
     iconSize: [22, 22],
     iconAnchor: [11, 11],
   });
@@ -387,7 +384,7 @@ export function LeafletMap({
         <Polyline
           key={`sat-track-${i}`}
           positions={seg}
-          pathOptions={{ color: SAT_VIOLET, weight: 2.5, opacity: 0.9 }}
+          pathOptions={{ color: color.entity.orbit, weight: 2.5, opacity: 0.9 }}
         />
       ))}
       {trackSubPoint ? (

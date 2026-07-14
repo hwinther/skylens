@@ -4,6 +4,7 @@
  * before the custom-scheme dev build exists. On success it routes back to the AR view.
  */
 
+import { color } from "@/theme";
 import { useEffect } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
@@ -25,7 +26,7 @@ export default function SignInScreen() {
       <Text style={styles.tagline}>Point at the sky. See what&apos;s flying.</Text>
 
       {status === "authenticating" ? (
-        <ActivityIndicator color="#78C8FF" />
+        <ActivityIndicator color={color.entity.air} />
       ) : (
         <Pressable style={styles.button} onPress={() => void signIn()}>
           <Text style={styles.buttonText}>
@@ -45,15 +46,15 @@ export default function SignInScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#0B1622", alignItems: "center", justifyContent: "center", padding: 24 },
-  brand: { color: "#EAF6FF", fontSize: 40, fontWeight: "800", letterSpacing: 1 },
-  tagline: { color: "#9FC7E0", fontSize: 15, marginTop: 8, marginBottom: 40 },
+  root: { flex: 1, backgroundColor: color.bg, alignItems: "center", justifyContent: "center", padding: 24 },
+  brand: { color: color.text, fontSize: 40, fontWeight: "800", letterSpacing: 1 },
+  tagline: { color: color.textDim, fontSize: 15, marginTop: 8, marginBottom: 40 },
   button: {
-    backgroundColor: "#12507a",
+    backgroundColor: color.accentFill,
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 28,
   },
-  buttonText: { color: "#EAF6FF", fontSize: 17, fontWeight: "600" },
-  note: { color: "#5c7a94", fontSize: 12, textAlign: "center", marginTop: 24, maxWidth: 300 },
+  buttonText: { color: color.text, fontSize: 17, fontWeight: "600" },
+  note: { color: color.textMuted, fontSize: 12, textAlign: "center", marginTop: 24, maxWidth: 300 },
 });

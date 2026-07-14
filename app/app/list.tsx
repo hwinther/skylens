@@ -5,6 +5,7 @@
  * AtoN opens its detail sheet; tapping a satellite opens the overhead sheet. Cross-platform (no map deps).
  */
 
+import { color } from "@/theme";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -29,11 +30,6 @@ import { satGroupsFromSettings } from "@/ar";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl, getHomeLocation } from "@/api/config";
 import { DEMO_HOME } from "@/mock/mockFeed";
-
-// Violet family — matches SatelliteLabel / the detail sheet; sets satellites apart from aircraft/ships.
-const SAT_VIOLET = "#C792EA";
-// Gold family — matches the AR planet labels; celestial bodies apart from every other domain's hue.
-const PLANET_GOLD = "#FFCF5C";
 
 export default function ListScreen() {
   const aircraft = useAircraftList();
@@ -136,7 +132,7 @@ export default function ListScreen() {
               onPress={() => setSelectedHex(row.a.hex)}
               style={styles.row}
             >
-              <MaterialCommunityIcons name={iconForCategory(row.a.cat)} size={18} color="#78C8FF" />
+              <MaterialCommunityIcons name={iconForCategory(row.a.cat)} size={18} color={color.entity.air} />
               <Text style={styles.callsign} numberOfLines={1}>
                 {row.a.flight?.trim() || row.a.hex.toUpperCase()}
               </Text>
@@ -187,7 +183,7 @@ export default function ListScreen() {
                 onPress={() => setSelectedNoradId(s.noradId)}
                 style={styles.row}
               >
-                <MaterialCommunityIcons name="satellite-variant" size={18} color={SAT_VIOLET} />
+                <MaterialCommunityIcons name="satellite-variant" size={18} color={color.entity.orbit} />
                 <Text style={styles.callsign} numberOfLines={1}>
                   {s.name.trim() || String(s.noradId)}
                 </Text>
@@ -197,7 +193,7 @@ export default function ListScreen() {
                     testID={`list-sat-eye-${s.noradId}`}
                     name="eye"
                     size={16}
-                    color={SAT_VIOLET}
+                    color={color.entity.orbit}
                   />
                 ) : null}
                 <Text style={styles.meta}>
@@ -232,7 +228,7 @@ export default function ListScreen() {
                 onPress={() => setSelectedPlanet(p.body)}
                 style={styles.row}
               >
-                <MaterialCommunityIcons name="star-four-points" size={18} color={PLANET_GOLD} />
+                <MaterialCommunityIcons name="star-four-points" size={18} color={color.entity.sky} />
                 <Text style={styles.callsign} numberOfLines={1}>
                   {p.name}
                 </Text>
@@ -275,22 +271,22 @@ export default function ListScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#0B1622" },
-  heading: { color: "#EAF6FF", fontSize: 18, fontWeight: "700", paddingHorizontal: 16, paddingVertical: 12 },
+  root: { flex: 1, backgroundColor: color.bg },
+  heading: { color: color.text, fontSize: 18, fontWeight: "700", paddingHorizontal: 16, paddingVertical: 12 },
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     paddingHorizontal: 16,
     paddingVertical: 9,
-    borderBottomColor: "#16283a",
+    borderBottomColor: color.surface2,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  callsign: { color: "#EAF6FF", fontSize: 14, fontWeight: "600", flex: 1 },
+  callsign: { color: color.text, fontSize: 14, fontWeight: "600", flex: 1 },
   marineLabel: { flex: 1, flexDirection: "row", alignItems: "center", gap: 6 },
-  shipName: { color: "#EAF6FF", fontSize: 14, fontWeight: "600", flexShrink: 1 },
-  flag: { color: "#9FC7E0", fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
-  meta: { color: "#9FC7E0", fontSize: 12, minWidth: 74, textAlign: "right" },
+  shipName: { color: color.text, fontSize: 14, fontWeight: "600", flexShrink: 1 },
+  flag: { color: color.textDim, fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
+  meta: { color: color.textDim, fontSize: 12, minWidth: 74, textAlign: "right" },
   satFreq: { color: "#C3A9E0", fontSize: 12, minWidth: 74, textAlign: "right" },
-  emptyLine: { color: "#5C7A94", fontSize: 13, paddingHorizontal: 16, paddingBottom: 12 },
+  emptyLine: { color: color.textMuted, fontSize: 13, paddingHorizontal: 16, paddingBottom: 12 },
 });

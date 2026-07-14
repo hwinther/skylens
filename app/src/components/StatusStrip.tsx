@@ -4,6 +4,7 @@
  * distrust) the overlay at a glance.
  */
 
+import { alpha, color } from "@/theme";
 import { StyleSheet, Text, View } from "react-native";
 import type { ConnectionState, FeedSource } from "@/state/aircraftStore";
 import { CompassCalibration } from "./CompassCalibration";
@@ -18,10 +19,10 @@ export interface StatusStripProps {
 }
 
 const CONNECTION_COLOR: Record<ConnectionState, string> = {
-  connected: "#7CFC9A",
-  connecting: "#FFD37C",
-  reconnecting: "#FFD37C",
-  disconnected: "#FF8A80",
+  connected: color.status.ok,
+  connecting: color.status.warn,
+  reconnecting: color.status.warn,
+  disconnected: color.status.error,
 };
 
 export function StatusStrip({
@@ -34,7 +35,7 @@ export function StatusStrip({
 }: StatusStripProps) {
   const gpsText =
     gpsAccuracyM == null ? "GPS: no fix" : `GPS: ±${Math.round(gpsAccuracyM)} m`;
-  const gpsColor = gpsAccuracyM == null ? "#FF8A80" : gpsAccuracyM <= 15 ? "#7CFC9A" : "#FFD37C";
+  const gpsColor = gpsAccuracyM == null ? color.status.error : gpsAccuracyM <= 15 ? color.status.ok : color.status.warn;
 
   return (
     <View style={styles.strip}>
@@ -69,7 +70,7 @@ function Badge({ label, tone }: { label: string; tone: "ok" | "warn" }) {
 
 const styles = StyleSheet.create({
   strip: {
-    backgroundColor: "rgba(11, 22, 34, 0.82)",
+    backgroundColor: alpha(color.bg, 0.82),
     paddingHorizontal: 12,
     paddingVertical: 8,
     gap: 6,
@@ -80,7 +81,7 @@ const styles = StyleSheet.create({
   gpsWrap: { flexDirection: "row", alignItems: "center" },
   dot: { width: 10, height: 10, borderRadius: 5, marginRight: 6 },
   connText: {
-    color: "#EAF6FF",
+    color: color.text,
     fontSize: 12,
     textTransform: "capitalize",
     textShadowColor: "rgba(0, 0, 0, 0.9)",
@@ -88,15 +89,15 @@ const styles = StyleSheet.create({
     textShadowRadius: 2,
   },
   gpsText: {
-    color: "#EAF6FF",
+    color: color.text,
     fontSize: 12,
     textShadowColor: "rgba(0, 0, 0, 0.9)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
-  count: { color: "#9FC7E0", fontSize: 12 },
+  count: { color: color.textDim, fontSize: 12 },
   badge: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
-  badgeOk: { backgroundColor: "rgba(124, 252, 154, 0.2)" },
+  badgeOk: { backgroundColor: alpha(color.status.ok, 0.2) },
   badgeWarn: { backgroundColor: "rgba(255, 180, 80, 0.25)" },
-  badgeText: { color: "#EAF6FF", fontSize: 11, fontWeight: "700" },
+  badgeText: { color: color.text, fontSize: 11, fontWeight: "700" },
 });

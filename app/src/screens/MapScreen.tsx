@@ -4,6 +4,7 @@
  * Web has no react-native-maps — see MapScreen.web.tsx (Leaflet). The flat list lives in the List tab.
  */
 
+import { alpha, color } from "@/theme";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -58,9 +59,6 @@ import { ApiClient } from "@/api/client";
 import { getApiBaseUrl, getHomeLocation } from "@/api/config";
 import { DEMO_HOME } from "@/mock/mockFeed";
 
-// Violet family — matches the satellite marker / detail sheet; distinct from the other map overlays.
-const SAT_VIOLET = "#C792EA";
-
 /**
  * One aircraft as a top-down airplane icon rotated to its track, laid flat on the map so the nose
  * points where it's heading (MaterialCommunityIcons "airplane" points north at rotation 0).
@@ -92,7 +90,7 @@ function AircraftMarker({
       rotation={a.trk ?? 0}
       tracksViewChanges={tracksViewChanges}
     >
-      <MaterialCommunityIcons name="airplane" size={24} color="#78C8FF" />
+      <MaterialCommunityIcons name="airplane" size={24} color={color.entity.air} />
     </Marker>
   );
 }
@@ -389,14 +387,14 @@ export default function MapScreen() {
               <Polyline
                 key={`sat-track-${i}`}
                 coordinates={toLatLngs(seg.map((p) => [p.lat, p.lon]))}
-                strokeColor={SAT_VIOLET}
+                strokeColor={color.entity.orbit}
                 strokeWidth={2.5}
               />
             ))}
             <Marker
               coordinate={{ latitude: observer.lat, longitude: observer.lon }}
               title="You"
-              pinColor="#78C8FF"
+              pinColor={color.entity.air}
             />
             {positioned.map((a) => (
               <AircraftMarker key={a.hex} aircraft={a} onSelect={setSelectedHex} />
@@ -412,7 +410,7 @@ export default function MapScreen() {
                 onPress={track.clear}
                 anchor={{ x: 0.5, y: 0.5 }}
               >
-                <MaterialCommunityIcons name="satellite-variant" size={24} color={SAT_VIOLET} />
+                <MaterialCommunityIcons name="satellite-variant" size={24} color={color.entity.orbit} />
               </Marker>
             ) : null}
           </MapView>
@@ -443,18 +441,18 @@ export default function MapScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#0B1622" },
+  root: { flex: 1, backgroundColor: color.bg },
   body: { flex: 1 },
   clearTrack: {
     position: "absolute",
     top: 12,
     right: 12,
-    backgroundColor: "rgba(11, 22, 34, 0.9)",
-    borderColor: SAT_VIOLET,
+    backgroundColor: alpha(color.bg, 0.9),
+    borderColor: color.entity.orbit,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
-  clearTrackText: { color: SAT_VIOLET, fontSize: 13, fontWeight: "700" },
+  clearTrackText: { color: color.entity.orbit, fontSize: 13, fontWeight: "700" },
 });
