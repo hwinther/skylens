@@ -26,6 +26,7 @@ import {
   ArOverlay,
   DetailSheet,
   PlanetDetailSheet,
+  RadioDetailSheet,
   SatelliteDetailSheet,
   StatusStrip,
   TrustLegend,
@@ -34,10 +35,11 @@ import {
   useObserverLocation,
   usePlanets,
   usePoseRefs,
+  useRadioSky,
   useSatellites,
 } from "@/components";
 import { airportFilter } from "@/components/webmap/airportStyle";
-import { satGroupsFromSettings } from "@/ar";
+import { RADIO_SOURCES, satGroupsFromSettings } from "@/ar";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
 import { startMockFeed, DEMO_HOME } from "@/mock/mockFeed";
@@ -61,12 +63,14 @@ export default function ArScreen() {
   const satElevationMaskDeg = useSettingsStore((s) => s.satElevationMaskDeg);
   const showPlanets = useSettingsStore((s) => s.showPlanets);
   const showEcliptic = useSettingsStore((s) => s.showEcliptic);
+  const showRadioSky = useSettingsStore((s) => s.showRadioSky);
   const showAirports = useSettingsStore((s) => s.showAirports);
   const showSmallAirfields = useSettingsStore((s) => s.showSmallAirfields);
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
   const [selectedPlanet, setSelectedPlanet] = useState<string | null>(null);
+  const [selectedRadioKey, setSelectedRadioKey] = useState<string | null>(null);
   const [selectedAirportIdent, setSelectedAirportIdent] = useState<string | null>(null);
   // Selected satellite for the Phase 5 detail sheet. Captured now so the overlay's tap wiring is
   // complete; the sheet itself mounts in Phase 5 (see the placeholder near <DetailSheet/> below).
@@ -124,6 +128,13 @@ export default function ArScreen() {
   const planetHook = usePlanets({
     observer: demoMode ? DEMO_HOME : observer,
     enabled: showPlanets || showEcliptic,
+  });
+
+  // Radio-astronomy targets are the same pure on-device astronomy (no hub, no network) — run in demo
+  // and live alike, gated only on the niche power-user toggle.
+  const radioHook = useRadioSky({
+    observer: demoMode ? DEMO_HOME : observer,
+    enabled: showRadioSky,
   });
 
   // Airports render in both demo and live (static reference data, independent of the hub), gated only on
@@ -206,6 +217,9 @@ export default function ArScreen() {
       ecliptic={planetHook.ecliptic}
       showEcliptic={showEcliptic}
       onSelectPlanet={setSelectedPlanet}
+      radioTargets={radioHook.visible}
+      showRadioSky={showRadioSky}
+      onSelectRadio={setSelectedRadioKey}
       airports={shownAirports}
       showAirports={showAirports}
       onSelectAirport={setSelectedAirportIdent}
@@ -312,6 +326,17 @@ export default function ArScreen() {
         view={selectedPlanet != null ? planetHook.byBody.get(selectedPlanet) : undefined}
         observer={demoMode ? DEMO_HOME : observer}
         onClose={() => setSelectedPlanet(null)}
+      />
+      <RadioDetailSheet
+        sourceKey={selectedRadioKey}
+        view={selectedRadioKey != null ? radioHook.byKey.get(selectedRadioKey) : undefined}
+        source={
+          selectedRadioKey != null
+            ? RADIO_SOURCES.find((s) => s.key === selectedRadioKey)
+            : undefined
+        }
+        observer={demoMode ? DEMO_HOME : observer}
+        onClose={() => setSelectedRadioKey(null)}
       />
       <AirportDetailSheet
         ident={selectedAirportIdent}

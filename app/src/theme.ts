@@ -32,6 +32,7 @@ export const color = {
     sea: "#3FC9B0",
     orbit: "#C792EA", // was SAT_VIOLET, ×6 files
     sky: "#FFCF5C", // was PLANET_GOLD, ×3 files
+    radio: "#B6E14E", // signal-lime — fixed radio-astronomy sources (hydrogen line)
   },
 
   // Vessel class palette (from vesselIcon.ts)
@@ -91,4 +92,5 @@ export const entityShape = {
   sea: "square",
   orbit: "diamond",
   sky: "triangle",
+  radio: "cross", // radio antenna crosshair
 } as const;

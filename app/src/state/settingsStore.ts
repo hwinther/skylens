@@ -48,6 +48,8 @@ interface SettingsState {
   showPlanets: boolean;
   /** Draw the faint ecliptic arc across the AR sky (the Sun's path / the plane the planets hug). */
   showEcliptic: boolean;
+  /** Draw the fixed radio-astronomy sources (Sgr A*, Cas A, Cyg A, Tau A) in the AR sky + Radio list. */
+  showRadioSky: boolean;
   /** Draw fishing-regulation zones (cod boundaries / forbidden / zero areas) on the geographic map. */
   showFishingZones: boolean;
   /** Draw reported lost/ghost fishing-gear points on the geographic map. */
@@ -75,6 +77,7 @@ interface SettingsState {
   setSatElevationMaskDeg: (deg: number) => void;
   setShowPlanets: (on: boolean) => void;
   setShowEcliptic: (on: boolean) => void;
+  setShowRadioSky: (on: boolean) => void;
   setShowFishingZones: (on: boolean) => void;
   setShowLostGear: (on: boolean) => void;
   setOnboarded: (on: boolean) => void;
@@ -135,6 +138,8 @@ export const useSettingsStore = create<SettingsState>()(
       // subtler power-user overlay, so it stays opt-in.
       showPlanets: true,
       showEcliptic: false,
+      // Radio-astronomy targets are a niche SDR power-user layer (invisible to the eye), so opt-in.
+      showRadioSky: false,
       // Fishing overlays are opt-in — they only make sense over the fjord/coast map view, so default off.
       showFishingZones: false,
       showLostGear: false,
@@ -160,6 +165,7 @@ export const useSettingsStore = create<SettingsState>()(
       setOnboarded: (onboarded) => set({ onboarded }),
       setShowPlanets: (showPlanets) => set({ showPlanets }),
       setShowEcliptic: (showEcliptic) => set({ showEcliptic }),
+      setShowRadioSky: (showRadioSky) => set({ showRadioSky }),
     }),
     {
       name: "skylens.settings.v1",
