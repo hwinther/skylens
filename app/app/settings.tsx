@@ -47,6 +47,7 @@ export default function SettingsScreen() {
     showPlanets,
     showEcliptic,
     showRadioSky,
+    showSkyEvents,
     setAzimuthTrim,
     setHFov,
     setRadiusKm,
@@ -66,6 +67,7 @@ export default function SettingsScreen() {
     setShowPlanets,
     setShowEcliptic,
     setShowRadioSky,
+    setShowSkyEvents,
   } = useSettingsStore();
   const status = useAuthStore((s) => s.status);
   const mockMode = useAuthStore((s) => s.mockMode);
@@ -230,10 +232,18 @@ export default function SettingsScreen() {
               onValueChange={setShowRadioSky}
             />
           </Row>
+          <Row label="Upcoming sky events">
+            <Switch
+              testID="settings-show-sky-events"
+              value={showSkyEvents}
+              onValueChange={setShowSkyEvents}
+            />
+          </Row>
           <Text style={styles.hint}>
             Sun, Moon and the naked-eye planets in the AR sky, plus the ecliptic — the arc they all
             ride. Radio sky adds the fixed hydrogen-line targets (Sgr A*, Cas A, Cyg A, Tau A) for SDR
-            observing. Computed on-device; no network needed.
+            observing. Upcoming lists the next equinox, eclipses, oppositions and supermoons. Computed
+            on-device; no network needed.
           </Text>
         </Section>
         </Group>
