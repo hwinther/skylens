@@ -8,4 +8,7 @@ export * from "./declutter";
 export * from "./surfaceBand";
 export * from "./satellites";
 export * from "./planets";
+// Selective: moon.ts also exports SPEED_OF_LIGHT_KM_S (identical value), already surfaced by ./satellites —
+// re-export only the EME-specific names to avoid a duplicate-export clash through the barrel.
+export { moonEmeInfo, MEAN_MOON_DISTANCE_KM, type MoonEmeInfo } from "./moon";
 export * from "./visibility";

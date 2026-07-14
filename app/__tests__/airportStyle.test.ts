@@ -11,6 +11,7 @@ import {
   airportArPriority,
   airportFilter,
   airportGlyphSize,
+  airportShortLabel,
   airportSubtitle,
   airportTitle,
   airportTypeLabel,
@@ -85,6 +86,35 @@ describe("airportTitle", () => {
 
   it("falls back to the ident when the name is blank", () => {
     expect(airportTitle(airport({ name: "  " }))).toBe("ENCN");
+  });
+});
+
+describe("airportShortLabel", () => {
+  it("uses an ICAO/IATA-shaped ident as-is", () => {
+    expect(airportShortLabel(airport({ ident: "ENGM" }))).toBe("ENGM");
+    expect(airportShortLabel(airport({ ident: "KRS" }))).toBe("KRS");
+  });
+
+  it("falls back to the IATA code when the ident isn't a real code", () => {
+    expect(airportShortLabel(airport({ ident: "NO-0085", iata: "XYZ" }))).toBe("XYZ");
+  });
+
+  it("falls back to the name's first word for a code-less community field", () => {
+    expect(
+      airportShortLabel(
+        airport({ ident: "NO-0003", iata: null, name: "Kilen Seaplane Base" }),
+      ),
+    ).toBe("Kilen");
+  });
+
+  it("strips a trailing comma off the first word", () => {
+    expect(
+      airportShortLabel(airport({ ident: "NO-0004", iata: null, name: "Sørkjosen, Nord-Troms" })),
+    ).toBe("Sørkjosen");
+  });
+
+  it("falls back to the bare ident when nothing else is usable", () => {
+    expect(airportShortLabel(airport({ ident: "NO-0009", iata: null, name: "  " }))).toBe("NO-0009");
   });
 });
 

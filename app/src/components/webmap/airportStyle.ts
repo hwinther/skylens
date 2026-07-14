@@ -67,6 +67,21 @@ export function airportTitle(a: AirportDto): string {
   return a.name?.trim() || a.ident;
 }
 
+/**
+ * Compact label for the AR / radar surfaces: prefer a real ICAO/IATA code, but community fields that
+ * lack one carry a synthetic ident like "NO-0003" — useless as a label — so fall back to the IATA code,
+ * then to the first word of the name ("Kilen Seaplane Base" → "Kilen"), and only to the raw ident as a
+ * last resort. The detail sheet keeps the full name via `airportTitle`; this is the space-tight glyph text.
+ */
+export function airportShortLabel(a: AirportDto): string {
+  if (/^[A-Z]{3,4}$/.test(a.ident)) return a.ident;
+  const iata = a.iata?.trim();
+  if (iata) return iata;
+  const name = a.name?.trim();
+  if (name) return name.split(/\s+/)[0].replace(/,$/, "");
+  return a.ident;
+}
+
 /** Marker line 2 (subtitle): "ICAO · IATA · municipality" — whichever are present. */
 export function airportSubtitle(a: AirportDto): string | undefined {
   const parts = [a.ident, a.iata?.trim() || null, a.municipality?.trim() || null].filter(Boolean);

@@ -31,6 +31,10 @@ import {
 } from "astronomy-engine";
 import { normalizeAzimuth } from "./geo";
 
+// Re-export the astronomy-engine Body enum so UI (e.g. the detail sheet) can compare bodyForKey(...) ===
+// Body.Moon without reaching into astronomy-engine directly.
+export { Body } from "astronomy-engine";
+
 /**
  * Elevation mask (deg) for the sky pass: bodies below this above the horizon are hidden. Kept at 0 so
  * a planet just clearing the horizon still shows (astronomy-engine's "normal" refraction already lifts
