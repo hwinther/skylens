@@ -6,7 +6,8 @@
 
 import { alpha, color } from "@/theme";
 import { textHalo } from "./textHalo";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { ConnectionState, FeedSource } from "@/state/aircraftStore";
 import { CompassCalibration } from "./CompassCalibration";
 
@@ -17,6 +18,8 @@ export interface StatusStripProps {
   source: FeedSource;
   connection: ConnectionState;
   aircraftCount: number;
+  /** Optional: when provided, an info glyph on the top row opens the trust-indicator legend. */
+  onInfo?: () => void;
 }
 
 const CONNECTION_COLOR: Record<ConnectionState, string> = {
@@ -33,6 +36,7 @@ export function StatusStrip({
   source,
   connection,
   aircraftCount,
+  onInfo,
 }: StatusStripProps) {
   const gpsText =
     gpsAccuracyM == null ? "GPS: no fix" : `GPS: ±${Math.round(gpsAccuracyM)} m`;
@@ -49,6 +53,11 @@ export function StatusStrip({
         <Text testID="status-aircraft-count" style={styles.count}>
           {aircraftCount} ac
         </Text>
+        {onInfo ? (
+          <Pressable onPress={onInfo} hitSlop={8} testID="status-info">
+            <MaterialCommunityIcons name="information-outline" size={16} color={color.textDim} />
+          </Pressable>
+        ) : null}
       </View>
       <View style={styles.rowBottom}>
         <View style={styles.gpsWrap}>

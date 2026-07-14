@@ -9,7 +9,7 @@ import { useEffect, useMemo } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { Tabs } from "expo-router";
+import { router, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
 import { hydrateTokens } from "@/auth/tokenStore";
@@ -27,6 +27,8 @@ export default function RootLayout() {
   const setStatus = useAuthStore((s) => s.setStatus);
   const demoMode = useSettingsStore((s) => s.demoMode);
   const radiusKm = useSettingsStore((s) => s.radiusKm);
+  const onboarded = useSettingsStore((s) => s.onboarded);
+  const hydrated = useSettingsStore((s) => s._hydrated);
   const baseUrl = useMemo(() => getApiBaseUrl(), []);
   // Baked home coords when present, else a one-shot device/browser geolocation fix. The
   // container/preview web bundles bake no coordinates, so without the geolocation fallback the
@@ -44,6 +46,12 @@ export default function RootLayout() {
       setStatus(tokens ? "authenticated" : "unauthenticated");
     })();
   }, [setStatus]);
+
+  // One-time onboarding: route to it once persisted settings have hydrated and the user hasn't been
+  // through it. Waiting on `hydrated` is what stops the intro flashing for returning users.
+  useEffect(() => {
+    if (hydrated && !onboarded) router.replace("/onboarding");
+  }, [hydrated, onboarded]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -95,6 +103,7 @@ export default function RootLayout() {
           />
           <Tabs.Screen name="sign-in" options={{ href: null }} />
           <Tabs.Screen name="oauth" options={{ href: null }} />
+          <Tabs.Screen name="onboarding" options={{ href: null }} />
         </Tabs>
       </SafeAreaProvider>
     </GestureHandlerRootView>
