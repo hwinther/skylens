@@ -92,7 +92,7 @@ function AircraftMarker({
       rotation={a.trk ?? 0}
       tracksViewChanges={tracksViewChanges}
     >
-      <MaterialCommunityIcons name="airplane" size={24} color="#FFB450" />
+      <MaterialCommunityIcons name="airplane" size={24} color="#78C8FF" />
     </Marker>
   );
 }
