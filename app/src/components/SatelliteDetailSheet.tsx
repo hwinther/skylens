@@ -32,6 +32,7 @@ import {
   formatFrequencyHz,
   formatPassDuration,
   nextPass,
+  passVisibility,
   type Observer,
   type SatelliteView,
 } from "@/ar";
@@ -122,12 +123,19 @@ export function SatelliteDetailSheet({
   // Predict the next pass once per detail load (keyed on the satellite + observer + mask, NOT per
   // render): build a satrec straight from the verbatim OMM and scan it client-side. `new Date()` is
   // captured here so the AOS/LOS times are fixed for this open; only the countdown ticks (via nowMs).
-  const pass = useMemo(() => {
+  const passInfo = useMemo(() => {
     if (!detail || !observer) return null;
     const satrec = buildSatrec(detail.satellite.omm);
     if (!satrec) return null;
-    return nextPass(satrec, observer, new Date(), maskDeg);
+    const p = nextPass(satrec, observer, new Date(), maskDeg);
+    if (!p) return null;
+    // Naked-eye visibility of THIS pass, computed once alongside the prediction (same satrec, kept off the
+    // render hot path): the sub-window where the satellite is sunlit AND the observer's sky is dark.
+    const visibility = passVisibility({ satrec, observer, pass: p, elevationMaskDeg: maskDeg });
+    return { pass: p, visibility };
   }, [detail, observer, maskDeg]);
+  const pass = passInfo?.pass ?? null;
+  const visibility = passInfo?.visibility ?? null;
 
   // Identity: prefer the live view, fall back to the fetched static satellite, then the bare id.
   const name = view?.name?.trim() || detail?.satellite.name?.trim() || String(noradId ?? "");
@@ -197,6 +205,13 @@ export function SatelliteDetailSheet({
               </Text>
             </>
           )}
+          {visibility?.visible ? (
+            <Text testID="sat-visible-badge" style={styles.visibleBadge}>
+              {visibility.visibleStart && visibility.visibleEnd
+                ? `👁 visible ${passClock(visibility.visibleStart)}–${passClock(visibility.visibleEnd)}`
+                : "👁 visible"}
+            </Text>
+          ) : null}
         </View>
 
         {noradId != null ? (
@@ -317,6 +332,21 @@ const styles = StyleSheet.create({
   passLine: { color: "#EDE3FA", fontSize: 14, fontWeight: "600" },
   passSub: { color: "#9FC7E0", fontSize: 12 },
   passMuted: { color: "#7fa6c4", fontSize: 13, fontStyle: "italic" },
+  // "👁 visible" pill — violet family like the group chip; the naked-eye "look up" cue for a visible pass.
+  visibleBadge: {
+    alignSelf: "flex-start",
+    marginTop: 4,
+    color: SAT_VIOLET,
+    fontSize: 12,
+    fontWeight: "700",
+    backgroundColor: "rgba(199, 146, 234, 0.16)",
+    borderColor: SAT_VIOLET,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    overflow: "hidden",
+  },
   trackButton: {
     marginTop: 12,
     alignItems: "center",

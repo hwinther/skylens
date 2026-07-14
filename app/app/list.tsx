@@ -176,6 +176,15 @@ export default function ListScreen() {
                 <Text style={styles.callsign} numberOfLines={1}>
                   {s.name.trim() || String(s.noradId)}
                 </Text>
+                {s.visibleNow ? (
+                  // Sunlit right now over a dark sky — the "look up, you can see it" cue (see visibility.ts).
+                  <MaterialCommunityIcons
+                    testID={`list-sat-eye-${s.noradId}`}
+                    name="eye"
+                    size={16}
+                    color={SAT_VIOLET}
+                  />
+                ) : null}
                 <Text style={styles.meta}>
                   {Math.round(s.elevationDeg)}° {compass8(s.azimuthDeg)}
                 </Text>
