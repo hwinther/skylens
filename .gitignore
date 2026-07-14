@@ -42,6 +42,7 @@ Thumbs.db
 .env
 .env.*
 !.env.sample
+firmware/rotator-esp32/secrets.h
 *.keystore
 !debug.keystore
 

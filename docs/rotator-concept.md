@@ -96,9 +96,24 @@ Worth doing on the SDR side regardless:
    (`rotctld -m 1`); "Track" button + status in skylens; pass-follow logic incl. flip/keyhole and
    deadband, fully testable with zero hardware. Deliverable: watch the simulated dish follow an ISS
    pass end-to-end from the app.
-3. **Phase 2 — build:** SatNOGS v3 (or chosen alternative), bench-calibrate, mount, true-north +
+3. **Phase 1.5 — servo pan-tilt prototype (already-owned hobby servos, ~$0):** the classic
+   HC-SR04/camera pan-tilt bracket + an ESP32 running the rotctld-subset firmware in
+   **`firmware/rotator-esp32/`** (WiFi TCP :4533, `P az el` / `p` / `S` / `K`, slew-rate limiting,
+   idle detach, mDNS `rotator.local`) — the Phase-1 tracker service (or Gpredict, today) drives it
+   UNCHANGED; only the last inch of hardware is toy-grade.
+   - Payload: a laser pointer or phone camera first — visually track the Moon, a dusk ISS pass, or
+     aircraft on approach (an ADS-B-driven plane-following camera is a great artifact on its own);
+     a small L-band patch (~50–100 g) later.
+   - **Full-sky trick:** 180° pan + 0–180° tilt covers the whole hemisphere (anything behind =
+     az−180°, el flipped past 90°) — which forces exactly the flip-mode code the real rotator
+     needs for keyhole passes anyway. Building the toy debugs the real control loop.
+   - Speed is trivial (LEO peaks ~1°/s across the sky; hobby servos do 60°/0.15 s). Slop of
+     1–3° is fine vs real antenna beamwidths (even a 1 m dish at 1.7 GHz has a ~12° beam).
+     Limits: no dish/yagi mass (SG90 ≈ 1.8 kg·cm, MG996R ≈ 10 kg·cm), indoor/balcony use, servo
+     jitter when holding position — all acceptable for validating math + calibration end-to-end.
+4. **Phase 2 — build:** SatNOGS v3 (or chosen alternative), bench-calibrate, mount, true-north +
    level calibration, dry-track passes and verify against the AR view (phone and dish should agree).
-4. **Phase 3 — receive chain:** 137 MHz omni first (proves SDR pipeline), then L-band dish + LNA
+5. **Phase 3 — receive chain:** 137 MHz omni first (proves SDR pipeline), then L-band dish + LNA
    for HRPT; rigctld Doppler tuning; automated pass recording (cron on the pass predictions —
    effectively a private SatNOGS station).
 
