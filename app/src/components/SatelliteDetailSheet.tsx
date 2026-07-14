@@ -12,15 +12,8 @@
 
 import { alpha, color } from "@/theme";
 import { useEffect, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Sheet } from "./Sheet";
 import { useRouter } from "expo-router";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
@@ -141,11 +134,7 @@ export function SatelliteDetailSheet({
   const transmitters = detail ? sortTransmitters(detail.transmitters) : [];
 
   return (
-    <Modal visible={noradId != null} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={styles.sheet}>
-        <View style={styles.handle} />
-
+    <Sheet visible={noradId != null} onClose={onClose} accent={color.entity.orbit} maxHeightPct={82}>
         <View style={styles.header}>
           <Text testID="sat-detail-title" style={styles.title} numberOfLines={1}>
             {name}
@@ -270,11 +259,7 @@ export function SatelliteDetailSheet({
         <Text style={styles.attribution}>
           Transmitters: SatNOGS DB (CC BY-SA) · Orbits: CelesTrak
         </Text>
-        <Pressable style={styles.close} onPress={onClose}>
-          <Text style={styles.closeText}>Close</Text>
-        </Pressable>
-      </View>
-    </Modal>
+    </Sheet>
   );
 }
 
@@ -288,23 +273,6 @@ function LiveRow({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
-  sheet: {
-    backgroundColor: color.bg,
-    padding: 20,
-    paddingBottom: 36,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-    maxHeight: "82%",
-  },
-  handle: {
-    alignSelf: "center",
-    width: 44,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#33506b",
-    marginBottom: 12,
-  },
   header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
   title: { color: "#EDE3FA", fontSize: 20, fontWeight: "700", flexShrink: 1 },
   chip: {
@@ -377,6 +345,4 @@ const styles = StyleSheet.create({
   error: { color: color.status.error, marginVertical: 8 },
   empty: { color: color.textLabel, fontSize: 14, paddingVertical: 8 },
   attribution: { color: color.textMuted, fontSize: 11, marginTop: 12 },
-  close: { marginTop: 16, alignItems: "center" },
-  closeText: { color: color.entity.orbit, fontSize: 16 },
 });

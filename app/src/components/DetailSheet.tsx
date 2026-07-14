@@ -7,14 +7,8 @@
 
 import { color } from "@/theme";
 import { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { Sheet } from "./Sheet";
 import type { ApiClient } from "@/api/client";
 import type { AircraftDetail, RouteResponse } from "@/api/types";
 
@@ -70,10 +64,7 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
   };
 
   return (
-    <Modal visible={!!hex} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={styles.sheet}>
-        <View style={styles.handle} />
+    <Sheet visible={!!hex} onClose={onClose} accent={color.entity.air}>
         {loading && <ActivityIndicator color={color.entity.air} />}
         {error && <Text style={styles.error}>{error}</Text>}
         {detail && (
@@ -117,11 +108,7 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
             )}
           </>
         )}
-        <Pressable style={styles.close} onPress={onClose}>
-          <Text style={styles.closeText}>Close</Text>
-        </Pressable>
-      </View>
-    </Modal>
+    </Sheet>
   );
 }
 
@@ -135,22 +122,6 @@ function Row({ label, value }: { label: string; value: string | null | undefined
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
-  sheet: {
-    backgroundColor: color.bg,
-    padding: 20,
-    paddingBottom: 36,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-  },
-  handle: {
-    alignSelf: "center",
-    width: 44,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#33506b",
-    marginBottom: 12,
-  },
   title: { color: color.text, fontSize: 20, fontWeight: "700", marginBottom: 12 },
   row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
   rowLabel: { color: color.textLabel, fontSize: 14 },
@@ -167,6 +138,4 @@ const styles = StyleSheet.create({
   route: { marginTop: 12 },
   routeText: { color: color.text, fontSize: 16, fontWeight: "600" },
   routeSub: { color: color.textDim, fontSize: 12, marginTop: 2 },
-  close: { marginTop: 20, alignItems: "center" },
-  closeText: { color: color.entity.air, fontSize: 16 },
 });

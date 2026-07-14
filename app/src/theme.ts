@@ -69,6 +69,10 @@ export const color = {
   // Airport reference (from airportStyle.ts — the canonical home for these consts)
   airport: "#7FA6C4", // AIRPORT_COLOR — steel-blue infrastructure (same hex as textLabel, kept distinct semantically)
   runway: "#9FB6CC", // RUNWAY_COLOR — a lighter steel above the airport marker's tone
+
+  // Modal / detail-sheet chrome
+  scrim: "rgba(0, 0, 0, 0.4)", // modal/sheet backdrop
+  handle: "#33506B", // drag handle (was hardcoded in all four detail sheets)
 } as const;
 
 /** Course-vector (velocity-leader) colours — reference entity hues so they can't drift. */

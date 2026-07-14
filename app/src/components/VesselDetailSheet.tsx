@@ -13,15 +13,8 @@
 
 import { alpha, color } from "@/theme";
 import { useEffect, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Sheet } from "./Sheet";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
 import type { VesselDetail, VesselDto } from "@/api/types";
@@ -109,11 +102,7 @@ export function VesselDetailSheet({ mmsi, vessel, onClose }: VesselDetailSheetPr
     .join(" · ");
 
   return (
-    <Modal visible={mmsi != null} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={styles.sheet}>
-        <View style={styles.handle} />
-
+    <Sheet visible={mmsi != null} onClose={onClose} accent={color.entity.sea} maxHeightPct={82}>
         <View style={styles.header}>
           <Text testID="vessel-detail-title" style={styles.title} numberOfLines={1}>
             {name}
@@ -186,11 +175,7 @@ export function VesselDetailSheet({ mmsi, vessel, onClose }: VesselDetailSheetPr
         </ScrollView>
 
         <Text style={styles.attribution}>{attribution}</Text>
-        <Pressable style={styles.close} onPress={onClose}>
-          <Text style={styles.closeText}>Close</Text>
-        </Pressable>
-      </View>
-    </Modal>
+    </Sheet>
   );
 }
 
@@ -204,23 +189,6 @@ function Row({ label, value }: { label: string; value: string | null | undefined
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
-  sheet: {
-    backgroundColor: color.bg,
-    padding: 20,
-    paddingBottom: 36,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-    maxHeight: "82%",
-  },
-  handle: {
-    alignSelf: "center",
-    width: 44,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#33506b",
-    marginBottom: 12,
-  },
   header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
   title: { color: "#CFF6EE", fontSize: 20, fontWeight: "700", flexShrink: 1 },
   chip: {
@@ -243,6 +211,4 @@ const styles = StyleSheet.create({
   error: { color: color.status.error, marginVertical: 8 },
   empty: { color: color.textLabel, fontSize: 14, paddingVertical: 8 },
   attribution: { color: color.textMuted, fontSize: 11, marginTop: 12 },
-  close: { marginTop: 16, alignItems: "center" },
-  closeText: { color: color.entity.sea, fontSize: 16 },
 });

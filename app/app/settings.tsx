@@ -5,8 +5,8 @@
  * to avoid an extra native dependency; the values feed straight into the AR pipeline.
  */
 
-import { color } from "@/theme";
-import { useEffect, useMemo, useState } from "react";
+import { alpha, color } from "@/theme";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
@@ -16,6 +16,9 @@ import { useAuth } from "@/auth/useAuth";
 import { DEFAULT_HFOV_DEG } from "@/ar/projection";
 import { ApiClient, getApiBaseUrl } from "@/api";
 import { getVersionLine } from "@/lib/version";
+
+/** Common subscription radii offered as one-tap presets on the Radius stepper. */
+const RADIUS_PRESETS = [30, 60, 100, 250] as const;
 
 /** Backend build info fetch state for the About section. */
 type BackendState =
@@ -254,6 +257,7 @@ export default function SettingsScreen() {
             min={10}
             max={400}
             onChange={setRadiusKm}
+            presets={RADIUS_PRESETS}
           />
         </Section>
 
@@ -383,6 +387,7 @@ function Stepper({
   max,
   onChange,
   hint,
+  presets,
 }: {
   label: string;
   value: number;
@@ -392,8 +397,42 @@ function Stepper({
   max: number;
   onChange: (v: number) => void;
   hint?: string;
+  presets?: readonly number[];
 }) {
   const clamp = (v: number) => Math.max(min, Math.min(max, v));
+  // Press-and-hold to repeat. The interval reads the latest value from a ref (a captured `value` would
+  // go stale), steps every 120 ms, and stops on release or once it hits min/max.
+  const valueRef = useRef(value);
+  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stop = () => {
+    if (timer.current) {
+      clearInterval(timer.current);
+      timer.current = null;
+    }
+  };
+  const startRepeat = (dir: number) => {
+    onChange(clamp(value + dir * step)); // immediate first step, so a plain tap still steps once
+    stop();
+    timer.current = setInterval(() => {
+      const next = clamp(valueRef.current + dir * step);
+      if (next === valueRef.current) {
+        stop(); // reached the bound
+        return;
+      }
+      onChange(next);
+    }, 120);
+  };
+  // Keep the ref fresh for the repeat interval (writing it in render trips react-hooks/refs).
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
+  useEffect(
+    () => () => {
+      if (timer.current) clearInterval(timer.current);
+    },
+    [],
+  );
+
   return (
     <View style={styles.stepper}>
       <View style={styles.stepperHead}>
@@ -401,17 +440,35 @@ function Stepper({
         {hint && <Text style={styles.hint}>{hint}</Text>}
       </View>
       <View style={styles.stepperControls}>
-        <Pressable style={styles.stepBtn} onPress={() => onChange(clamp(value - step))}>
+        <Pressable style={styles.stepBtn} onPressIn={() => startRepeat(-1)} onPressOut={stop}>
           <Text style={styles.stepBtnText}>−</Text>
         </Pressable>
         <Text style={styles.stepValue}>
           {value}
           {unit}
         </Text>
-        <Pressable style={styles.stepBtn} onPress={() => onChange(clamp(value + step))}>
+        <Pressable style={styles.stepBtn} onPressIn={() => startRepeat(1)} onPressOut={stop}>
           <Text style={styles.stepBtnText}>+</Text>
         </Pressable>
       </View>
+      {presets ? (
+        <View style={styles.presetRow}>
+          {presets.map((p) => {
+            const active = value === p;
+            return (
+              <Pressable
+                key={p}
+                style={[styles.presetChip, active && styles.presetChipActive]}
+                onPress={() => onChange(clamp(p))}
+              >
+                <Text style={[styles.presetChipText, active && styles.presetChipTextActive]}>
+                  {p}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -475,6 +532,18 @@ const styles = StyleSheet.create({
   },
   stepBtnText: { color: color.text, fontSize: 22, fontWeight: "600" },
   stepValue: { color: color.text, fontSize: 18, fontWeight: "600", minWidth: 90, textAlign: "center" },
+  presetRow: { flexDirection: "row", gap: 8, marginTop: 4 },
+  presetChip: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: alpha(color.entity.air, 0.35),
+  },
+  presetChipActive: { backgroundColor: color.accentFill, borderColor: color.accentFill },
+  presetChipText: { color: color.textDim, fontSize: 13, fontWeight: "600" },
+  presetChipTextActive: { color: color.text },
   button: {
     backgroundColor: color.accentFill,
     borderRadius: 10,
