@@ -5,14 +5,15 @@
  * (a Pressable that opens the airport detail sheet) — but is deliberately dimmer and smaller: airports
  * are fixed infrastructure laid *under* the live traffic, not a target you're tracking. Its steel-blue
  * family (matching the map markers / detail sheet) sets it apart from the aircraft blue, vessel teal and
- * satellite violet. The title is just the ident (e.g. "ENGM") — the roomier detail sheet carries the rest.
+ * satellite violet. The title is the compact `airportShortLabel` (ICAO/IATA code, else the name's first
+ * word for code-less community fields) — the roomier detail sheet carries the rest.
  */
 
 import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { AirportDto } from "@/api/types";
-import { AIRPORT_COLOR, AIRPORT_GLYPH } from "./webmap/airportStyle";
+import { AIRPORT_COLOR, AIRPORT_GLYPH, airportShortLabel } from "./webmap/airportStyle";
 
 export interface AirportArLabelProps {
   airport: AirportDto;
@@ -53,7 +54,7 @@ function AirportArLabelBase({ airport, x, y, anchorY, onPress }: AirportArLabelP
           style={styles.icon}
         />
         <Text style={styles.title} numberOfLines={1}>
-          {airport.ident}
+          {airportShortLabel(airport)}
         </Text>
       </Pressable>
     </>

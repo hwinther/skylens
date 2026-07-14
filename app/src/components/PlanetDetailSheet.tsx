@@ -12,7 +12,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import {
+  Body,
   bodyForKey,
+  moonEmeInfo,
   nextPlanetEvents,
   type PlanetObserver,
   type PlanetView,
@@ -37,6 +39,11 @@ function eventClock(d: Date): string {
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+/** Short local calendar date for an event days away, e.g. "Jul 24" (display only). */
+function eventDate(d: Date): string {
+  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
 export function PlanetDetailSheet({ body, view, observer, onClose }: PlanetDetailSheetProps) {
   // Capture "now" once per open so the predicted times are fixed while the sheet is up.
   const [openedAt, setOpenedAt] = useState<number>(() => Date.now());
@@ -52,6 +59,13 @@ export function PlanetDetailSheet({ body, view, observer, onClose }: PlanetDetai
     if (!b) return null;
     return nextPlanetEvents(b, observer, new Date(openedAt));
   }, [body, observer, openedAt]);
+
+  // EME (moonbounce) facts for the Moon only — geocentric, so no observer needed. Same once-per-open
+  // captured instant as `events`, off the render hot path. Null for any body that isn't the Moon.
+  const eme = useMemo(() => {
+    if (body == null || bodyForKey(body) !== Body.Moon) return null;
+    return moonEmeInfo(new Date(openedAt));
+  }, [body, openedAt]);
 
   const name = view?.name?.trim() || body || "";
 
@@ -121,6 +135,38 @@ export function PlanetDetailSheet({ body, view, observer, onClose }: PlanetDetai
             </>
           )}
         </View>
+
+        {eme ? (
+          <View testID="moon-eme" style={styles.eventSection}>
+            <Text style={styles.eventHeading}>Moonbounce (EME)</Text>
+            <LiveRow
+              label="Antenna el / az"
+              value={
+                view
+                  ? `${Math.round(view.elevationDeg)}° / ${Math.round(view.azimuthDeg)}° ${compass8(view.azimuthDeg)}`
+                  : "Below horizon"
+              }
+            />
+            <LiveRow label="Distance" value={`${Math.round(eme.distanceKm).toLocaleString()} km`} />
+            <LiveRow label="Echo delay" value={`${eme.echoDelaySeconds.toFixed(2)} s`} />
+            <LiveRow
+              label="Path-loss penalty"
+              value={`+${eme.pathLossPenaltyDb.toFixed(1)} dB vs perigee`}
+            />
+            <LiveRow
+              label="Libration"
+              value={`${eme.librationLatDeg.toFixed(1)}°, ${eme.librationLonDeg.toFixed(1)}°`}
+            />
+            <EventRow
+              label="Next perigee"
+              value={`${eventDate(eme.nextPerigee.date)} · ${Math.round(eme.nextPerigee.km)} km`}
+            />
+            <EventRow
+              label="Next apogee"
+              value={`${eventDate(eme.nextApogee.date)} · ${Math.round(eme.nextApogee.km)} km`}
+            />
+          </View>
+        ) : null}
 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
           <Text style={styles.attribution}>Ephemeris: astronomy-engine (on-device)</Text>
