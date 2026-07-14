@@ -167,6 +167,11 @@ public sealed class SmokeTests
         Assert.Equal("https://auth.wsh.no/api/oidc/token",
             flow.GetProperty("tokenUrl").GetString());
         Assert.True(flow.GetProperty("scopes").TryGetProperty("openid", out _));
+        // offline_access must NOT be offered: swagger never refreshes, the Authelia swagger client
+        // doesn't allow the scope, and a refresh-token grant would force an explicit consent screen
+        // per the OIDC spec - defeating the client's consent_mode: implicit.
+        Assert.False(flow.GetProperty("scopes").TryGetProperty("offline_access", out _),
+            "swagger must not offer offline_access");
 
         // A global security requirement references the scheme so the gated endpoints show the padlock.
         var requiresOidc = root.GetProperty("security").EnumerateArray()

@@ -22,9 +22,12 @@ internal static class OpenApiExtensions
     private const string OidcSchemeId = "oidc";
 
     /// <summary>
-    ///     Scopes the docs request, mirroring the app's OIDC login (see <c>app/src/auth/config.ts</c>). The
-    ///     access token's <c>aud=skylens-api</c> does NOT come from a scope — it comes from the audience
-    ///     request parameter wired into Swagger UI below, exactly the way the app requests it.
+    ///     Scopes the docs request — the app's OIDC scopes (see <c>app/src/auth/config.ts</c>) MINUS
+    ///     <c>offline_access</c>: Swagger never refreshes tokens, the Authelia <c>skylens-swagger</c>
+    ///     client doesn't allow the scope, and any refresh-token grant would force an explicit consent
+    ///     screen per the OIDC spec (defeating the client's <c>consent_mode: implicit</c>). The access
+    ///     token's <c>aud=skylens-api</c> does NOT come from a scope — the Authelia client grants it via
+    ///     <c>requested_audience_mode: implicit</c>.
     /// </summary>
     private static readonly IReadOnlyDictionary<string, string> OAuthScopes = new Dictionary<string, string>
     {
@@ -32,7 +35,6 @@ internal static class OpenApiExtensions
         ["profile"] = "Basic profile claims",
         ["email"] = "Email address",
         ["groups"] = "Group membership (backend authorization)",
-        ["offline_access"] = "Refresh token",
     };
 
     public static IServiceCollection AddOpenApiDocumentation(this IServiceCollection services, OidcOptions oidc)
@@ -93,15 +95,12 @@ internal static class OpenApiExtensions
         app.UseSwaggerUI(options =>
         {
             // Real Authelia login from the docs: a dedicated public swagger client + PKCE, no secret.
+            // No audience request parameter: the Authelia client's `requested_audience_mode: implicit`
+            // stamps aud=skylens-api on its own, and swagger-ui appends additionalQueryStringParams to
+            // BOTH the authorization redirect and the token fetch (a stray ?audience= on the token POST).
             options.OAuthClientId(oidc.SwaggerClientId);
             options.OAuthScopes(OAuthScopes.Keys.ToArray());
             options.OAuthUsePkce();
-            // Mirror the app (app/src/auth/useAuth.ts extraParams.audience): request the API audience so
-            // Authelia stamps aud=skylens-api on the access token the backend's JwtBearer validates.
-            options.OAuthAdditionalQueryStringParams(new Dictionary<string, string>
-            {
-                ["audience"] = ResolveAudience(oidc),
-            });
         });
 
         return app;
@@ -114,7 +113,4 @@ internal static class OpenApiExtensions
     private static string ResolveAuthority(OidcOptions oidc) =>
         (string.IsNullOrWhiteSpace(oidc.Authority) ? new OidcOptions().Authority : oidc.Authority).TrimEnd('/');
 
-    /// <summary>API audience requested at login; falls back to the default like <see cref="ResolveAuthority" />.</summary>
-    private static string ResolveAudience(OidcOptions oidc) =>
-        string.IsNullOrWhiteSpace(oidc.Audience) ? new OidcOptions().Audience : oidc.Audience;
 }

@@ -1407,8 +1407,7 @@
               "openid": "OpenID Connect sign-in (required)",
               "profile": "Basic profile claims",
               "email": "Email address",
-              "groups": "Group membership (backend authorization)",
-              "offline_access": "Refresh token"
+              "groups": "Group membership (backend authorization)"
             }
           }
         }
@@ -1421,8 +1420,7 @@
         "openid",
         "profile",
         "email",
-        "groups",
-        "offline_access"
+        "groups"
       ]
     }
   ],
