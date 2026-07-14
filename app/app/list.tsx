@@ -109,11 +109,25 @@ export default function ListScreen() {
     return [...acRows, ...shipRows].sort((x, y) => x.distanceKm - y.distanceKm);
   }, [aircraft, vessels, observer, showShips, showAton]);
 
+  // Family split for the Traffic heading breakdown (air = aircraft, sea = vessels).
+  const acCount = rows.filter((r) => r.kind === "aircraft").length;
+  const shipCount = rows.length - acCount;
+
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <Text testID="list-count" style={styles.heading}>
-        Traffic ({rows.length})
-      </Text>
+      <View style={styles.headingRow}>
+        <View style={styles.headingLeft}>
+          <View style={[styles.headingDot, { backgroundColor: color.entity.air }]} />
+          <Text testID="list-count" style={styles.heading}>
+            Traffic ({rows.length})
+          </Text>
+        </View>
+        {rows.length > 0 ? (
+          <Text style={styles.headingBreakdown}>
+            {acCount} air · {shipCount} sea
+          </Text>
+        ) : null}
+      </View>
       <ScrollView testID="list-scroll">
         {rows.length === 0 ? (
           <EmptyState
@@ -175,9 +189,12 @@ export default function ListScreen() {
 
         {showSatellites && (
           <>
-            <Text testID="list-sat-count" style={styles.heading}>
-              Overhead ({overhead.length})
-            </Text>
+            <View style={styles.headingLeft}>
+              <View style={[styles.headingDot, { backgroundColor: color.entity.orbit }]} />
+              <Text testID="list-sat-count" style={styles.heading}>
+                Overhead ({overhead.length})
+              </Text>
+            </View>
             {overhead.length === 0 ? (
               <Text style={styles.emptyLine}>No passes overhead right now.</Text>
             ) : (
@@ -220,9 +237,12 @@ export default function ListScreen() {
 
         {showPlanets && (
           <>
-            <Text testID="list-sky-count" style={styles.heading}>
-              Sky ({sky.length})
-            </Text>
+            <View style={styles.headingLeft}>
+              <View style={[styles.headingDot, { backgroundColor: color.entity.sky }]} />
+              <Text testID="list-sky-count" style={styles.heading}>
+                Sky ({sky.length})
+              </Text>
+            </View>
             {sky.length === 0 ? (
               <Text style={styles.emptyLine}>No planets above the horizon right now.</Text>
             ) : (
@@ -278,6 +298,11 @@ export default function ListScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
   heading: { color: color.text, fontSize: 18, fontWeight: "700", paddingHorizontal: 16, paddingVertical: 12 },
+  headingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingRight: 16 },
+  headingLeft: { flexDirection: "row", alignItems: "center" },
+  // Domain-coded dot sits in the 16px gutter; negative right margin trims the heading's own left padding.
+  headingDot: { width: 8, height: 8, borderRadius: 4, marginLeft: 16, marginRight: -8 },
+  headingBreakdown: { color: color.textDim, fontSize: 13, fontWeight: "600" },
   row: {
     flexDirection: "row",
     alignItems: "center",

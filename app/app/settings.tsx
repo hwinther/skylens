@@ -9,6 +9,7 @@ import { color } from "@/theme";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useSettingsStore } from "@/state/settingsStore";
 import { useAuthStore } from "@/state/authStore";
 import { useAuth } from "@/auth/useAuth";
@@ -110,50 +111,8 @@ export default function SettingsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Settings</Text>
 
-        <Section title="Account">
-          <Row label="Status" value={status} />
-          <Row label="Mock auth (Expo Go)">
-            <Switch value={mockMode} onValueChange={setMockMode} />
-          </Row>
-          {status === "authenticated" ? (
-            <Button label="Sign out" onPress={() => void signOut()} tone="danger" />
-          ) : (
-            <Button label={mockMode ? "Sign in (mock)" : "Sign in"} onPress={() => void signIn()} />
-          )}
-        </Section>
-
-        <Section title="AR calibration">
-          <Stepper
-            label="Azimuth trim"
-            value={azimuthTrimDeg}
-            unit="°"
-            step={1}
-            min={-45}
-            max={45}
-            onChange={setAzimuthTrim}
-          />
-          <Stepper
-            label="Horizontal FOV"
-            value={hFovDeg}
-            unit="°"
-            step={1}
-            min={40}
-            max={100}
-            onChange={setHFov}
-            hint={`default ${DEFAULT_HFOV_DEG}°`}
-          />
-          <Stepper
-            label="Radius"
-            value={radiusKm}
-            unit=" km"
-            step={10}
-            min={10}
-            max={400}
-            onChange={setRadiusKm}
-          />
-        </Section>
-
-        <Section title="Ships">
+        <Group title="Layers & data" defaultOpen>
+          <Section title="Ships">
           <Row label="Show ships">
             <Switch value={showShips} onValueChange={setShowShips} />
           </Row>
@@ -264,11 +223,58 @@ export default function SettingsScreen() {
             ride. Computed on-device; no network needed.
           </Text>
         </Section>
+        </Group>
+
+        <Group title="Calibration & sensors">
+        <Section title="AR calibration">
+          <Stepper
+            label="Azimuth trim"
+            value={azimuthTrimDeg}
+            unit="°"
+            step={1}
+            min={-45}
+            max={45}
+            onChange={setAzimuthTrim}
+          />
+          <Stepper
+            label="Horizontal FOV"
+            value={hFovDeg}
+            unit="°"
+            step={1}
+            min={40}
+            max={100}
+            onChange={setHFov}
+            hint={`default ${DEFAULT_HFOV_DEG}°`}
+          />
+          <Stepper
+            label="Radius"
+            value={radiusKm}
+            unit=" km"
+            step={10}
+            min={10}
+            max={400}
+            onChange={setRadiusKm}
+          />
+        </Section>
 
         <Section title="Demo">
           <Row label="Demo mode (replay + drag-to-look)">
             <Switch value={demoMode} onValueChange={setDemoMode} />
           </Row>
+        </Section>
+        </Group>
+
+        <Group title="Account">
+        <Section title="Account">
+          <Row label="Status" value={status} />
+          <Row label="Mock auth (Expo Go)">
+            <Switch value={mockMode} onValueChange={setMockMode} />
+          </Row>
+          {status === "authenticated" ? (
+            <Button label="Sign out" onPress={() => void signOut()} tone="danger" />
+          ) : (
+            <Button label={mockMode ? "Sign in (mock)" : "Sign in"} onPress={() => void signIn()} />
+          )}
         </Section>
 
         <Section title="About">
@@ -294,6 +300,7 @@ export default function SettingsScreen() {
             </Text>
           )}
         </Section>
+        </Group>
       </ScrollView>
     </SafeAreaView>
   );
@@ -320,6 +327,32 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
       {children}
+    </View>
+  );
+}
+
+/** Collapsible accordion grouping related Sections so the screen stays short as entity families grow. */
+function Group({
+  title,
+  defaultOpen,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen ?? false);
+  return (
+    <View style={styles.group}>
+      <Pressable style={styles.groupHead} onPress={() => setOpen((o) => !o)} hitSlop={6}>
+        <Text style={styles.groupTitle}>{title}</Text>
+        <MaterialCommunityIcons
+          name={open ? "chevron-up" : "chevron-down"}
+          size={22}
+          color={color.textDim}
+        />
+      </Pressable>
+      {open ? <View style={styles.groupBody}>{children}</View> : null}
     </View>
   );
 }
@@ -406,6 +439,16 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
   content: { padding: 16, gap: 8 },
   title: { color: color.text, fontSize: 24, fontWeight: "700", marginBottom: 8 },
+  group: { marginBottom: 12 },
+  groupHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 4,
+    paddingVertical: 10,
+  },
+  groupTitle: { color: color.text, fontSize: 17, fontWeight: "700" },
+  groupBody: { gap: 8 },
   section: {
     backgroundColor: color.surface,
     borderRadius: 12,
