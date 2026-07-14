@@ -143,6 +143,38 @@ public sealed class SmokeTests
     }
 
     [Fact]
+    public async Task Swagger_doc_advertises_the_authelia_oidc_security_scheme()
+    {
+        using var client = _factory.CreateClient();
+
+        // The OpenAPI doc is served pre-auth (the docs stay anonymous) and must advertise the Authelia
+        // OIDC authorization-code + PKCE scheme so "Authorize" in Swagger UI can do a real login and call
+        // the auth-gated endpoints. The authority is bound from config (a deterministic default here), so
+        // the endpoint URLs are stable.
+        using var resp = await client.GetAsync("/swagger/v1/swagger.json", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+
+        var scheme = root.GetProperty("components").GetProperty("securitySchemes").GetProperty("oidc");
+        Assert.Equal("oauth2", scheme.GetProperty("type").GetString());
+
+        var flow = scheme.GetProperty("flows").GetProperty("authorizationCode");
+        Assert.Equal("https://auth.wsh.no/api/oidc/authorization",
+            flow.GetProperty("authorizationUrl").GetString());
+        Assert.Equal("https://auth.wsh.no/api/oidc/token",
+            flow.GetProperty("tokenUrl").GetString());
+        Assert.True(flow.GetProperty("scopes").TryGetProperty("openid", out _));
+
+        // A global security requirement references the scheme so the gated endpoints show the padlock.
+        var requiresOidc = root.GetProperty("security").EnumerateArray()
+                               .Any(req => req.TryGetProperty("oidc", out _));
+        Assert.True(requiresOidc, "the global security requirement must reference the oidc scheme");
+    }
+
+    [Fact]
     public async Task Api_me_requires_authentication()
     {
         using var client = _factory.CreateClient();

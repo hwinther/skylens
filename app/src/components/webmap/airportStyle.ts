@@ -33,6 +33,17 @@ export function airportGlyphSize(type: string): number {
   return 14; // small_airport / heliport / seaplane_base
 }
 
+/**
+ * AR-overlay declutter priority by class. The overlay's declutter places the highest-priority label
+ * first (it keeps its un-pushed spot), so when several airports stack on the horizon the busier class
+ * wins: large > medium > the smaller fields — mirroring the glyph-size hierarchy.
+ */
+export function airportArPriority(type: string): number {
+  if (type === "large_airport") return 2;
+  if (type === "medium_airport") return 1;
+  return 0; // small_airport / heliport / seaplane_base
+}
+
 /** Friendly label for an OurAirports type code, e.g. "medium_airport" → "Medium airport". */
 export function airportTypeLabel(type: string): string {
   switch (type) {

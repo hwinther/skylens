@@ -135,8 +135,8 @@ public sealed class AirportDbServiceTests
             Path.Combine(FixtureDir, "airport-frequencies.csv"));
 
         Assert.True(service.Loaded);
-        // ENCN + ENGK + ENOH + ENQC; ENXX (closed) excluded.
-        Assert.Equal(4, service.Count);
+        // ENCN + ENGM + ENKJ + ENRH + ENRY + Kilen (NO-0003) + ENGK + ENOH + ENQC; ENXX (closed) excluded.
+        Assert.Equal(9, service.Count);
 
         // Nearby is the only read surface — query a wide radius around ENCN to get them all.
         var all = service.Nearby(58.2042, 8.0854, 500, 100);

@@ -8,8 +8,12 @@ public sealed class OidcOptions
     public string Authority { get; set; } = "https://auth.wsh.no";
     public string Audience { get; set; } = "skylens-api";
 
-    /// <summary>Swagger UI OAuth client id (dev only).</summary>
-    public string ClientId { get; set; } = "skylens";
+    /// <summary>
+    ///     Swagger UI's OAuth client id — a DEDICATED Authelia public client (authorization-code + PKCE,
+    ///     no secret) so "Authorize" in the docs does a real login. Kept separate from the mobile app's
+    ///     own <c>skylens</c> client because it has different redirect URIs (…/swagger/oauth2-redirect.html).
+    /// </summary>
+    public string SwaggerClientId { get; set; } = "skylens-swagger";
 }
 
 /// <summary>

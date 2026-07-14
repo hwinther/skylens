@@ -1394,8 +1394,38 @@
         },
         "additionalProperties": false
       }
+    },
+    "securitySchemes": {
+      "oidc": {
+        "type": "oauth2",
+        "description": "Authelia OIDC — authorization-code flow with PKCE (public client, no secret).",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "https://auth.wsh.no/api/oidc/authorization",
+            "tokenUrl": "https://auth.wsh.no/api/oidc/token",
+            "scopes": {
+              "openid": "OpenID Connect sign-in (required)",
+              "profile": "Basic profile claims",
+              "email": "Email address",
+              "groups": "Group membership (backend authorization)",
+              "offline_access": "Refresh token"
+            }
+          }
+        }
+      }
     }
   },
+  "security": [
+    {
+      "oidc": [
+        "openid",
+        "profile",
+        "email",
+        "groups",
+        "offline_access"
+      ]
+    }
+  ],
   "tags": [
     {
       "name": "Skylens.Api, Version=0.0.0.1, Culture=neutral, PublicKeyToken=null"

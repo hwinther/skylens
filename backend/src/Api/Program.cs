@@ -272,7 +272,7 @@ builder.Services.AddOpenTelemetry()
 builder.Services.AddProblemDetails();
 
 // -- OpenAPI -----------------------------------------------------------------------------------
-builder.Services.AddOpenApiDocumentation();
+builder.Services.AddOpenApiDocumentation(oidcConfig);
 
 var app = builder.Build();
 
@@ -293,7 +293,7 @@ app.Use((context, next) =>
 });
 
 // OpenAPI (/openapi, /swagger) before auth so the docs stay anonymous.
-app.UseOpenApiDocumentation();
+app.UseOpenApiDocumentation(oidcConfig);
 
 // CORS must run before auth so preflight/actual cross-origin calls to /api and /hubs are allowed.
 if (corsOrigins.Length > 0)

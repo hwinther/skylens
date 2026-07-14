@@ -8,6 +8,7 @@ import {
   AIRPORT_COLOR,
   AIRPORT_GLYPH,
   RUNWAY_COLOR,
+  airportArPriority,
   airportFilter,
   airportGlyphSize,
   airportSubtitle,
@@ -53,6 +54,18 @@ describe("airportGlyphSize", () => {
     expect(airportGlyphSize("small_airport")).toBe(14);
     expect(airportGlyphSize("heliport")).toBe(14);
     expect(airportGlyphSize("seaplane_base")).toBe(14);
+  });
+});
+
+describe("airportArPriority", () => {
+  it("ranks large over medium over the smaller fields (higher wins the un-pushed AR slot)", () => {
+    expect(airportArPriority("large_airport")).toBe(2);
+    expect(airportArPriority("medium_airport")).toBe(1);
+    expect(airportArPriority("small_airport")).toBe(0);
+    expect(airportArPriority("heliport")).toBe(0);
+    expect(airportArPriority("seaplane_base")).toBe(0);
+    expect(airportArPriority("large_airport")).toBeGreaterThan(airportArPriority("medium_airport"));
+    expect(airportArPriority("medium_airport")).toBeGreaterThan(airportArPriority("small_airport"));
   });
 });
 

@@ -1,5 +1,10 @@
 "id","ident","type","name","latitude_deg","longitude_deg","elevation_ft","continent","iso_country","iso_region","municipality","scheduled_service","icao_code","iata_code","gps_code","local_code","home_link","wikipedia_link","keywords"
 2572,"ENCN","medium_airport","Kristiansand Airport",58.204201,8.08537,57,"EU","NO","NO-42","Kristiansand","yes","ENCN","KRS","ENCN",,,,
+2600,"ENGM","large_airport","Oslo Airport, Gardermoen",60.193901,11.1004,681,"EU","NO","NO-02","Oslo","yes","ENGM","OSL","ENGM",,,,
+2582,"ENKJ","small_airport","Lillestrøm Airfield, Kjeller",59.969089,11.040482,354,"EU","NO","NO-32","Kjeller","no",,,"ENKJ",,"http://www.kjellerflyplass.no/","https://en.wikipedia.org/wiki/Kjeller_Airfield","Lillestrøm"
+319143,"ENRH","heliport","Oslo Heliport, Rikshospitalet",59.948467,10.716144,,"EU","NO","NO-03","Oslo","no",,,"ENRH",,,,
+2592,"ENRY","medium_airport","Moss Airport, Rygge",59.378817,10.785439,174,"EU","NO","NO-31","Oslo","no","ENRY",,"ENRY",,"http://www.en.ryg.no/","https://en.wikipedia.org/wiki/Moss_Airport%2C_Rygge","Moss lufthavn Rygge, Rygge Air Station, RYG"
+41543,"NO-0003","seaplane_base","Kilen Seaplane Base",59.89238,10.59803,,"EU","NO","NO-32","Fornebu","no",,,,,"http://www.kilensjoflyklubb.no/",,
 29927,"ENGK","small_airport","Gullknapp Airfield",58.516701,8.7,390,"EU","NO","NO-42","Arendal","no","ENGK",,"ENGK",,,,
 900001,"ENOH","heliport","Oslo Hospital Heliport",59.91,10.75,80,"EU","NO","NO-03","Oslo","no","ENOH",,"ENOH",,,,
 900002,"ENQC","small_airport","Somewhere, ""Nice"" Field",58.10,8.00,120,"EU","NO","NO-42","Testville","no","ENQC",,"ENQC",,,,
