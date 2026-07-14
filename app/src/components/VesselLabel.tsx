@@ -107,8 +107,8 @@ const styles = StyleSheet.create({
     position: "absolute",
     transform: [{ translateX: -6 }, { translateY: -6 }],
     // Dark, faintly teal-tinted backing so the marine labels sit apart from the navy aircraft chips.
-    backgroundColor: "rgba(6, 26, 30, 0.72)",
-    borderWidth: StyleSheet.hairlineWidth,
+    backgroundColor: "rgba(6, 26, 30, 0.9)",
+    borderWidth: 1,
     borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 3,
@@ -116,9 +116,9 @@ const styles = StyleSheet.create({
     pointerEvents: "none",
   },
   aton: {
-    opacity: 0.82,
+    opacity: 0.9,
     maxWidth: 120,
-    backgroundColor: "rgba(6, 26, 30, 0.6)",
+    backgroundColor: "rgba(6, 26, 30, 0.85)",
   },
   tick: {
     position: "absolute",
@@ -130,13 +130,26 @@ const styles = StyleSheet.create({
   },
   titleRow: { flexDirection: "row", alignItems: "center" },
   icon: { marginRight: 3 },
-  title: { color: "#CFF6EE", fontSize: 12, fontWeight: "600" },
+  title: {
+    color: "#CFF6EE",
+    fontSize: 12,
+    fontWeight: "600",
+    textShadowColor: "rgba(0, 0, 0, 0.9)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
   atonTitle: { color: "#EDE0B8", fontSize: 10, fontWeight: "500" },
-  sub: { color: "#8FD3C6", fontSize: 10 },
+  sub: {
+    color: "#B6E8DD",
+    fontSize: 11,
+    textShadowColor: "rgba(0, 0, 0, 0.9)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
   leader: {
     position: "absolute",
-    width: StyleSheet.hairlineWidth,
-    backgroundColor: "rgba(63, 201, 176, 0.5)",
+    width: 1,
+    backgroundColor: "rgba(63, 201, 176, 0.7)",
     pointerEvents: "none",
   },
 });

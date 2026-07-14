@@ -69,7 +69,7 @@ function Badge({ label, tone }: { label: string; tone: "ok" | "warn" }) {
 
 const styles = StyleSheet.create({
   strip: {
-    backgroundColor: "rgba(11, 22, 34, 0.6)",
+    backgroundColor: "rgba(11, 22, 34, 0.82)",
     paddingHorizontal: 12,
     paddingVertical: 8,
     gap: 6,
@@ -78,9 +78,22 @@ const styles = StyleSheet.create({
   rowBottom: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   connWrap: { flexDirection: "row", alignItems: "center" },
   gpsWrap: { flexDirection: "row", alignItems: "center" },
-  dot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
-  connText: { color: "#EAF6FF", fontSize: 12, textTransform: "capitalize" },
-  gpsText: { color: "#EAF6FF", fontSize: 12 },
+  dot: { width: 10, height: 10, borderRadius: 5, marginRight: 6 },
+  connText: {
+    color: "#EAF6FF",
+    fontSize: 12,
+    textTransform: "capitalize",
+    textShadowColor: "rgba(0, 0, 0, 0.9)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  gpsText: {
+    color: "#EAF6FF",
+    fontSize: 12,
+    textShadowColor: "rgba(0, 0, 0, 0.9)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
   count: { color: "#9FC7E0", fontSize: 12 },
   badge: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
   badgeOk: { backgroundColor: "rgba(124, 252, 154, 0.2)" },
