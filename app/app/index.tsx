@@ -15,6 +15,8 @@ import { useEffect, useMemo, useState } from "react";
 import { ImageBackground, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { WebCameraView } from "@/components/WebCameraView";
 import { useWebArSensors } from "@/components/useWebArSensors";
@@ -72,6 +74,12 @@ export default function ArScreen() {
   // Live-mode observer: baked home coords, else a one-shot device/browser geolocation fix
   // (same source the root layout's hub subscription uses).
   const observer = useObserverLocation(!demoMode);
+
+  // First-run / degraded AR hints (item 03), native live mode only — demo & web show neither.
+  // `observer` is null until the first GPS fix; `cameraPermission` is reactive from the hook above.
+  const acquiringFix = !demoMode && Platform.OS !== "web" && !observer;
+  const cameraDenied =
+    !demoMode && Platform.OS !== "web" && cameraPermission?.status === "denied";
 
   const aircraft = useAircraftList();
   const snapshotAt = useAircraftStore((s) => s.lastSnapshotAt);
@@ -267,6 +275,25 @@ export default function ArScreen() {
         />
       </SafeAreaView>
 
+      {cameraDenied ? (
+        <SafeAreaView edges={["top"]} style={styles.bannerWrap} pointerEvents="box-none">
+          <Pressable style={styles.banner} onPress={() => router.push("/settings")} hitSlop={6}>
+            <MaterialCommunityIcons name="camera-off" size={16} color="#FFD37C" />
+            <Text style={styles.bannerText}>Camera off — showing synthetic horizon. Tap to enable.</Text>
+          </Pressable>
+        </SafeAreaView>
+      ) : null}
+
+      {acquiringFix ? (
+        <View style={styles.acquireWrap} pointerEvents="box-none">
+          <View style={styles.acquirePill}>
+            <MaterialCommunityIcons name="crosshairs-gps" size={16} color="#78C8FF" />
+            <Text style={styles.acquireText}>Acquiring position…</Text>
+          </View>
+          <Text style={styles.acquireSub}>Step outside for a clear view of the sky.</Text>
+        </View>
+      ) : null}
+
       <DetailSheet hex={selectedHex} client={client} onClose={() => setSelectedHex(null)} />
       <SatelliteDetailSheet
         noradId={selectedNoradId}
@@ -317,4 +344,34 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   enableText: { color: "#EAF6FF", fontSize: 15, fontWeight: "700" },
+  // Camera-denied banner: sits just under the status strip, routes to Settings.
+  bannerWrap: { position: "absolute", top: 0, left: 0, right: 0, alignItems: "center" },
+  banner: {
+    marginTop: 64, // clears the status strip; tune to taste
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(11, 22, 34, 0.9)",
+    borderColor: "rgba(255, 211, 124, 0.5)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  bannerText: { color: "#EAF6FF", fontSize: 12, fontWeight: "600" },
+  // Acquiring-position hint: centred over the synthetic horizon while waiting for the first GPS fix.
+  acquireWrap: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center", gap: 8 },
+  acquirePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(11, 22, 34, 0.9)",
+    borderColor: "rgba(120, 200, 255, 0.5)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  acquireText: { color: "#EAF6FF", fontSize: 14, fontWeight: "700" },
+  acquireSub: { color: "#9FC7E0", fontSize: 12 },
 });
