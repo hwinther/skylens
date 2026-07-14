@@ -16,8 +16,10 @@ import { Sheet } from "./Sheet";
 import {
   Body,
   bodyForKey,
+  computeJupiterMoons,
   moonEmeInfo,
   nextPlanetEvents,
+  type JupiterMoonsView,
   type PlanetObserver,
   type PlanetView,
 } from "@/ar";
@@ -64,6 +66,14 @@ export function PlanetDetailSheet({ body, view, observer, onClose }: PlanetDetai
   const eme = useMemo(() => {
     if (body == null || bodyForKey(body) !== Body.Moon) return null;
     return moonEmeInfo(new Date(openedAt));
+  }, [body, openedAt]);
+
+  // Galilean-moon finder configuration for Jupiter only — pure geometry (no observer, no visibility),
+  // so it shows even when Jupiter is below the horizon. Same once-per-open captured instant as `eme`,
+  // off the render hot path. Null for any body that isn't Jupiter.
+  const jupiterMoons = useMemo(() => {
+    if (body == null || bodyForKey(body) !== Body.Jupiter) return null;
+    return computeJupiterMoons(new Date(openedAt));
   }, [body, openedAt]);
 
   const name = view?.name?.trim() || body || "";
@@ -163,6 +173,8 @@ export function PlanetDetailSheet({ body, view, observer, onClose }: PlanetDetai
           </View>
         ) : null}
 
+        {jupiterMoons ? <GalileanMoons view={jupiterMoons} /> : null}
+
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
           <Text style={styles.attribution}>Ephemeris: astronomy-engine (on-device)</Text>
         </ScrollView>
@@ -184,6 +196,49 @@ function EventRow({ label, value }: { label: string; value: string }) {
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
       <Text style={styles.eventValue}>{value}</Text>
+    </View>
+  );
+}
+
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+/**
+ * The classic Galilean-moon finder strip: Jupiter centred, Io/Europa/Ganymede/Callisto as labelled
+ * dots either side, scaled to the widest moon's plane-of-sky offset. Convention: celestial EAST is on
+ * the LEFT (the naked-eye / binocular view), so a moon east of Jupiter (+x) is drawn to the left; the
+ * edges are labelled "E" / "W". Labels alternate above (Europa, Callisto) / below (Io, Ganymede) so
+ * they don't collide when two moons crowd together. Pure Views — no SVG.
+ */
+function GalileanMoons({ view }: { view: JupiterMoonsView }) {
+  const maxAbs = view.maxAbsXArcsec || 1; // guard the (impossible) all-zero case
+  const offsets = view.moons
+    .map((m) => `${m.name} ${(Math.abs(m.xArcsec) / 60).toFixed(1)}′ ${m.xArcsec >= 0 ? "E" : "W"}`)
+    .join("  ·  ");
+  return (
+    <View testID="jupiter-moons" style={styles.eventSection}>
+      <Text style={styles.eventHeading}>Galilean moons</Text>
+      <View style={styles.moonStrip}>
+        <View style={styles.moonAxis} />
+        <Text style={[styles.moonEdge, styles.moonEdgeLeft]}>E</Text>
+        <Text style={[styles.moonEdge, styles.moonEdgeRight]}>W</Text>
+        <View style={styles.jupiterRing}>
+          <View style={styles.jupiterCore} />
+        </View>
+        {view.moons.map((m, i) => {
+          // +x = celestial east; east renders on the LEFT, so a positive offset maps to a smaller left%.
+          const leftPct = 50 - clamp(m.xArcsec / maxAbs, -1, 1) * 45;
+          const above = i % 2 === 1; // Europa (1) & Callisto (3) above; Io (0) & Ganymede (2) below.
+          return (
+            <View key={m.key} style={[styles.moonCol, { left: `${leftPct}%` }]}>
+              <Text style={[styles.moonName, above ? styles.moonNameAbove : styles.moonNameBelow]}>
+                {m.name}
+              </Text>
+              <View style={styles.moonDot} />
+            </View>
+          );
+        })}
+      </View>
+      <Text style={styles.moonOffsets}>{offsets}</Text>
     </View>
   );
 }
@@ -220,4 +275,59 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 0 },
   scrollContent: { paddingTop: 4 },
   attribution: { color: color.textMuted, fontSize: 11, marginTop: 12 },
+  // Galilean-moon finder strip.
+  moonStrip: { position: "relative", height: 72, marginTop: 8, marginBottom: 2 },
+  moonAxis: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 36,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: alpha(color.entity.sky, 0.18),
+  },
+  moonEdge: { position: "absolute", top: 30, color: color.textMuted, fontSize: 10, fontWeight: "700" },
+  moonEdgeLeft: { left: 2 },
+  moonEdgeRight: { right: 2 },
+  jupiterRing: {
+    position: "absolute",
+    left: "50%",
+    marginLeft: -11,
+    top: 25,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: alpha(color.entity.sky, 0.4),
+    backgroundColor: alpha(color.entity.sky, 0.06),
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  jupiterCore: { width: 12, height: 12, borderRadius: 6, backgroundColor: color.entity.sky },
+  moonCol: {
+    position: "absolute",
+    top: 0,
+    height: 72,
+    width: 56,
+    marginLeft: -28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  moonDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: color.entity.sky },
+  moonName: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    textAlign: "center",
+    color: color.textDim,
+    fontSize: 10,
+  },
+  moonNameAbove: { bottom: 44 },
+  moonNameBelow: { top: 44 },
+  moonOffsets: {
+    color: color.textDim,
+    fontSize: 12,
+    textAlign: "center",
+    fontVariant: ["tabular-nums"],
+    marginTop: 2,
+  },
 });
