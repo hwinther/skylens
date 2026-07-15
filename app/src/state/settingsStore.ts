@@ -10,6 +10,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
 import { DEFAULT_HFOV_DEG } from "@/ar/projection";
 import { DEFAULT_ELEVATION_MASK_DEG } from "@/ar/satellites";
 
@@ -98,7 +99,20 @@ const forceLive =
 
 const memoryFallback = new Map<string, string>();
 
-const secureStorage: StateStorage = {
+// Native persists to SecureStore. Web has no SecureStore, so persist to the browser's
+// localStorage instead — otherwise the in-memory fallback below was wiped on every page
+// load and nothing (settings, the onboarding flag) survived a reload. Both degrade to the
+// in-memory map when neither backend is reachable (server-render / private mode / jest).
+type WebKV = {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+};
+// The cast keeps this compiling without the DOM lib in tsconfig; the per-method try/catch
+// falls back to memory whenever localStorage is genuinely absent (e.g. on native).
+const web = globalThis as unknown as { localStorage: WebKV };
+
+const nativeStorage: StateStorage = {
   getItem: async (name) => {
     try {
       return (await SecureStore.getItemAsync(name)) ?? null;
@@ -121,6 +135,32 @@ const secureStorage: StateStorage = {
     }
   },
 };
+
+const webStorage: StateStorage = {
+  getItem: (name) => {
+    try {
+      return web.localStorage.getItem(name);
+    } catch {
+      return memoryFallback.get(name) ?? null;
+    }
+  },
+  setItem: (name, value) => {
+    try {
+      web.localStorage.setItem(name, value);
+    } catch {
+      memoryFallback.set(name, value);
+    }
+  },
+  removeItem: (name) => {
+    try {
+      web.localStorage.removeItem(name);
+    } catch {
+      memoryFallback.delete(name);
+    }
+  },
+};
+
+const settingsStorage: StateStorage = Platform.OS === "web" ? webStorage : nativeStorage;
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
@@ -182,7 +222,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: "skylens.settings.v1",
-      storage: createJSONStorage(() => secureStorage),
+      storage: createJSONStorage(() => settingsStorage),
       // Flip the hydration flag once persisted settings load, so the onboarding gate can wait for it
       // and never flash the intro at a returning user. Fires even on a fresh install (empty storage).
       onRehydrateStorage: () => () =>

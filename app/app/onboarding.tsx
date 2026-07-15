@@ -6,13 +6,16 @@
  */
 import { color } from "@/theme";
 import { useState } from "react";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { router } from "expo-router";
 import { useCameraPermissions } from "expo-camera";
 import { useSettingsStore } from "@/state/settingsStore";
 import { TrustLegend } from "@/components/TrustLegend";
+
+/** Public privacy policy — linked from the live-mode disclosure below (Google prominent-disclosure). */
+const PRIVACY_URL = "https://wsh.no/skylens/privacy";
 
 export default function OnboardingScreen() {
   const [step, setStep] = useState(0);
@@ -65,10 +68,25 @@ export default function OnboardingScreen() {
                 <Text style={styles.choiceTitle}>Live</Text>
                 <Text style={styles.choiceSub}>
                   Real sky. Uses your camera, GPS and compass to place aircraft, ships and satellites
-                  where they actually are. The feed stays on-device.
+                  where they actually are.
                 </Text>
               </View>
             </View>
+            <Text style={styles.disclosure}>
+              Going live uses your camera and precise location. Your location is sent to Skylens — and,
+              when you&apos;re away from home, an aircraft-data provider — to find nearby traffic. It is
+              never used for advertising.{" "}
+              <Text
+                style={styles.link}
+                onPress={() => {
+                  Linking.openURL(PRIVACY_URL).catch(() => {
+                    /* no browser available — non-fatal */
+                  });
+                }}
+              >
+                Privacy Policy
+              </Text>
+            </Text>
             <Pressable style={styles.primary} onPress={goLive}>
               <Text style={styles.primaryText}>Go live</Text>
             </Pressable>
@@ -161,6 +179,8 @@ const styles = StyleSheet.create({
   primaryText: { color: color.text, fontSize: 16, fontWeight: "700" },
   secondary: { paddingVertical: 10, alignItems: "center" },
   secondaryText: { color: color.entity.air, fontSize: 14, fontWeight: "600" },
+  disclosure: { color: color.textMuted, fontSize: 12, lineHeight: 17, marginTop: 4 },
+  link: { color: color.entity.air, fontWeight: "700", textDecorationLine: "underline" },
   dots: { flexDirection: "row", gap: 6, justifyContent: "center", paddingBottom: 8 },
   dot: { height: 4, borderRadius: 2 },
   dotOn: { width: 18, backgroundColor: color.entity.air },
