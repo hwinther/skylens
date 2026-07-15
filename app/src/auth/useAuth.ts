@@ -9,8 +9,8 @@
  *    and mark the session authenticated.
  *  - refreshIfNeeded() uses the refresh token to renew silently before expiry.
  *
- * Mock mode short-circuits all of this and mints a fake token so the app is usable
- * in Expo Go before the dev build exists.
+ * Mock mode (dev-only default, see authStore) short-circuits all of this and mints
+ * a fake token so the app is usable in Expo Go without touching the IdP.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";

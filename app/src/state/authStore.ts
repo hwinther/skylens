@@ -7,8 +7,7 @@
 import { create } from "zustand";
 
 // Same opt-in override settingsStore uses: the hosted web build is baked with
-// EXPO_PUBLIC_FORCE_LIVE=1 so it boots into the real OIDC flow, while native/Expo-Go
-// dev (env unset) still defaults to mock auth until a custom-scheme dev build exists.
+// EXPO_PUBLIC_FORCE_LIVE=1 so it boots into the real OIDC flow even under `expo start`.
 // The live SignalR feed is gated on demoMode, not auth, so mock vs live sign-in never
 // affects the (empty-bearer) live connect used by the E2E and preview envs.
 const forceLive =
@@ -30,9 +29,11 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>((set) => ({
   status: "unknown",
-  // Mock auth by default (Expo Go / native dev before the custom-scheme dev build),
-  // but the FORCE_LIVE web build boots straight into the real OIDC flow.
-  mockMode: !forceLive,
+  // Mock auth is a dev convenience only (Expo Go / metro, where __DEV__ is true).
+  // Release builds — standalone Android/iOS and the static web export — must boot
+  // into the real OIDC flow: they don't inherit build-time env, so keying this off
+  // FORCE_LIVE alone left Play-track installs preselected on mock.
+  mockMode: __DEV__ && !forceLive,
   setStatus: (status) => set({ status }),
   setMockMode: (mockMode) => set({ mockMode }),
 }));
