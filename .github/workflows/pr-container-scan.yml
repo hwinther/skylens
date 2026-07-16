@@ -1,0 +1,44 @@
+name: "PR container scan"
+
+# Grype-scans the api image for every PR that changes what gets baked into it, WITHOUT the
+# `deploy-feature` label that gates the full pr-preview pipeline (build + push + e2e + deploy).
+# Uses the no-push build-and-scan reusable; findings land in the job summary AND as a sticky
+# PR comment (via _scan-image → _grype-summary). deploy-feature PRs are skipped here because
+# pr-preview's docker-container.yml build already scans and maintains the same sticky comment.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - "app/**"
+      - "Dockerfile"
+      - ".dockerignore"
+      - ".github/workflows/pr-container-scan.yml"
+
+concurrency:
+  group: "pr-container-scan-${{ github.event.pull_request.number }}"
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'deploy-feature') }}
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+      pull-requests: write # Grype findings sticky comment
+    uses: hwinther/reusable-workflows/.github/workflows/build-and-scan-docker.yml@00fef736b925dfc7b70ab0476276ae1f59e1683b # v2.0.1
+    with:
+      container_image_name_postfix: api
+      build_context: .
+      dockerfile: Dockerfile
+      # auto = report/SARIF/comment only on PRs (never fails a pull_request event).
+      grype_fail_build: auto
+      # Nothing downstream consumes cosign predicates from a scan-only run — skip generating them.
+      generate_supply_chain_artifacts: false
+      # The loaded-image artifact is a build byproduct here (nothing downstream loads it);
+      # keep it only long enough to debug a failed run.
+      artifact_retention_days: 1
