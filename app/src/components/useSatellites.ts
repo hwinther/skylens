@@ -2,8 +2,12 @@
  * Satellite data + propagation hook for the AR overlay.
  *
  * Splits the work by cadence, mirroring the app-wide rule that heavy math never rides the pose loop:
- *  - SLOW (fetch): pull the CelesTrak OMM snapshot from the backend once, refetch every 6 h and on
- *    app re-activation, and back off 5 min on failure (401/503 included — we fail soft to empty).
+ *  - SLOW (fetch): pull the CelesTrak OMM snapshot from the backend once, refetch every 6 h, on
+ *    app re-activation, and immediately when sign-in completes. Failures fail soft to empty and
+ *    retry on an escalating backoff (10 s doubling to a 5 min cap) — the cold-start failures
+ *    (401 racing token hydration, 503/timeout while the backend's first CelesTrak fetch warms)
+ *    resolve in seconds, so a flat long backoff left the AR view empty while the later-mounted
+ *    list screen's own hook instance fetched successfully.
  *    buildSatrecs (json2satrec × N) runs ONCE per payload, memoised.
  *  - 1 Hz (propagate): a setInterval re-runs SGP4 + the ECI→ECF→look-angle transforms for every
  *    satellite and selects the visible set. SGP4 is FAR too heavy for the 60 Hz rAF overlay, so it is
@@ -18,6 +22,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AppState, Platform } from "react-native";
 import type { ApiClient } from "@/api/client";
 import type { SatelliteDto } from "@/api/types";
+import { useAuthStore } from "@/state/authStore";
 import {
   buildSatrecs,
   propagateAll,
@@ -29,8 +34,18 @@ import {
 } from "@/ar";
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
-const RETRY_BACKOFF_MS = 5 * 60 * 1000;
+const INITIAL_RETRY_MS = 10 * 1000;
+const MAX_RETRY_MS = 5 * 60 * 1000;
 const PROPAGATE_INTERVAL_MS = 1000;
+
+/**
+ * Fetch-retry delay for the Nth consecutive failure (0-based): 10 s doubling to a 5 min cap.
+ * Short early retries recover the cold-start failures within seconds; the cap keeps a
+ * genuinely-down backend from being hammered. Exported for tests.
+ */
+export function retryDelayMs(attempt: number): number {
+  return Math.min(MAX_RETRY_MS, INITIAL_RETRY_MS * 2 ** attempt);
+}
 
 export type SatelliteStatus = "ok" | "loading" | "unavailable";
 
@@ -101,30 +116,40 @@ export function useSatellites(options: UseSatellitesOptions): UseSatellitesResul
   const [fetchState, setFetchState] = useState<SatelliteStatus>("loading");
   const [result, setResult] = useState<PropagatedResult>(EMPTY_RESULT);
 
-  // --- SLOW: fetch the OMM snapshot; refetch on 6 h timer / app re-activation; back off on failure ---
-  // All state updates live in the async .then/.catch (never synchronously in the effect body) so this
-  // stays clear of react-hooks/set-state-in-effect; "loading" is the initial fetchState. When
-  // disabled we simply idle — the derived `status`/`visible` below mask any stale payload to empty.
+  // Sign-in completion re-runs the fetch effect below. The deployed app's cold start races this
+  // hook's first fetch against token hydration/sign-in: that 401 used to park the always-mounted
+  // AR screen in a flat 5-minute backoff, while the list screen — mounted after sign-in — fetched
+  // fine with its own hook instance ("satellites in list but not in AR").
+  const isAuthenticated = useAuthStore((s) => s.status === "authenticated");
+
+  // --- SLOW: fetch the OMM snapshot; refetch on 6 h timer / app re-activation / sign-in; back off
+  // on failure (escalating, see retryDelayMs). All state updates live in the async .then/.catch
+  // (never synchronously in the effect body) so this stays clear of react-hooks/set-state-in-effect;
+  // "loading" is the initial fetchState. When disabled we simply idle — the derived
+  // `status`/`visible` below mask any stale payload to empty.
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
     let refetchTimer: ReturnType<typeof setTimeout> | undefined;
+    let failedAttempts = 0;
 
     const load = () => {
       client
         .satellites()
         .then((res) => {
           if (cancelled) return;
+          failedAttempts = 0;
           setPayload({ sats: res.satellites ?? [], tleAgeSeconds: res.tleAgeSeconds ?? 0 });
           setFetchState("ok");
           refetchTimer = setTimeout(load, SIX_HOURS_MS);
         })
         .catch(() => {
           if (cancelled) return;
-          // Fail soft (incl. 401 signed-out / 503 no-snapshot-yet): drop to empty and retry later.
+          // Fail soft (incl. 401 signed-out / 503 no-snapshot-yet): drop to empty and retry on the
+          // escalating schedule — cold-start failures clear in seconds, real outages hit the cap.
           setPayload(null);
           setFetchState("unavailable");
-          refetchTimer = setTimeout(load, RETRY_BACKOFF_MS);
+          refetchTimer = setTimeout(load, retryDelayMs(failedAttempts++));
         });
     };
 
@@ -153,7 +178,7 @@ export function useSatellites(options: UseSatellitesOptions): UseSatellitesResul
       if (refetchTimer) clearTimeout(refetchTimer);
       removeActivation?.();
     };
-  }, [enabled, client]);
+  }, [enabled, client, isAuthenticated]);
 
   // buildSatrecs (json2satrec × N) is the expensive part — run it once per fetched payload only.
   const entries = useMemo<SatrecEntry[]>(
