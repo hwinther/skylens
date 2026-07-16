@@ -139,17 +139,24 @@ export function useSatellites(options: UseSatellitesOptions): UseSatellitesResul
         .then((res) => {
           if (cancelled) return;
           failedAttempts = 0;
+          if (__DEV__)
+            console.log(
+              `[skylens] satellites: fetched ${res.satellites?.length ?? 0} (tleAge ${res.tleAgeSeconds ?? "?"}s)`,
+            );
           setPayload({ sats: res.satellites ?? [], tleAgeSeconds: res.tleAgeSeconds ?? 0 });
           setFetchState("ok");
           refetchTimer = setTimeout(load, SIX_HOURS_MS);
         })
-        .catch(() => {
+        .catch((err: unknown) => {
           if (cancelled) return;
           // Fail soft (incl. 401 signed-out / 503 no-snapshot-yet): drop to empty and retry on the
           // escalating schedule — cold-start failures clear in seconds, real outages hit the cap.
+          const delay = retryDelayMs(failedAttempts++);
+          if (__DEV__)
+            console.log(`[skylens] satellites: fetch failed (${String(err)}), retry in ${delay / 1000}s`);
           setPayload(null);
           setFetchState("unavailable");
-          refetchTimer = setTimeout(load, retryDelayMs(failedAttempts++));
+          refetchTimer = setTimeout(load, delay);
         });
     };
 
@@ -204,10 +211,23 @@ export function useSatellites(options: UseSatellitesOptions): UseSatellitesResul
   // setState happens only inside `tick` (a called function, not the effect body) — again clear of the
   // set-state-in-effect rule; when the gate is off the derived return below masks to empty.
   const shouldRun = enabled && observer != null && entries.length > 0;
+
+  // Dev-only gate tracing: which precondition is holding satellites off screen. The AR screen's
+  // observer is GPS-only (null until a fix) while the list screen falls back to home/demo coords —
+  // this line is what tells those apart in adb logcat when "list shows them, AR doesn't".
+  useEffect(() => {
+    if (__DEV__)
+      console.log(
+        `[skylens] satellites gate: enabled=${enabled} observer=${observer != null} entries=${entries.length} → ${shouldRun ? "run" : "idle"}`,
+      );
+  }, [shouldRun, enabled, observer, entries]);
   useEffect(() => {
     if (!shouldRun) return;
     const setIntervalFn = setIntervalImpl ?? setInterval;
     const clearIntervalFn = clearIntervalImpl ?? clearInterval;
+    // Dev-only: log the selectVisible outcome when it changes (not every 1 Hz tick) — separates
+    // "propagating but everything filtered out (mask/groups)" from an AR render-path problem.
+    let lastLoggedVisible = -1;
 
     const tick = () => {
       const obs = observerRef.current;
@@ -217,6 +237,12 @@ export function useSatellites(options: UseSatellitesOptions): UseSatellitesResul
       const sampleDate = nowRef.current();
       const views = propagateAll(entriesRef.current, obs, sampleDate);
       const visible = selectVisible(views, maskRef.current, groupsRef.current);
+      if (__DEV__ && visible.length !== lastLoggedVisible) {
+        lastLoggedVisible = visible.length;
+        console.log(
+          `[skylens] satellites visible: ${visible.length}/${views.length} (mask ${maskRef.current}°, groups ${[...groupsRef.current].join(",") || "none"})`,
+        );
+      }
       setResult({
         visible,
         byNoradId: new Map(visible.map((v) => [v.noradId, v])),

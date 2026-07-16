@@ -76,8 +76,13 @@ RUN set -eux; \
     gzip -9 -c /tmp/airport-frequencies.csv > /out/airport-frequencies.csv.gz; \
     rm -rf /var/lib/apt/lists/* /tmp/*.csv
 
-# 4) Runtime
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+# 4) Runtime — chiseled (distroless-style) base: no shell, no package manager, none of the Debian
+#    userland packages Grype keeps flagging; same `-extra` variant (ICU + tzdata for culture/timezone
+#    formatting) the ClutterStock API uses. Non-root by default (`app`, uid 1654 — the same uid the
+#    k8s deployment already pins via runAsUser). Consequences: no `docker exec` shell into the
+#    container, and any in-container healthcheck would need a sidecar (the e2e compose already
+#    polls /healthz from a curl sidecar for exactly this reason).
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra AS final
 WORKDIR /app
 COPY --from=backend /app/publish ./
 COPY --from=aircraftdb /out/aircraft.csv.gz /app/data/aircraft.csv.gz
@@ -99,7 +104,6 @@ COPY backend/tests/Api.Tests/fixtures/transmitters.json /app/fixtures/transmitte
 ENV ASPNETCORE_URLS=http://0.0.0.0:8080 \
     DOTNET_RUNNING_IN_CONTAINER=true
 
-# Non-root (the aspnet image ships an `app` user as $APP_UID=1654).
-USER $APP_UID
+# No USER needed: chiseled images already default to the non-root `app` user (uid 1654).
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "Skylens.Api.dll"]
