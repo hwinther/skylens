@@ -6,8 +6,10 @@
  * rotation matrix. We only need the camera pointing direction: for a phone held up
  * to look at the sky, the back camera looks along the device −Z axis. We build a
  * world←device rotation matrix from the Euler angles, transform the device −Z axis
- * into world ENU, and read off azimuth / elevation. Roll comes from the device up
- * (−Y or +Y) vector projected into the image plane.
+ * into world ENU, and read off azimuth / elevation. Roll comes from the SCREEN up
+ * (the device top rotated by the current screen-orientation angle) projected into the
+ * image plane — so a landscape hold reads level once the OS has rotated the UI, exactly
+ * like the web path (see webOrientation.ts).
  *
  * We then apply magnetic declination (so the gyro-derived azimuth, which is
  * relative to magnetic north via the fused rotation, is corrected to true north)
@@ -16,7 +18,7 @@
  * Must import nothing from react-native / expo / react.
  */
 
-import { normalizeAzimuth, rad2deg } from "./geo";
+import { deg2rad, normalizeAzimuth, rad2deg } from "./geo";
 
 export interface DeviceRotation {
   /** Rotation around Z (yaw), radians — DeviceMotion.rotation.alpha. */
@@ -76,8 +78,14 @@ export function rotationMatrixFromEuler(rot: DeviceRotation): Mat3 {
 /**
  * Given a world←device rotation matrix, compute the back-camera pose.
  * The back camera looks along device −Z; the device "up" (top edge) is +Y.
+ *
+ * `screenAngleDeg` is the OS screen-orientation angle (0 portrait, 90/180/270 as the UI
+ * rotates). It rotates the "up" reference off the raw device top so a landscape hold —
+ * where the OS has already turned the UI + camera preview — reports roll ≈ 0 instead of
+ * ~±90. Default 0 leaves the portrait behaviour (and every existing caller) unchanged.
+ * On native, pass the negation of expo-sensors' DeviceMotion `orientation` (see usePoseRefs).
  */
-export function poseFromMatrix(r: Mat3): CameraPose {
+export function poseFromMatrix(r: Mat3, screenAngleDeg = 0): CameraPose {
   // Back-camera bore-sight = device −Z axis in world coords = −(third column of R).
   const boreDevice: Vec3 = [0, 0, -1];
   const bore = multiplyMatVec(r, boreDevice);
@@ -87,11 +95,16 @@ export function poseFromMatrix(r: Mat3): CameraPose {
   const azimuth = normalizeAzimuth(rad2deg(Math.atan2(bx, by)));
   const elevation = rad2deg(Math.atan2(bz, horiz));
 
-  // Roll: project the device top edge (+Y) into the plane perpendicular to the
-  // bore-sight and measure its angle from world-up. We compute the "screen up"
-  // by removing the bore component from the device-Y world vector, then compare
-  // to the ideal (world-up with bore removed).
-  const topWorld = multiplyMatVec(r, [0, 1, 0]);
+  // Roll: project the SCREEN up (device top +Y rotated about the device z by the screen
+  // angle) into the plane perpendicular to the bore-sight and measure its angle from
+  // world-up. Removing the bore component from the screen-up world vector gives the
+  // on-image "up"; compare it to the ideal (world-up with the bore removed). Screen
+  // rotation is about device-z, which leaves the bore (−Z) — and thus azimuth/elevation
+  // — untouched; it only re-references which device edge is "up". Same construction as
+  // webOrientation.poseFromOrientation.
+  const theta = deg2rad(screenAngleDeg);
+  const screenUpDevice: Vec3 = [Math.sin(theta), Math.cos(theta), 0]; // Rz(−theta)·[0,1,0]
+  const topWorld = multiplyMatVec(r, screenUpDevice);
   const boreNorm = normalize(bore);
   const screenUp = normalize(subtract(topWorld, scale(boreNorm, dot(topWorld, boreNorm))));
   const worldUp: Vec3 = [0, 0, 1];
@@ -123,14 +136,16 @@ export function applyDeclinationAndTrim(
   };
 }
 
-/** Full pipeline: Euler angles → corrected back-camera pose. */
+/** Full pipeline: Euler angles → corrected back-camera pose. `screenAngleDeg` compensates
+ *  for the OS screen rotation so labels stay level in landscape (see poseFromMatrix). */
 export function cameraPoseFromRotation(
   rot: DeviceRotation,
   declinationDeg = 0,
   trimDeg = 0,
+  screenAngleDeg = 0,
 ): CameraPose {
   const r = rotationMatrixFromEuler(rot);
-  const pose = poseFromMatrix(r);
+  const pose = poseFromMatrix(r, screenAngleDeg);
   return applyDeclinationAndTrim(pose, declinationDeg, trimDeg);
 }
 

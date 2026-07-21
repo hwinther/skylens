@@ -79,6 +79,12 @@ export function usePoseRefs(options: UsePoseRefsOptions): PoseRefs {
         DeviceMotion.setUpdateInterval(16); // ~60 Hz
         motionSub = DeviceMotion.addListener((data) => {
           if (!data.rotation) return;
+          // data.orientation is the OS-applied screen rotation (0 / 90 / 180 / −90, from
+          // Surface.getRotation on Android). The pose wants its NEGATION: Android reports the
+          // rotation of the drawn graphics, which is the opposite of the physical device turn,
+          // so negating it makes a landscape hold read level (roll ≈ 0) once the UI + camera
+          // preview have rotated with the device. See orientation.poseFromMatrix.
+          const screenAngleDeg = -(data.orientation ?? 0);
           const next = cameraPoseFromRotation(
             {
               alpha: data.rotation.alpha,
@@ -87,6 +93,7 @@ export function usePoseRefs(options: UsePoseRefsOptions): PoseRefs {
             },
             declinationRef.current,
             trimRef.current,
+            screenAngleDeg,
           );
           poseRef.current = smoothPose(poseRef.current, next, alpha);
         });

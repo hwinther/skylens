@@ -41,6 +41,21 @@ export interface ProjectionConfig {
 
 export const DEFAULT_HFOV_DEG = 66;
 
+/**
+ * The horizontal FOV to feed `project()` for the current screen aspect, given a base FOV
+ * calibrated across the SHORTER screen edge (portrait width). The camera's focal length is
+ * a fixed property of the lens, so it must stay constant as the device rotates: portrait
+ * (aspect ≤ 1) passes the base through unchanged, while landscape widens it so an off-axis
+ * plane keeps its true bearing instead of spreading toward the frame edge. Uses the same
+ * single-focal-length (square-pixel) model as `project()`, so the vertical FOV it derives
+ * from `aspect` then equals the base — i.e. the short edge always subtends the base FOV.
+ */
+export function effectiveHFovDeg(baseHFovDeg: number, aspect: number): number {
+  if (aspect <= 1) return baseHFovDeg; // portrait / square: the base already spans the width
+  const halfBase = deg2rad(baseHFovDeg) / 2;
+  return rad2degSafe(2 * Math.atan(Math.tan(halfBase) * aspect));
+}
+
 export const DEFAULT_PROJECTION_CONFIG: ProjectionConfig = {
   hFovDeg: DEFAULT_HFOV_DEG,
   aspect: 9 / 16, // portrait phone: narrower than tall
