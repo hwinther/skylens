@@ -22,9 +22,9 @@
 
   <ItemGroup>
     <!-- JwtBearer validates Authelia's RFC 9068 access tokens (the clutterstock/test-api pattern). -->
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
     <!-- OpenAPI: built-in doc + Swashbuckle (the "v1" doc the CLI writes to openapi.json). -->
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
     <!-- MQTTnet v5: hand-rolled reconnect BackgroundService (ManagedClient was removed in v5). -->
     <PackageReference Include="MQTTnet" Version="5.2.0.1603" />
