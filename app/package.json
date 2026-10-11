@@ -62,7 +62,7 @@
     "eslint": "9.39.3",
     "eslint-config-expo": "~57.0.0",
     "jest": "30.4.2",
-    "jest-expo": "~57.0.0",
+    "jest-expo": "~58.0.7",
     "jest-junit": "^17.0.0",
     "openapi-typescript": "^7.13.0",
     "typescript": "~5.9.2"
