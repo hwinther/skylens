@@ -9,6 +9,7 @@ import { color } from "@/theme";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Sheet } from "./Sheet";
+import { ShowOnMapButton } from "./ShowOnMapButton";
 import type { ApiClient } from "@/api/client";
 import { useAircraftStore } from "@/state/aircraftStore";
 import type { AircraftDetail, RouteResponse } from "@/api/types";
@@ -111,11 +112,22 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
                 )}
               </View>
             )}
-
-            {state?.src === "adsblol" && (
-              <Text style={styles.attribution}>Away-mode traffic: adsb.lol (ODbL)</Text>
-            )}
           </>
+        )}
+
+        {/* Outside the detail block: the live position is enough to show it on the map, even when
+            the detail fetch failed (backend unreachable, unknown aircraft). */}
+        {hex && state?.lat != null && state?.lon != null && (
+          <ShowOnMapButton
+            testID="detail-show-on-map"
+            focus={{ kind: "aircraft", hex }}
+            accent={color.entity.air}
+            onClose={onClose}
+          />
+        )}
+
+        {state?.src === "adsblol" && (
+          <Text style={styles.attribution}>Away-mode traffic: adsb.lol (ODbL)</Text>
         )}
     </Sheet>
   );

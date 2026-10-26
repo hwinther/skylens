@@ -5,12 +5,13 @@
  */
 
 import { alpha, color } from "@/theme";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAircraftList } from "@/state/aircraftStore";
 import { useVesselList } from "@/state/vesselStore";
 import { useSettingsStore } from "@/state/settingsStore";
+import { useMapFocusStore } from "@/state/mapFocusStore";
 import {
   DetailSheet,
   AircraftRadar,
@@ -23,6 +24,8 @@ import {
 import { MapViewToggle, type MapView } from "@/components/webmap/MapViewToggle";
 import { LeafletMap } from "@/components/webmap/LeafletMap";
 import { airportFilter } from "@/components/webmap/airportStyle";
+import { resolveFocus } from "@/components/webmap/focus";
+import { MapFocusChip } from "@/components/webmap/MapFocusChip";
 import type { LatLngTuple } from "@/components/webmap/geojson";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl, getHomeLocation } from "@/api/config";
@@ -58,6 +61,19 @@ export default function MapScreen() {
     const snapToMap = () => setView("map");
     if (track.trackedNoradId != null) snapToMap();
   }, [track.trackedNoradId]);
+  // "Show on map" from a detail sheet: same snap, then LeafletMap centres on and follows the target.
+  const focus = useMapFocusStore((s) => s.focus);
+  const focusSeq = useMapFocusStore((s) => s.seq);
+  const following = useMapFocusStore((s) => s.following);
+  const setFocus = useMapFocusStore((s) => s.setFocus);
+  const setFollowing = useMapFocusStore((s) => s.setFollowing);
+  const clearFocus = useMapFocusStore((s) => s.clear);
+  useEffect(() => {
+    const snapToMap = () => setView("map");
+    if (focus != null) snapToMap();
+  }, [focus, focusSeq]);
+  const stopFollowing = useCallback(() => setFollowing(false), [setFollowing]);
+  const target = useMemo(() => resolveFocus(focus, aircraft, vessels), [focus, aircraft, vessels]);
   // Fishing overlays fetch only when at least one toggle is on; fail-soft to empty when unconfigured.
   const { zones, gear } = useFishingLayers({
     client,
@@ -122,12 +138,24 @@ export default function MapScreen() {
             trackKey={track.trackedNoradId}
             onClearTrack={track.clear}
             showCourseVectors={showCourseVectors}
+            focus={target}
+            focusSeq={focusSeq}
+            following={following}
+            onUserPan={stopFollowing}
           />
         )}
         {view === "map" && track.trackedNoradId != null ? (
           <Pressable testID="clear-track" style={styles.clearTrack} onPress={track.clear}>
             <Text style={styles.clearTrackText}>✕ Clear track</Text>
           </Pressable>
+        ) : null}
+        {view === "map" && target && focus ? (
+          <MapFocusChip
+            target={target}
+            following={following}
+            onFollow={() => setFocus(focus)}
+            onClear={clearFocus}
+          />
         ) : null}
       </View>
       <DetailSheet hex={selectedHex} client={client} onClose={() => setSelectedHex(null)} />
@@ -156,6 +184,8 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 12,
     right: 12,
+    // Above Leaflet's panes (z-index 400-700); without it the canvas swallows the tap.
+    zIndex: 1000,
     backgroundColor: alpha(color.bg, 0.9),
     borderColor: color.entity.orbit,
     borderWidth: StyleSheet.hairlineWidth,
