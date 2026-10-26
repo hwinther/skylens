@@ -113,6 +113,19 @@ public sealed class AdsbxOptions
     public int MonthlyBudget { get; set; } = 1000;
 }
 
+/// <summary>
+///     adsb.lol point-radius (free, keyless, ODbL). Primary away-mode source. DailyBudget fails closed;
+///     the default allows one fetch per 0.5° cell every 10 s for about five busy cells around the clock.
+/// </summary>
+public sealed class AdsbLolOptions
+{
+    public const string SectionName = "AdsbLol";
+
+    public bool Enabled { get; set; } = true;
+    public string BaseUrl { get; set; } = "https://api.adsb.lol";
+    public int DailyBudget { get; set; } = 40000;
+}
+
 /// <summary>FlightAware AeroAPI route lookups by callsign. DailyBudget fails closed.</summary>
 public sealed class AeroApiOptions
 {

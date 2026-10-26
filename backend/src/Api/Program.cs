@@ -28,6 +28,7 @@ builder.Services.AddOptions<MqttOptions>().Bind(configuration.GetSection(MqttOpt
 builder.Services.AddOptions<FeedOptions>().Bind(configuration.GetSection(FeedOptions.SectionName));
 builder.Services.AddOptions<OpenSkyOptions>().Bind(configuration.GetSection(OpenSkyOptions.SectionName));
 builder.Services.AddOptions<AdsbxOptions>().Bind(configuration.GetSection(AdsbxOptions.SectionName));
+builder.Services.AddOptions<AdsbLolOptions>().Bind(configuration.GetSection(AdsbLolOptions.SectionName));
 builder.Services.AddOptions<AeroApiOptions>().Bind(configuration.GetSection(AeroApiOptions.SectionName));
 builder.Services.AddOptions<AircraftDbOptions>().Bind(configuration.GetSection(AircraftDbOptions.SectionName));
 builder.Services.AddOptions<AirportsOptions>().Bind(configuration.GetSection(AirportsOptions.SectionName));
@@ -174,10 +175,14 @@ builder.Services.AddHostedService(static sp => sp.GetRequiredService<AircraftDbS
 builder.Services.AddSingleton<AirportDbService>();
 builder.Services.AddHostedService(static sp => sp.GetRequiredService<AirportDbService>());
 
-// Per-provider budgets: ADSBx monthly, AeroAPI daily. Keyed so the clients pull the right one.
+// Per-provider budgets: ADSBx monthly, AeroAPI/adsb.lol daily. Keyed so the clients pull the right one.
 builder.Services.AddKeyedSingleton("adsbx", static (sp, _) =>
     UpstreamBudget.Monthly(
         sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AdsbxOptions>>().Value.MonthlyBudget,
+        sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddKeyedSingleton("adsblol", static (sp, _) =>
+    UpstreamBudget.Daily(
+        sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AdsbLolOptions>>().Value.DailyBudget,
         sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddKeyedSingleton("aeroapi", static (sp, _) =>
     UpstreamBudget.Daily(
@@ -205,6 +210,7 @@ builder.Services.AddKeyedSingleton("satnogs", static (sp, _) =>
 
 builder.Services.AddHttpClient<OpenSkyMetadataClient>();
 builder.Services.AddHttpClient<AdsbxClient>();
+builder.Services.AddHttpClient<AdsbLolClient>(static client => client.Timeout = TimeSpan.FromSeconds(10));
 builder.Services.AddHttpClient<AeroApiClient>();
 builder.Services.AddHttpClient<BarentsWatchClient>();
 builder.Services.AddSingleton<MetadataService>();
@@ -232,9 +238,14 @@ builder.Services.AddSingleton<SatNogsClient>();
 builder.Services.AddHttpClient("fiskinfo", client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddSingleton<FiskInfoClient>();
 
-// The away-mode source the broadcaster consumes is the ADSBx client. HttpClient-typed clients are
-// registered transient, so resolve the same instance the DI container builds for AdsbxClient.
-builder.Services.AddSingleton<IAwayModeSource>(static sp => sp.GetRequiredService<AdsbxClient>());
+// The away-mode source the broadcaster and /api/area consume: adsb.lol (free) first, ADSBx (paid, only
+// with a RapidAPI key) as fallback. HttpClient-typed clients are registered transient, so the chain is
+// the singleton that holds one instance of each, which is what keeps their per-cell caches shared.
+builder.Services.AddSingleton<IAwayModeSource>(static sp => new AwayModeChain(
+[
+    sp.GetRequiredService<AdsbLolClient>(),
+    sp.GetRequiredService<AdsbxClient>(),
+]));
 // Vessel away-mode is the BarentsWatch client (same transient-typed-client resolve pattern as ADSBx).
 builder.Services.AddSingleton<IVesselAwayModeSource>(static sp => sp.GetRequiredService<BarentsWatchClient>());
 

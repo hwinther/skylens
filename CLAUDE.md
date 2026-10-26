@@ -8,7 +8,8 @@ Guidance for working in this repo.
 gateway. The app overlays aircraft labels on the camera preview using GPS + compass/gyro sensor
 fusion (pinhole projection, no ARCore). The backend consumes a live ADS-B MQTT feed, keeps aircraft
 state in memory, streams slim snapshots over a SignalR hub, and enriches on demand from OpenSky /
-ADS-B Exchange / FlightAware AeroAPI behind caches and per-provider budgets. Auth is Authelia OIDC +
+FlightAware AeroAPI behind caches and per-provider budgets. Viewers outside the home feed's range
+get away-mode traffic from adsb.lol (free), with ADS-B Exchange as an optional paid fallback. Auth is Authelia OIDC +
 PKCE; the backend validates the JWT with audience `skylens-api`.
 
 ## Layout
@@ -53,7 +54,7 @@ npx expo start --web              # react-native-web build (map screen → map.w
   `dependabot-update-dotnet-lockfiles` workflow regenerates them on the PR branch.
 - **Never relay the raw ADS-B blob** to clients — the hub sends a slim per-aircraft DTO. Keep the
   filtering (radius, positioned-only) and the DTO shape as the bandwidth contract.
-- **Enrichment spend is gated**: ADS-B Exchange / AeroAPI calls go through single-flight caching and
+- **Enrichment spend is gated**: adsb.lol / ADS-B Exchange / AeroAPI calls go through single-flight caching and
   per-provider budgets that fail closed. Route lookups are on-tap only. Do not add uncached fan-out
   to these providers.
 - **No secrets or home coordinates in the repo.** MQTT credentials, provider API keys, and the
