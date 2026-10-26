@@ -138,11 +138,12 @@ public static class ApiEndpoints
                    })
            .WithName("AircraftRouteCached");
 
-        // GET /api/area?lat=&lon=&radiusKm= — ADSBx point-radius (away-mode coverage). Tight budget/rate limit.
+        // GET /api/area?lat=&lon=&radiusKm= — away-mode point-radius (adsb.lol, ADSBx fallback). Shares
+        // the broadcaster's per-cell cache and budgets; tight rate limit.
         api.MapGet("/area",
                    async Task<Results<Ok<IReadOnlyList<AircraftDto>>, ProblemHttpResult>> (
                        double lat, double lon, double? radiusKm,
-                       AdsbxClient adsbx,
+                       IAwayModeSource awayMode,
                        ClaimsPrincipal user,
                        ILoggerFactory loggerFactory,
                        CancellationToken ct) =>
@@ -150,7 +151,7 @@ public static class ApiEndpoints
                        using var _ = BeginAuditScope(loggerFactory, "area", user);
 
                        var r = Math.Clamp(radiusKm ?? 300, 1, 500);
-                       var result = await adsbx.GetAsync(lat, lon, r, ct);
+                       var result = await awayMode.GetAsync(lat, lon, r, ct);
                        if (result.StatusReason is not null)
                            return TypedResults.Problem(
                                detail: result.StatusReason,

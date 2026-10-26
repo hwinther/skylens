@@ -13,7 +13,7 @@ streams a live ADS-B feed and enriches it on demand.
 - **`backend/`** — ASP.NET Core 10 Minimal API + SignalR gateway. Consumes an ADS-B MQTT feed,
   keeps an in-memory aircraft state store, and pushes a slim per-subscriber snapshot over a SignalR
   hub (~1 Hz). Enriches aircraft with registration/type (bundled offline DB, OpenSky fallback),
-  away-area coverage (ADS-B Exchange), and on-tap route lookups (FlightAware AeroAPI), all behind
+  away-area coverage (adsb.lol, ADS-B Exchange fallback), and on-tap route lookups (FlightAware AeroAPI), all behind
   single-flight caching and per-provider budgets to protect API quotas.
 
 Access requires sign-in: **Authelia OIDC + PKCE**, and the backend validates the RFC 9068 JWT with

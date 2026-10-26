@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Sheet } from "./Sheet";
 import type { ApiClient } from "@/api/client";
+import { useAircraftStore } from "@/state/aircraftStore";
 import type { AircraftDetail, RouteResponse } from "@/api/types";
 
 export interface DetailSheetProps {
@@ -24,6 +25,10 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
   const [loading, setLoading] = useState(false);
   const [routeLoading, setRouteLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Away-mode aircraft (adsb.lol / ADSBx) aren't in the backend's own-feed store, so the detail
+  // response carries metadata only; fall back to the live snapshot entry for the state fields.
+  const live = useAircraftStore((s) => (hex ? s.byHex[hex] : undefined));
+  const state = detail?.state ?? live ?? null;
 
   useEffect(() => {
     setDetail(null);
@@ -70,21 +75,21 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
         {detail && (
           <>
             <Text testID="detail-title" style={styles.title}>
-              {detail.state?.flight?.trim() ||
-                (detail.state?.hex ?? detail.metadata?.hex ?? hex ?? "").toUpperCase()}
+              {state?.flight?.trim() ||
+                (state?.hex ?? detail.metadata?.hex ?? hex ?? "").toUpperCase()}
             </Text>
             <Row label="Registration" value={detail.metadata?.registration} />
             <Row label="Type" value={detail.metadata?.typeName ?? detail.metadata?.typeCode} />
             <Row label="Operator" value={detail.metadata?.operator} />
             <Row
               label="Altitude"
-              value={detail.state?.alt != null ? `${detail.state.alt.toLocaleString()} ft` : null}
+              value={state?.alt != null ? `${state.alt.toLocaleString()} ft` : null}
             />
             <Row
               label="Ground speed"
-              value={detail.state?.gs != null ? `${Math.round(detail.state.gs)} kt` : null}
+              value={state?.gs != null ? `${Math.round(state.gs)} kt` : null}
             />
-            <Row label="Source" value={detail.state?.src ?? detail.metadata?.source} />
+            <Row label="Source" value={state?.src ?? detail.metadata?.source} />
 
             {!route && (
               <Pressable style={styles.routeBtn} onPress={loadRoute} disabled={routeLoading}>
@@ -105,6 +110,10 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
                   </Text>
                 )}
               </View>
+            )}
+
+            {state?.src === "adsblol" && (
+              <Text style={styles.attribution}>Away-mode traffic: adsb.lol (ODbL)</Text>
             )}
           </>
         )}
@@ -138,4 +147,5 @@ const styles = StyleSheet.create({
   route: { marginTop: 12 },
   routeText: { color: color.text, fontSize: 16, fontWeight: "600" },
   routeSub: { color: color.textDim, fontSize: 12, marginTop: 2 },
+  attribution: { color: color.textMuted, fontSize: 11, marginTop: 12 },
 });
