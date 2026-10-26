@@ -8,12 +8,22 @@ import { color } from "@/theme";
 import "leaflet/dist/leaflet.css";
 import { useEffect, useMemo, useRef } from "react";
 import L from "leaflet";
-import { MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, useMap } from "react-leaflet";
+import {
+  CircleMarker,
+  MapContainer,
+  Marker,
+  Polygon,
+  Polyline,
+  Popup,
+  TileLayer,
+  useMap,
+} from "react-leaflet";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { AircraftDto, AirportDto, FishingZone, LostGear, VesselDto } from "@/api/types";
 import { iconForCategory } from "@/components/aircraftIcon";
 import { iconForVessel } from "@/components/vesselIcon";
 import { lineLatLngs, pointLatLng, polygonRings, type GeoGeometry, type LatLngTuple } from "./geojson";
+import { FOCUS_ZOOM, type FocusTarget } from "./focus";
 import {
   AIRPORT_COLOR,
   AIRPORT_GLYPH,
@@ -66,6 +76,14 @@ export interface LeafletMapProps {
   onClearTrack?: () => void;
   /** Draw a short predicted-track (course/heading) leader ahead of moving aircraft & ships. */
   showCourseVectors?: boolean;
+  /** "Show on map" target to centre on (and ring), or null. */
+  focus?: FocusTarget | null;
+  /** mapFocusStore seq: the map re-centres once per new value. */
+  focusSeq?: number;
+  /** Keep the focus target centred as it moves. */
+  following?: boolean;
+  /** Called when the user drags the map (ends follow mode). */
+  onUserPan?: () => void;
 }
 
 // Reach the icon-font statics (not in the public types) so Leaflet's raw-HTML markers render the same
@@ -296,6 +314,50 @@ function FitTrack({ points, trackKey }: { points: [number, number][]; trackKey: 
   return null;
 }
 
+/**
+ * Centres on the "Show on map" target once per request (seq), then pans along with it while
+ * `following`; a user drag reports back through onUserPan. The follow effect is declared before the
+ * centre effect so the render that centres doesn't immediately replace setView with a pan.
+ */
+function FocusController({
+  target,
+  seq,
+  following,
+  onUserPan,
+}: {
+  target: FocusTarget | null;
+  seq: number;
+  following: boolean;
+  onUserPan?: () => void;
+}) {
+  const map = useMap();
+  const centredSeq = useRef<number | null>(null);
+  const lat = target?.position?.lat;
+  const lon = target?.position?.lon;
+  const kind = target?.kind;
+
+  useEffect(() => {
+    if (!onUserPan) return;
+    map.on("dragstart", onUserPan);
+    return () => {
+      map.off("dragstart", onUserPan);
+    };
+  }, [map, onUserPan]);
+
+  useEffect(() => {
+    if (!following || lat == null || lon == null || centredSeq.current !== seq) return;
+    map.panTo([lat, lon], { animate: true });
+  }, [map, following, seq, lat, lon]);
+
+  useEffect(() => {
+    if (kind == null || lat == null || lon == null || centredSeq.current === seq) return;
+    map.setView([lat, lon], Math.max(map.getZoom(), FOCUS_ZOOM[kind]), { animate: true });
+    centredSeq.current = seq;
+  }, [map, seq, kind, lat, lon]);
+
+  return null;
+}
+
 export function LeafletMap({
   aircraft,
   observer,
@@ -312,6 +374,10 @@ export function LeafletMap({
   trackKey = null,
   onClearTrack,
   showCourseVectors = false,
+  focus = null,
+  focusSeq = 0,
+  following = false,
+  onUserPan,
 }: LeafletMapProps) {
   const positioned = aircraft.filter((a) => a.lat != null && a.lon != null);
   const positionedVessels = vessels.filter((v) => v.lat != null && v.lon != null);
@@ -338,6 +404,19 @@ export function LeafletMap({
       {/* Airport reference layer under the traffic markers (runways + steel-blue class-sized markers). */}
       <Airports airports={airports} onSelectAirport={onSelectAirport} />
       <Marker position={[observer.lat, observer.lon]} icon={observerIcon} />
+      {/* Focus ring under the traffic markers, so the target's own marker stays tappable. */}
+      {focus?.position ? (
+        <CircleMarker
+          center={[focus.position.lat, focus.position.lon]}
+          radius={20}
+          interactive={false}
+          pathOptions={{
+            color: focus.kind === "aircraft" ? color.entity.air : color.entity.sea,
+            weight: 2,
+            fillOpacity: 0.15,
+          }}
+        />
+      ) : null}
       {positioned.map((a) => (
         <Marker
           key={a.hex}
@@ -399,6 +478,7 @@ export function LeafletMap({
       ) : null}
       <FitBounds points={points} />
       <FitTrack points={trackPoints} trackKey={trackKey} />
+      <FocusController target={focus} seq={focusSeq} following={following} onUserPan={onUserPan} />
     </MapContainer>
   );
 }

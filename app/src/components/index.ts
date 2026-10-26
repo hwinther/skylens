@@ -8,6 +8,7 @@ export * from "./AirportDetailSheet";
 export * from "./CompassCalibration";
 export * from "./EmptyState";
 export * from "./Sheet";
+export * from "./ShowOnMapButton";
 export * from "./StatusStrip";
 export * from "./TrustLegend";
 export * from "./VesselLabel";

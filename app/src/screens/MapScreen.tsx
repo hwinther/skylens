@@ -14,6 +14,7 @@ import type { AircraftDto, AirportDto, FishingZone, LostGear, VesselDto } from "
 import { useAircraftList } from "@/state/aircraftStore";
 import { useVesselList } from "@/state/vesselStore";
 import { useSettingsStore } from "@/state/settingsStore";
+import { useMapFocusStore } from "@/state/mapFocusStore";
 import {
   DetailSheet,
   AircraftRadar,
@@ -55,6 +56,8 @@ import {
   airportTitle,
 } from "@/components/webmap/airportStyle";
 import { MapViewToggle, type MapView as MapViewMode } from "@/components/webmap/MapViewToggle";
+import { FOCUS_SPAN_DEG, resolveFocus } from "@/components/webmap/focus";
+import { MapFocusChip } from "@/components/webmap/MapFocusChip";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl, getHomeLocation } from "@/api/config";
 import { DEMO_HOME } from "@/mock/mockFeed";
@@ -226,6 +229,28 @@ function AirportMarker({
   );
 }
 
+/**
+ * Ring drawn under the focused aircraft/vessel ("Show on map"). A static view, so it uses the same
+ * brief tracksViewChanges window as the traffic markers and then only moves natively.
+ */
+function FocusRing({ lat, lon, accent }: { lat: number; lon: number; accent: string }) {
+  const [tracksViewChanges, setTracksViewChanges] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setTracksViewChanges(false), 800);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <Marker
+      coordinate={{ latitude: lat, longitude: lon }}
+      anchor={{ x: 0.5, y: 0.5 }}
+      tracksViewChanges={tracksViewChanges}
+      tappable={false}
+    >
+      <View style={[styles.focusRing, { borderColor: accent, backgroundColor: alpha(accent, 0.15) }]} />
+    </Marker>
+  );
+}
+
 /** Real runway segments per airport — one steel-blue Polyline per runway whose BOTH ends carry coords. */
 function AirportRunways({ airports }: { airports: AirportDto[] }) {
   return (
@@ -273,6 +298,24 @@ export default function MapScreen() {
   const [selectedAirportIdent, setSelectedAirportIdent] = useState<string | null>(null);
   const mapRef = useRef<MapView>(null);
   const fittedFor = useRef<number | null>(null);
+  // "Show on map" focus from a detail sheet: centre once per request (seq), then follow until the
+  // user drags the map. The map can only be animated after onMapReady, and a radar/map switch
+  // remounts it, so both reset the ready flag and the "already centred" marker.
+  const focus = useMapFocusStore((s) => s.focus);
+  const focusSeq = useMapFocusStore((s) => s.seq);
+  const following = useMapFocusStore((s) => s.following);
+  const setFocus = useMapFocusStore((s) => s.setFocus);
+  const setFollowing = useMapFocusStore((s) => s.setFollowing);
+  const clearFocus = useMapFocusStore((s) => s.clear);
+  const [mapReady, setMapReady] = useState(false);
+  const centredSeq = useRef<number | null>(null);
+  const changeView = (next: MapViewMode) => {
+    if (next !== view) {
+      setMapReady(false);
+      centredSeq.current = null;
+    }
+    setView(next);
+  };
   // Fishing overlays fetch only when at least one toggle is on; fail-soft to empty when unconfigured.
   const { zones, gear } = useFishingLayers({
     client,
@@ -287,6 +330,12 @@ export default function MapScreen() {
     const snapToMap = () => setView("map");
     if (track.trackedNoradId != null) snapToMap();
   }, [track.trackedNoradId]);
+
+  // Same snap for a new "Show on map" request (radar can't centre on a target).
+  useEffect(() => {
+    const snapToMap = () => setView("map");
+    if (focus != null) snapToMap();
+  }, [focus, focusSeq]);
 
   // Fit the map to the track bounds once per new tracked satellite (so it zooms out to the whole orbit).
   // Keyed on the tracked id, not every render; points arrive a moment after selection (async fetch).
@@ -313,6 +362,30 @@ export default function MapScreen() {
   const positionedVessels = vessels.filter(
     (v) => v.lat != null && v.lon != null && (v.kind === "aton" ? showAton : showShips),
   );
+  const target = useMemo(() => resolveFocus(focus, aircraft, vessels), [focus, aircraft, vessels]);
+  const targetLat = target?.position?.lat;
+  const targetLon = target?.position?.lon;
+  const targetKind = target?.kind;
+
+  // Follow: keep the target centred as it moves (zoom untouched). Declared BEFORE the centre effect
+  // so the render that centres doesn't immediately interrupt that animation with a pan.
+  useEffect(() => {
+    if (view !== "map" || !mapReady || !following || targetLat == null || targetLon == null) return;
+    if (centredSeq.current !== focusSeq) return;
+    mapRef.current?.animateCamera({ center: { latitude: targetLat, longitude: targetLon } }, { duration: 900 });
+  }, [view, mapReady, following, focusSeq, targetLat, targetLon]);
+
+  // Centre + zoom once per request.
+  useEffect(() => {
+    if (view !== "map" || !mapReady || targetKind == null || targetLat == null || targetLon == null) return;
+    if (centredSeq.current === focusSeq) return;
+    const span = FOCUS_SPAN_DEG[targetKind];
+    mapRef.current?.animateToRegion(
+      { latitude: targetLat, longitude: targetLon, latitudeDelta: span, longitudeDelta: span },
+      600,
+    );
+    centredSeq.current = focusSeq;
+  }, [view, mapReady, focusSeq, targetKind, targetLat, targetLon]);
   // Airports: fetched once (static) when the layer is on, then filtered by the small-airfields toggle.
   const airports = useAirports({ client, observer, enabled: showAirports });
   const shownAirports = useMemo(
@@ -322,7 +395,7 @@ export default function MapScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <MapViewToggle view={view} onChange={setView} count={positioned.length} />
+      <MapViewToggle view={view} onChange={changeView} count={positioned.length} />
       <View style={styles.body}>
         {view === "radar" ? (
           <AircraftRadar
@@ -343,6 +416,11 @@ export default function MapScreen() {
             style={StyleSheet.absoluteFill}
             initialRegion={{ latitude: observer.lat, longitude: observer.lon, latitudeDelta: 1.2, longitudeDelta: 1.2 }}
             showsUserLocation
+            onMapReady={() => setMapReady(true)}
+            // A user drag ends follow mode; the focus chip resumes it.
+            onPanDrag={() => {
+              if (following) setFollowing(false);
+            }}
           >
             {/* Fishing overlays first so aircraft/vessel markers draw on top of the zone fills. */}
             {showFishingZones ? <FishingZoneShapes zones={zones} /> : null}
@@ -396,6 +474,14 @@ export default function MapScreen() {
               title="You"
               pinColor={color.entity.air}
             />
+            {target?.position ? (
+              <FocusRing
+                key={`focus-${target.kind}-${target.id}`}
+                lat={target.position.lat}
+                lon={target.position.lon}
+                accent={target.kind === "aircraft" ? color.entity.air : color.entity.sea}
+              />
+            ) : null}
             {positioned.map((a) => (
               <AircraftMarker key={a.hex} aircraft={a} onSelect={setSelectedHex} />
             ))}
@@ -419,6 +505,14 @@ export default function MapScreen() {
           <Pressable testID="clear-track" style={styles.clearTrack} onPress={track.clear}>
             <Text style={styles.clearTrackText}>✕ Clear track</Text>
           </Pressable>
+        ) : null}
+        {view === "map" && target && focus ? (
+          <MapFocusChip
+            target={target}
+            following={following}
+            onFollow={() => setFocus(focus)}
+            onClear={clearFocus}
+          />
         ) : null}
       </View>
       <DetailSheet hex={selectedHex} client={client} onClose={() => setSelectedHex(null)} />
@@ -455,4 +549,5 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   clearTrackText: { color: color.entity.orbit, fontSize: 13, fontWeight: "700" },
+  focusRing: { width: 40, height: 40, borderRadius: 20, borderWidth: 2 },
 });

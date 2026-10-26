@@ -15,6 +15,7 @@ import { alpha, color } from "@/theme";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Sheet } from "./Sheet";
+import { ShowOnMapButton } from "./ShowOnMapButton";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
 import type { VesselDetail, VesselDto } from "@/api/types";
@@ -113,6 +114,15 @@ export function VesselDetailSheet({ mmsi, vessel, onClose }: VesselDetailSheetPr
           {flag ? <Text style={styles.flag}>{flag}</Text> : null}
           {mmsi != null ? <Text style={styles.mmsi}>{mmsi}</Text> : null}
         </View>
+
+        {mmsi != null && hasPosition ? (
+          <ShowOnMapButton
+            testID="vessel-show-on-map"
+            focus={{ kind: "vessel", mmsi }}
+            accent={color.entity.sea}
+            onClose={onClose}
+          />
+        ) : null}
 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
           {loading && <ActivityIndicator color={color.entity.sea} />}
