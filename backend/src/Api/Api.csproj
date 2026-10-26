@@ -25,14 +25,14 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.13" />
     <!-- OpenAPI: built-in doc + Swashbuckle (the "v1" doc the CLI writes to openapi.json). -->
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.13" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.3.0" />
     <!-- MQTTnet v5: hand-rolled reconnect BackgroundService (ManagedClient was removed in v5). -->
     <PackageReference Include="MQTTnet" Version="5.2.0.1603" />
     <!-- OpenTelemetry stack mirrors the proven test-api versions. -->
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.0" />
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.16.0" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.20.0" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.0" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.16.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.20.0" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.20.0" />
   </ItemGroup>
 
