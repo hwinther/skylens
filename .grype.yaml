@@ -1,0 +1,17 @@
+# Grype configuration, picked up automatically by the container scan (anchore/scan-action runs in the
+# repo checkout). Only false positives belong here: each entry is keyed on the CVE AND the package it was
+# wrongly matched to, with the reason. Remove an entry once Grype/NVD stops producing the match.
+#
+# The package scope is by name only: the scan reads an SPDX SBOM, where Grype loses the package type
+# (it reports "UnknownPackage"), so a `type: dotnet` scope would never match.
+ignore:
+  # OpenTelemetry JavaScript (@opentelemetry/propagator-jaeger). NVD tags it with the generic
+  # cpe:2.3:a:opentelemetry:opentelemetry CPE (target_sw node.js); Grype's CPE matcher ignores target_sw
+  # and hits the .NET NuGet OpenTelemetry package, which this CVE does not affect.
+  - vulnerability: CVE-2026-59892
+    package:
+      name: OpenTelemetry
+  # OpenTelemetry-Go (BSD kenv command path). Same generic CPE (target_sw go), same .NET false match.
+  - vulnerability: CVE-2026-39883
+    package:
+      name: OpenTelemetry
