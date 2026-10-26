@@ -3,7 +3,7 @@
     "name": "Skylens",
     "slug": "skylens",
     "version": "0.1.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "scheme": "skylens",
     "userInterfaceStyle": "automatic",

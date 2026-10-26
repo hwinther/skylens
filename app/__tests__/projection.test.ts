@@ -1,6 +1,7 @@
 import {
   DEFAULT_HFOV_DEG,
   DEFAULT_PROJECTION_CONFIG,
+  effectiveHFovDeg,
   project,
   type ProjectionConfig,
 } from "@/ar/projection";
@@ -62,6 +63,46 @@ describe("project — culling and off-screen arrows", () => {
     const p = project({ azimuth: 180, elevation: 0 }, NORTH_LEVEL, CONFIG);
     expect(p.behind).toBe(true);
     expect(p.onScreen).toBe(false);
+  });
+});
+
+describe("effectiveHFovDeg — focal length constant across rotation", () => {
+  it("portrait (aspect ≤ 1) returns the base FOV unchanged", () => {
+    expect(effectiveHFovDeg(66, 9 / 16)).toBeCloseTo(66, 9);
+    expect(effectiveHFovDeg(66, 1)).toBeCloseTo(66, 9);
+  });
+
+  it("landscape widens the horizontal FOV beyond the base", () => {
+    expect(effectiveHFovDeg(66, 16 / 9)).toBeGreaterThan(66);
+  });
+
+  it("keeps the short screen edge subtending the base FOV after a 90° turn", () => {
+    // Portrait short edge = width = base. Landscape short edge = height, whose FOV project()
+    // derives from the widened horizontal FOV and the aspect — it must come back to the base.
+    const base = 66;
+    const aspect = 16 / 9;
+    const effH = effectiveHFovDeg(base, aspect);
+    const derivedVFov =
+      (2 * Math.atan(Math.tan((effH * Math.PI) / 180 / 2) / aspect) * 180) / Math.PI;
+    expect(derivedVFov).toBeCloseTo(base, 6);
+  });
+
+  it("preserves a target's position relative to the short screen edge across rotation", () => {
+    const base = 66;
+    const aspect = 16 / 9;
+    const portrait = project({ azimuth: 20, elevation: 0 }, NORTH_LEVEL, {
+      hFovDeg: base,
+      aspect: 9 / 16,
+      cullMargin: 0.15,
+    });
+    const landscape = project({ azimuth: 20, elevation: 0 }, NORTH_LEVEL, {
+      hFovDeg: effectiveHFovDeg(base, aspect),
+      aspect,
+      cullMargin: 0.15,
+    });
+    // Short edge = width (portrait) vs height (landscape); expressing the horizontal offset in
+    // short-edge units (×aspect for landscape) must match — the focal length didn't change.
+    expect(landscape.xNdc * aspect).toBeCloseTo(portrait.xNdc, 9);
   });
 });
 

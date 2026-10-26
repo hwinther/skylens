@@ -12,6 +12,7 @@ import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import {
   declutter,
   deadReckonVessel,
+  effectiveHFovDeg,
   extrapolateView,
   GROUP_PRIORITY,
   lookAngles,
@@ -280,7 +281,9 @@ export function ArOverlay({
     // loop (the "frozen, can't tap, planes stuck as arrows" symptom). 20 fps still tracks the sky.
     const MIN_INTERVAL_MS = 1000 / 20;
     const config: ProjectionConfig = {
-      hFovDeg: hFovRef.current,
+      // hFovRef is the base FOV calibrated for portrait width; effectiveHFovDeg widens it in
+      // landscape so the constant camera focal length is preserved as the screen rotates.
+      hFovDeg: effectiveHFovDeg(hFovRef.current, width / height),
       aspect: width / height,
       cullMargin: 0.15,
     };
@@ -293,7 +296,7 @@ export function ArOverlay({
 
       const pose = poseRef.current;
       const observer = positionRef.current;
-      config.hFovDeg = hFovRef.current;
+      config.hFovDeg = effectiveHFovDeg(hFovRef.current, width / height);
       config.aspect = width / height;
 
       const nextLabels: RenderLabel[] = [];
