@@ -15,3 +15,23 @@ ignore:
   - vulnerability: CVE-2026-39883
     package:
       name: OpenTelemetry
+  # The rest of the same CPE family (all below the high gate, listed so Code Scanning stays clean).
+  # Each is another OpenTelemetry implementation, never the .NET NuGet packages:
+  - vulnerability: CVE-2026-54285 # JavaScript: @opentelemetry/core W3CBaggagePropagator size limits
+    package:
+      name: OpenTelemetry
+  - vulnerability: CVE-2026-41178 # Go: baggage Parse raw-length rejection
+    package:
+      name: OpenTelemetry
+  - vulnerability: CVE-2026-39882 # Go: OTLP HTTP exporters read unbounded responses
+    package:
+      name: OpenTelemetry
+  - vulnerability: CVE-2026-81869 # Go: sdk/trace attribute truncation
+    package:
+      name: OpenTelemetry
+  - vulnerability: CVE-2026-81870 # Go: sdk/trace NewTracerProvider
+    package:
+      name: OpenTelemetry
+  - vulnerability: CVE-2026-44967 # C++: OTLP HTTP exporters read unbounded responses
+    package:
+      name: OpenTelemetry
