@@ -28,13 +28,12 @@ import { resolveFocus } from "@/components/webmap/focus";
 import { MapFocusChip } from "@/components/webmap/MapFocusChip";
 import type { LatLngTuple } from "@/components/webmap/geojson";
 import { ApiClient } from "@/api/client";
-import { getApiBaseUrl, getHomeLocation } from "@/api/config";
-import { DEMO_HOME } from "@/mock/mockFeed";
+import { getApiBaseUrl } from "@/api/config";
+import { useObserver } from "@/components/useObserver";
 
 export default function MapScreen() {
   const aircraft = useAircraftList();
   const vessels = useVesselList();
-  const demoMode = useSettingsStore((s) => s.demoMode);
   const showShips = useSettingsStore((s) => s.showShips);
   const showAton = useSettingsStore((s) => s.showAton);
   const showCourseVectors = useSettingsStore((s) => s.showCourseVectors);
@@ -88,10 +87,8 @@ export default function MapScreen() {
     () => (view === "map" && track.subPoint ? [track.subPoint.lat, track.subPoint.lon] : null),
     [view, track.subPoint],
   );
-  const observer = useMemo(
-    () => (demoMode ? DEMO_HOME : (getHomeLocation() ?? DEMO_HOME)),
-    [demoMode],
-  );
+  // Device GPS (or baked home) shared via observerStore, not the build-time home alone.
+  const observer = useObserver();
   const positioned = aircraft.filter((a) => a.lat != null && a.lon != null);
   // Vessels the toggles allow, positioned only — ships gated by showShips, AtoNs by showAton.
   const positionedVessels = vessels.filter(

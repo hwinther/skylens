@@ -35,6 +35,7 @@ export interface UseLiveFeedOptions {
 
 export function useLiveFeed({ enabled, baseUrl, observer, radiusKm }: UseLiveFeedOptions): void {
   const setSnapshot = useAircraftStore((s) => s.setSnapshot);
+  const setFeedStatus = useAircraftStore((s) => s.setFeedStatus);
   const setConnection = useAircraftStore((s) => s.setConnection);
   const setSource = useAircraftStore((s) => s.setSource);
   // Vessels ride this same connection (the "vessels" message) but live in their own store.
@@ -79,12 +80,10 @@ export function useLiveFeed({ enabled, baseUrl, observer, radiusKm }: UseLiveFee
     const offSnapshot = onSnapshot(conn, (aircraft) => setSnapshot(aircraft));
     const offVessels = onVessels(conn, (vessels) => setVessels(vessels));
     // A "status" frame means the server has no aircraft for us this tick (own feed empty and
-    // away-mode unavailable) — clear both lists so stale aircraft/ships don't linger, and it
-    // silences SignalR's "no client method 'status'" warning.
-    const offStatus = onStatus(conn, () => {
-      setSnapshot([]);
-      clearVessels();
-    });
+    // away-mode unavailable): clear the aircraft and keep the reason for the UI. Ships are left
+    // alone — the frame is aircraft-only and arrives every second, while vessels come every 5 s,
+    // so clearing them here made ships flicker out whenever aircraft away mode was unavailable.
+    const offStatus = onStatus(conn, (status) => setFeedStatus(status.reason));
     conn.onreconnecting(() => setConnection("reconnecting"));
     conn.onreconnected(() => {
       setConnection("connected");
@@ -130,6 +129,7 @@ export function useLiveFeed({ enabled, baseUrl, observer, radiusKm }: UseLiveFee
     baseUrl,
     authenticated,
     setSnapshot,
+    setFeedStatus,
     setVessels,
     clearVessels,
     setConnection,

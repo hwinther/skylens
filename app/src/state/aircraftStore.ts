@@ -25,8 +25,15 @@ interface AircraftState {
   lastSnapshotAt: number;
   connection: ConnectionState;
   source: FeedSource;
-  /** Replace the whole set from a fresh 1 Hz snapshot. */
+  /**
+   * Reason from the hub's last "status" frame (away mode couldn't serve aircraft), or null. Any
+   * real snapshot clears it; see feedStatusMessage for the user-facing text.
+   */
+  feedStatus: string | null;
+  /** Replace the whole set from a fresh 1 Hz snapshot (and clear feedStatus). */
   setSnapshot: (aircraft: AircraftDto[], at?: number) => void;
+  /** No aircraft this tick, with the server's reason. */
+  setFeedStatus: (reason: string) => void;
   setConnection: (connection: ConnectionState) => void;
   setSource: (source: FeedSource) => void;
   clear: () => void;
@@ -37,15 +44,17 @@ export const useAircraftStore = create<AircraftState>((set) => ({
   lastSnapshotAt: 0,
   connection: "disconnected",
   source: "demo",
+  feedStatus: null,
   setSnapshot: (aircraft, at = Date.now()) =>
     set(() => {
       const byHex: Record<string, AircraftDto> = {};
       for (const ac of aircraft) byHex[ac.hex] = ac;
-      return { byHex, lastSnapshotAt: at };
+      return { byHex, lastSnapshotAt: at, feedStatus: null };
     }),
+  setFeedStatus: (reason) => set({ byHex: {}, feedStatus: reason }),
   setConnection: (connection) => set({ connection }),
   setSource: (source) => set({ source }),
-  clear: () => set({ byHex: {}, lastSnapshotAt: 0 }),
+  clear: () => set({ byHex: {}, lastSnapshotAt: 0, feedStatus: null }),
 }));
 
 /**

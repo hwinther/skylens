@@ -33,7 +33,6 @@ import {
   TrustLegend,
   useAirports,
   useDemoPose,
-  useObserverLocation,
   usePlanets,
   usePoseRefs,
   useRadioSky,
@@ -44,6 +43,7 @@ import { RADIO_SOURCES, satGroupsFromSettings } from "@/ar";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
 import { startMockFeed, DEMO_HOME } from "@/mock/mockFeed";
+import { useLiveObserver } from "@/components/useObserver";
 import {
   useAircraftList,
   useAircraftStore,
@@ -83,9 +83,9 @@ export default function ArScreen() {
   const [showLegend, setShowLegend] = useState(false);
 
   const baseUrl = useMemo(() => getApiBaseUrl(), []);
-  // Live-mode observer: baked home coords, else a one-shot device/browser geolocation fix
-  // (same source the root layout's hub subscription uses).
-  const observer = useObserverLocation(!demoMode);
+  // Live-mode observer: baked home coords, else a one-shot device/browser geolocation fix, resolved
+  // once by the root layout (which also subscribes the hub with it) and shared via observerStore.
+  const observer = useLiveObserver();
 
   // First-run / degraded AR hints (item 03), native live mode only — demo & web show neither.
   // `observer` is null until the first GPS fix; `cameraPermission` is reactive from the hook above.

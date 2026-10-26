@@ -208,11 +208,19 @@ builder.Services.AddKeyedSingleton("satnogs", static (sp, _) =>
         sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<SatellitesOptions>>().Value.SatNogsDailyBudget,
         sp.GetRequiredService<TimeProvider>()));
 
-builder.Services.AddHttpClient<OpenSkyMetadataClient>();
-builder.Services.AddHttpClient<AdsbxClient>();
-builder.Services.AddHttpClient<AdsbLolClient>(static client => client.Timeout = TimeSpan.FromSeconds(10));
-builder.Services.AddHttpClient<AeroApiClient>();
-builder.Services.AddHttpClient<BarentsWatchClient>();
+// Typed clients are transient, but singletons hold on to them for the app's lifetime (AwayModeChain,
+// the vessel away-mode source, MetadataService), so the factory's 2-minute handler rotation never
+// reaches them and a DNS change upstream would go unnoticed. Let SocketsHttpHandler recycle pooled
+// connections instead, and stop the factory rotating handlers that nothing re-resolves.
+static void LongLived(IHttpClientBuilder client) =>
+    client.UseSocketsHttpHandler(static (handler, _) => handler.PooledConnectionLifetime = TimeSpan.FromMinutes(2))
+          .SetHandlerLifetime(Timeout.InfiniteTimeSpan);
+
+LongLived(builder.Services.AddHttpClient<OpenSkyMetadataClient>());
+LongLived(builder.Services.AddHttpClient<AdsbxClient>());
+LongLived(builder.Services.AddHttpClient<AdsbLolClient>(static client => client.Timeout = TimeSpan.FromSeconds(10)));
+LongLived(builder.Services.AddHttpClient<AeroApiClient>());
+LongLived(builder.Services.AddHttpClient<BarentsWatchClient>());
 builder.Services.AddSingleton<MetadataService>();
 
 // CelesTrak + SatNOGS are polite public APIs, so identify ourselves and cap the timeout. These are
