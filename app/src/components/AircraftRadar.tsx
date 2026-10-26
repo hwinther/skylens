@@ -9,7 +9,7 @@
  */
 
 import { alpha, color } from "@/theme";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ComponentRef } from "react";
 import { Platform, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { AircraftDto, AirportDto, VesselDto } from "@/api/types";
@@ -141,7 +141,7 @@ export function AircraftRadar({
 
   // Mouse-wheel zoom on web only (RN Views expose no onWheel — attach to the host DOM node directly).
   // Re-attaching when the reference ranges change keeps the closure current; the cost is negligible.
-  const rootRef = useRef<View>(null);
+  const rootRef = useRef<ComponentRef<typeof View>>(null);
   const current = auto ? 0 : (rangeKm as number);
   useEffect(() => {
     if (Platform.OS !== "web" || !onRangeChange) return;

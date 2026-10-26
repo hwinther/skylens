@@ -6,6 +6,7 @@
 
 import { color } from "@/theme";
 import { useEffect, useMemo } from "react";
+import type { ColorValue } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -22,6 +23,10 @@ import { useLiveFeed, useObserverLocation } from "@/components";
 // this posts the auth response to the opener and dismisses the popup. No-op on native
 // (the native flow calls it from useAuth), and safe to call more than once.
 WebBrowser.maybeCompleteAuthSession();
+
+// React Native 0.88 widened ColorValue to include null and packed-ARGB numbers, which Ionicons
+// does not accept. The tab tints are always theme strings, so narrow the type here.
+const iconColor = (c: ColorValue) => (typeof c === "number" || c == null ? undefined : c);
 
 export default function RootLayout() {
   const setStatus = useAuthStore((s) => s.setStatus);
@@ -70,7 +75,7 @@ export default function RootLayout() {
             options={{
               title: "AR",
               tabBarIcon: ({ color, size, focused }) => (
-                <Ionicons name={focused ? "scan" : "scan-outline"} size={size} color={color} />
+                <Ionicons name={focused ? "scan" : "scan-outline"} size={size} color={iconColor(color)} />
               ),
             }}
           />
@@ -79,7 +84,7 @@ export default function RootLayout() {
             options={{
               title: "Map",
               tabBarIcon: ({ color, size, focused }) => (
-                <Ionicons name={focused ? "map" : "map-outline"} size={size} color={color} />
+                <Ionicons name={focused ? "map" : "map-outline"} size={size} color={iconColor(color)} />
               ),
             }}
           />
@@ -88,7 +93,7 @@ export default function RootLayout() {
             options={{
               title: "List",
               tabBarIcon: ({ color, size, focused }) => (
-                <Ionicons name={focused ? "list" : "list-outline"} size={size} color={color} />
+                <Ionicons name={focused ? "list" : "list-outline"} size={size} color={iconColor(color)} />
               ),
             }}
           />
@@ -97,7 +102,7 @@ export default function RootLayout() {
             options={{
               title: "Settings",
               tabBarIcon: ({ color, size, focused }) => (
-                <Ionicons name={focused ? "settings" : "settings-outline"} size={size} color={color} />
+                <Ionicons name={focused ? "settings" : "settings-outline"} size={size} color={iconColor(color)} />
               ),
             }}
           />

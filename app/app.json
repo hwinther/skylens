@@ -7,7 +7,6 @@
     "icon": "./assets/icon.png",
     "scheme": "skylens",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "no.wsh.skylens"
