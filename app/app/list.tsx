@@ -6,12 +6,12 @@
  */
 
 import { color } from "@/theme";
-import { useMemo, useState, type ComponentProps } from "react";
+import { memo, useMemo, useState, type ComponentProps } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { useAircraftList } from "@/state/aircraftStore";
+import { useAircraftList, useAircraftStore } from "@/state/aircraftStore";
 import { useVesselList } from "@/state/vesselStore";
 import { useSettingsStore } from "@/state/settingsStore";
 import {
@@ -27,12 +27,13 @@ import {
   useSkyEvents,
 } from "@/components";
 import { iconForCategory } from "@/components/aircraftIcon";
+import { useObserver } from "@/components/useObserver";
+import { feedStatusMessage } from "@/components/feedStatus";
 import { iconForVessel } from "@/components/vesselIcon";
 import { compass8, relativePosition } from "@/components/webmap/relative";
 import { RADIO_SOURCES, satGroupsFromSettings, type SkyEventKind } from "@/ar";
 import { ApiClient } from "@/api/client";
-import { getApiBaseUrl, getHomeLocation } from "@/api/config";
-import { DEMO_HOME } from "@/mock/mockFeed";
+import { getApiBaseUrl } from "@/api/config";
 
 type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 
@@ -69,10 +70,85 @@ function countdownLabel(days: number): string {
 /** Short calendar date for the row's right column, e.g. "4 Oct". */
 const shortDate = (date: Date) => date.toLocaleDateString([], { day: "numeric", month: "short" });
 
+/**
+ * One aircraft row. Memoised on plain display values: the list re-renders every second, but a row
+ * only re-renders when something it shows changes (onSelect is a stable state setter).
+ */
+const AircraftRow = memo(function AircraftRow({
+  hex,
+  title,
+  icon,
+  distance,
+  level,
+  speed,
+  onSelect,
+}: {
+  hex: string;
+  title: string;
+  icon: IconName;
+  distance: string;
+  level: string;
+  speed: string;
+  onSelect: (hex: string) => void;
+}) {
+  return (
+    <Pressable testID={`list-ac-${hex}`} onPress={() => onSelect(hex)} style={styles.row}>
+      <MaterialCommunityIcons name={icon} size={18} color={color.entity.air} />
+      <Text style={styles.callsign} numberOfLines={1}>
+        {title}
+      </Text>
+      <Text style={styles.meta}>{distance}</Text>
+      <Text style={styles.meta}>{level}</Text>
+      <Text style={styles.meta}>{speed}</Text>
+    </Pressable>
+  );
+});
+
+/** One ship/AtoN row, memoised the same way (most vessels are stationary between 5 s updates). */
+const VesselRow = memo(function VesselRow({
+  mmsi,
+  title,
+  icon,
+  iconColor,
+  tag,
+  flag,
+  distance,
+  speed,
+  course,
+  onSelect,
+}: {
+  mmsi: string;
+  title: string;
+  icon: IconName;
+  iconColor: string;
+  tag: string | null;
+  flag: string | null;
+  distance: string;
+  speed: string;
+  course: string;
+  onSelect: (mmsi: string) => void;
+}) {
+  return (
+    <Pressable testID={`list-ship-${mmsi}`} onPress={() => onSelect(mmsi)} style={styles.row}>
+      <MaterialCommunityIcons name={icon} size={18} color={iconColor} />
+      <View style={styles.marineLabel}>
+        <Text style={styles.shipName} numberOfLines={1}>
+          {title}
+        </Text>
+        {tag ? <Text style={[styles.classTag, { backgroundColor: iconColor }]}>{tag}</Text> : null}
+        {flag ? <Text style={styles.flag}>{flag}</Text> : null}
+      </View>
+      <Text style={styles.meta}>{distance}</Text>
+      <Text style={styles.meta}>{speed}</Text>
+      <Text style={styles.meta}>{course}</Text>
+    </Pressable>
+  );
+});
+
 export default function ListScreen() {
   const aircraft = useAircraftList();
   const vessels = useVesselList();
-  const demoMode = useSettingsStore((s) => s.demoMode);
+  const feedStatus = useAircraftStore((s) => s.feedStatus);
   const showShips = useSettingsStore((s) => s.showShips);
   const showAton = useSettingsStore((s) => s.showAton);
   const showSatellites = useSettingsStore((s) => s.showSatellites);
@@ -89,10 +165,8 @@ export default function ListScreen() {
   const [selectedPlanet, setSelectedPlanet] = useState<string | null>(null);
   const [selectedRadioKey, setSelectedRadioKey] = useState<string | null>(null);
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
-  const observer = useMemo(
-    () => (demoMode ? DEMO_HOME : (getHomeLocation() ?? DEMO_HOME)),
-    [demoMode],
-  );
+  // Device GPS (or baked home) shared via observerStore, not the build-time home alone.
+  const observer = useObserver();
 
   // Same satellite source the AR screen uses — independent of the ADS-B hub, so it runs in demo and
   // live alike, gated only on the toggle. Groups/mask come from the shared settings derivation.
@@ -182,61 +256,52 @@ export default function ListScreen() {
         ) : null}
       </View>
       <ScrollView testID="list-scroll">
+        {/* Ships listed but aircraft away mode unavailable: say why there are no aircraft. */}
+        {feedStatus && rows.length > 0 ? (
+          <Text testID="list-feed-status" style={styles.notice}>
+            {feedStatusMessage(feedStatus)}
+          </Text>
+        ) : null}
         {rows.length === 0 ? (
           <EmptyState
             icon="radar"
             title="No traffic in range"
-            message="No aircraft or ships are being received right now. They'll appear here the moment they're picked up."
+            message={
+              feedStatus
+                ? feedStatusMessage(feedStatus)
+                : "No aircraft or ships are being received right now. They'll appear here the moment they're picked up."
+            }
             actionLabel="Check data sources"
             onAction={() => router.push("/settings")}
           />
         ) : (
           rows.map((row) =>
             row.kind === "aircraft" ? (
-            <Pressable
-              key={row.key}
-              testID={`list-ac-${row.a.hex}`}
-              onPress={() => setSelectedHex(row.a.hex)}
-              style={styles.row}
-            >
-              <MaterialCommunityIcons name={iconForCategory(row.a.cat)} size={18} color={color.entity.air} />
-              <Text style={styles.callsign} numberOfLines={1}>
-                {row.a.flight?.trim() || row.a.hex.toUpperCase()}
-              </Text>
-              <Text style={styles.meta}>
-                {row.distanceKm.toFixed(1)} km {compass8(row.bearingDeg)}
-              </Text>
-              <Text style={styles.meta}>
-                {row.a.fl != null ? `FL${String(row.a.fl).padStart(3, "0")}` : "—"}
-              </Text>
-              <Text style={styles.meta}>{row.a.gs != null ? `${Math.round(row.a.gs)} kt` : "—"}</Text>
-            </Pressable>
-          ) : (
-            <Pressable
-              key={row.key}
-              testID={`list-ship-${row.v.mmsi}`}
-              onPress={() => setSelectedMmsi(row.v.mmsi)}
-              style={styles.row}
-            >
-              <MaterialCommunityIcons name={row.icon.name} size={18} color={row.icon.color} />
-              <View style={styles.marineLabel}>
-                <Text style={styles.shipName} numberOfLines={1}>
-                  {row.v.name?.trim() || row.v.mmsi}
-                </Text>
-                {row.icon.tag ? (
-                  <Text style={[styles.classTag, { backgroundColor: row.icon.color }]}>
-                    {row.icon.tag}
-                  </Text>
-                ) : null}
-                {row.v.flag ? <Text style={styles.flag}>{row.v.flag}</Text> : null}
-              </View>
-              <Text style={styles.meta}>
-                {row.distanceKm.toFixed(1)} km {compass8(row.bearingDeg)}
-              </Text>
-              <Text style={styles.meta}>{row.v.sog != null ? `${Math.round(row.v.sog)} kn` : "—"}</Text>
-              <Text style={styles.meta}>{row.v.cog != null ? `${Math.round(row.v.cog)}°` : "—"}</Text>
-            </Pressable>
-          ),
+              <AircraftRow
+                key={row.key}
+                hex={row.a.hex}
+                title={row.a.flight?.trim() || row.a.hex.toUpperCase()}
+                icon={iconForCategory(row.a.cat)}
+                distance={`${row.distanceKm.toFixed(1)} km ${compass8(row.bearingDeg)}`}
+                level={row.a.fl != null ? `FL${String(row.a.fl).padStart(3, "0")}` : "—"}
+                speed={row.a.gs != null ? `${Math.round(row.a.gs)} kt` : "—"}
+                onSelect={setSelectedHex}
+              />
+            ) : (
+              <VesselRow
+                key={row.key}
+                mmsi={row.v.mmsi}
+                title={row.v.name?.trim() || row.v.mmsi}
+                icon={row.icon.name}
+                iconColor={row.icon.color}
+                tag={row.icon.tag ?? null}
+                flag={row.v.flag ?? null}
+                distance={`${row.distanceKm.toFixed(1)} km ${compass8(row.bearingDeg)}`}
+                speed={row.v.sog != null ? `${Math.round(row.v.sog)} kn` : "—"}
+                course={row.v.cog != null ? `${Math.round(row.v.cog)}°` : "—"}
+                onSelect={setSelectedMmsi}
+              />
+            ),
           )
         )}
 
@@ -465,6 +530,7 @@ const styles = StyleSheet.create({
   meta: { color: color.textDim, fontSize: 12, minWidth: 74, textAlign: "right" },
   satFreq: { color: "#C3A9E0", fontSize: 12, minWidth: 74, textAlign: "right" },
   emptyLine: { color: color.textMuted, fontSize: 13, paddingHorizontal: 16, paddingBottom: 12 },
+  notice: { color: color.textDim, fontSize: 12, paddingHorizontal: 16, paddingBottom: 8 },
   // Upcoming (sky events): a two-line label (title + detail) with a right-aligned date + countdown.
   eventText: { flex: 1 },
   eventTitle: { color: color.text, fontSize: 14, fontWeight: "600" },

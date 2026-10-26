@@ -16,6 +16,7 @@ import * as WebBrowser from "expo-web-browser";
 import { hydrateTokens } from "@/auth/tokenStore";
 import { useAuthStore } from "@/state/authStore";
 import { useSettingsStore } from "@/state/settingsStore";
+import { useObserverStore } from "@/state/observerStore";
 import { getApiBaseUrl } from "@/api/config";
 import { useLiveFeed, useObserverLocation } from "@/components";
 
@@ -39,6 +40,12 @@ export default function RootLayout() {
   // container/preview web bundles bake no coordinates, so without the geolocation fallback the
   // hub connection would stay connected-but-unsubscribed and no snapshot would ever arrive.
   const observer = useObserverLocation(!demoMode);
+  // Publish it so every screen measures from the same position (and the AR screen doesn't trigger
+  // a second geolocation request of its own).
+  const setObserverPosition = useObserverStore((s) => s.setPosition);
+  useEffect(() => {
+    setObserverPosition(observer);
+  }, [observer, setObserverPosition]);
 
   // App-wide live SignalR feed: populate the shared aircraft store here (not in the AR screen)
   // so every tab — AR and Map — sees the same 1 Hz data regardless of which mounts first. Demo

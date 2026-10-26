@@ -59,8 +59,8 @@ import { MapViewToggle, type MapView as MapViewMode } from "@/components/webmap/
 import { FOCUS_SPAN_DEG, resolveFocus } from "@/components/webmap/focus";
 import { MapFocusChip } from "@/components/webmap/MapFocusChip";
 import { ApiClient } from "@/api/client";
-import { getApiBaseUrl, getHomeLocation } from "@/api/config";
-import { DEMO_HOME } from "@/mock/mockFeed";
+import { getApiBaseUrl } from "@/api/config";
+import { useObserver } from "@/components/useObserver";
 
 /**
  * One aircraft as a top-down airplane icon rotated to its track, laid flat on the map so the nose
@@ -277,7 +277,6 @@ function AirportRunways({ airports }: { airports: AirportDto[] }) {
 export default function MapScreen() {
   const aircraft = useAircraftList();
   const vessels = useVesselList();
-  const demoMode = useSettingsStore((s) => s.demoMode);
   const showShips = useSettingsStore((s) => s.showShips);
   const showAton = useSettingsStore((s) => s.showAton);
   const showCourseVectors = useSettingsStore((s) => s.showCourseVectors);
@@ -353,10 +352,8 @@ export default function MapScreen() {
     });
     fittedFor.current = track.trackedNoradId;
   }, [view, track.trackedNoradId, track.segments]);
-  const observer = useMemo(
-    () => (demoMode ? DEMO_HOME : (getHomeLocation() ?? DEMO_HOME)),
-    [demoMode],
-  );
+  // Device GPS (or baked home) shared via observerStore, not the build-time home alone.
+  const observer = useObserver();
   const positioned = aircraft.filter((a) => a.lat != null && a.lon != null);
   // Vessels the toggles allow, positioned only — ships gated by showShips, AtoNs by showAton.
   const positionedVessels = vessels.filter(
