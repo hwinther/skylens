@@ -50,6 +50,11 @@ updates:
       patterns:
       - "xunit"
       - "xunit.*"
+    # The OpenTelemetry packages release together; one PR instead of one per package.
+    opentelemetry:
+      patterns:
+      - "OpenTelemetry"
+      - "OpenTelemetry.*"
 
 - package-ecosystem: "npm"
   directories:
@@ -66,6 +71,39 @@ updates:
   ignore:
   - dependency-name: "*"
     update-types: [ "version-update:semver-patch" ]
+  # Expo SDK-managed packages: their versions are pinned by the installed Expo SDK and change only with
+  # an SDK upgrade (`npx expo install expo@~N` + `npx expo install --fix`). Dependabot bumps of these
+  # drift off the SDK's tested set (expo-doctor fails) or split one upgrade across mismatched PRs.
+  # Note react-native-* matches every RN library; a non-SDK one added later needs its own exception.
+  - dependency-name: "expo"
+    update-types: [ "version-update:semver-minor", "version-update:semver-major" ]
+  - dependency-name: "expo-*"
+    update-types: [ "version-update:semver-minor", "version-update:semver-major" ]
+  - dependency-name: "@expo/*"
+    update-types: [ "version-update:semver-minor", "version-update:semver-major" ]
+  - dependency-name: "react"
+    update-types: [ "version-update:semver-minor", "version-update:semver-major" ]
+  - dependency-name: "react-dom"
+    update-types: [ "version-update:semver-minor", "version-update:semver-major" ]
+  - dependency-name: "react-native"
+    update-types: [ "version-update:semver-minor", "version-update:semver-major" ]
+  - dependency-name: "react-native-*"
+    update-types: [ "version-update:semver-minor", "version-update:semver-major" ]
+  - dependency-name: "@react-native/*"
+    update-types: [ "version-update:semver-minor", "version-update:semver-major" ]
+  - dependency-name: "@types/react"
+    update-types: [ "version-update:semver-minor", "version-update:semver-major" ]
+  - dependency-name: "jest-expo"
+    update-types: [ "version-update:semver-minor", "version-update:semver-major" ]
+  - dependency-name: "eslint-config-expo"
+    update-types: [ "version-update:semver-minor", "version-update:semver-major" ]
+  - dependency-name: "typescript"
+    update-types: [ "version-update:semver-minor", "version-update:semver-major" ]
+  # ESLint 10 breaks lint: eslint-plugin-react (via eslint-config-expo) still calls
+  # context.getFilename(), which ESLint 10 removed; 7.37.5 peers eslint up to ^9.7. Drop this once a
+  # release supports ESLint 10.
+  - dependency-name: "eslint"
+    update-types: [ "version-update:semver-major" ]
   groups:
     expo:
       patterns:
