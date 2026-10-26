@@ -52,7 +52,15 @@
           "motionPermission": "Skylens uses device motion to align labels with the direction you are pointing the phone."
         }
       ],
-      "./plugins/withAndroidUserAgent"
+      "./plugins/withAndroidUserAgent",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraProguardRules": "-keep class * extends androidx.room.RoomDatabase { <init>(); }"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
