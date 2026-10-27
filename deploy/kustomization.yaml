@@ -1,0 +1,16 @@
+# Workload manifests for skylens, shipped as a signed OCI artifact
+# (ghcr.io/hwinther/skylens/manifests:<version>) by the `manifests` job in container.yml.
+# The cluster side (namespace, network policies, the skylens-secrets Secret, values for the
+# ${VARS} below) lives in hwinther/proxmox. See README.md for the contract.
+#
+# Never commit rendered output. CI pins the image to tag@digest at release time; the tag here is
+# only a placeholder so `kubectl kustomize deploy` renders locally.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- deployment.yaml
+- service.yaml
+- ingress.yaml
+images:
+- name: ghcr.io/hwinther/skylens/api
+  newTag: 0.0.0-dev

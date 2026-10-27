@@ -1,0 +1,51 @@
+# Public ingress: the API validates the OIDC JWT in-app, so there is no forward-auth middleware
+# (it would also block the SignalR ?access_token= handshake). The gethomepage.dev annotations are
+# inert on clusters without homepage.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: skylens
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    gethomepage.dev/enabled: "true"
+    gethomepage.dev/href: "https://${APP_HOST}/"
+    gethomepage.dev/group: Apps
+    gethomepage.dev/name: Skylens
+    gethomepage.dev/siteMonitor: "https://${APP_HOST}/healthz"
+    gethomepage.dev/icon: mdi-airplane
+    gethomepage.dev/description: ADS-B plane-spotter gateway — Android AR app backend (API under /api/, SignalR under /hubs/)
+    gethomepage.dev/pod-selector: app=skylens-api
+spec:
+  rules:
+  - host: "${APP_HOST}"
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: skylens-api
+            port:
+              number: 8080
+      - path: /hubs
+        pathType: Prefix
+        backend:
+          service:
+            name: skylens-api
+            port:
+              number: 8080
+      - path: /swagger
+        pathType: Prefix
+        backend:
+          service:
+            name: skylens-api
+            port:
+              number: 8080
+      # Root serves a minimal landing/health page from the same API.
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: skylens-api
+            port:
+              number: 8080

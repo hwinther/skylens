@@ -1,0 +1,127 @@
+# skylens gateway: ASP.NET Core 10 Minimal API + SignalR. Ingests dump1090-fa aircraft.json and
+# ais-catcher AIS from mosquitto, keeps a slim in-memory state, and fans it out to the app over
+# SignalR. JWTs (aud=skylens-api) are validated in-app, so the ingress needs no forward-auth.
+#
+# ${VARS} are filled in by Flux postBuild substitution in the cluster repo; `${X:=d}` has a default.
+# Only substitute string values: kustomize drops the quotes, so a substituted number or boolean
+# comes out as a YAML int/bool and env values must be strings.
+# Every variable without a default must be listed in README.md (CI fails otherwise).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: skylens-api
+spec:
+  # Single replica by design: state lives in-process (no SignalR backplane) and there must be
+  # exactly one MQTT consumer of adsb/aircraft — a second replica would double-consume and split state.
+  # Recreate (not RollingUpdate) keeps the single-consumer invariant across rollouts.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: skylens-api
+  template:
+    metadata:
+      labels:
+        app: skylens-api
+        app.kubernetes.io/name: skylens-api
+    spec:
+      automountServiceAccountToken: false
+      # Grace period must exceed preStop sleep (20s) + longest expected SignalR reconnect window.
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1654          # matches the dotnet aspnet image's `app` user ($APP_UID)
+        runAsGroup: 1654
+        fsGroup: 1654
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+      - name: skylens-api
+        image: ghcr.io/hwinther/skylens/api
+        imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            # The bundled offline aircraft registration DB (~600k rows) is loaded into RAM.
+            memory: 768Mi
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: ASPNETCORE_URLS
+          value: "http://+:8080"
+        - name: Oidc__Authority
+          value: "${OIDC_AUTHORITY}"
+        - name: Oidc__Audience
+          value: "${OIDC_AUDIENCE:=skylens-api}"
+        # MQTT__USERNAME/PASSWORD come from the skylens-secrets Secret.
+        - name: MQTT__HOST
+          value: "${MQTT_HOST}"
+        - name: MQTT__PORT
+          value: "1883"
+        - name: MQTT__TOPIC
+          value: "adsb/aircraft"
+        - name: MQTT__AISTOPIC
+          value: "ais/data"
+        # ADSBx via RapidAPI (away-mode point-radius enrichment); key is secret.
+        - name: ADSBX__RAPIDAPIHOST
+          value: "adsbexchange-com1.p.rapidapi.com"
+        # Enrichment budgets fail closed when exceeded.
+        - name: AEROAPI__DAILYBUDGET
+          value: "100"
+        - name: ADSBX__MONTHLYBUDGET
+          value: "10000"
+        # Satellites need no env: appsettings.json ships the production defaults and CelesTrak /
+        # SatNOGS are keyless.
+        - name: OTEL_SERVICE_NAME
+          value: "skylens-api"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "${OTEL_EXPORTER_OTLP_ENDPOINT}"
+        - name: OTEL_EXPORTER_OTLP_PROTOCOL
+          value: "grpc"
+        - name: OTEL_TRACES_EXPORTER
+          value: "otlp"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.namespace=$(POD_NAMESPACE),deployment.environment=${APP_ENVIRONMENT:=production}"
+        envFrom:
+        # MQTT__USERNAME / MQTT__PASSWORD / OPENSKY__CLIENTID / OPENSKY__CLIENTSECRET /
+        # ADSBX__RAPIDAPIKEY / AEROAPI__APIKEY / FEED__LAT / FEED__LON / FEED__RADIUSKM
+        - secretRef:
+            name: skylens-secrets
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        # /healthz always returns 200 (with a degraded flag when MQTT is stale) so a broker outage
+        # never fails these probes into a restart loop. preStop keeps the pod in Terminating long
+        # enough for the ingress to stop routing new SignalR connections here.
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 6
+        lifecycle:
+          preStop:
+            exec:
+              command: [ "sh", "-c", "sleep 20" ]
