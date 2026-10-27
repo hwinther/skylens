@@ -1,0 +1,96 @@
+name: "Manifest diff"
+
+# Renders deploy/ for the PR head and its base, validates the head, and posts a review report (a
+# resource map plus a dyff per changed resource) to the job summary and a sticky PR comment, so
+# manifest review happens here rather than in the cluster repo's tag bump.
+# Both sides keep the placeholder image tag; the release job pins the real tag@digest.
+
+on:
+  pull_request:
+    paths:
+      - "deploy/**"
+      - ".github/scripts/render-manifests.sh"
+      - ".github/scripts/manifest-report.py"
+      - ".github/workflows/manifest-diff.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "${{ github.workflow }} @ ${{ github.head_ref }}"
+  cancel-in-progress: true
+
+jobs:
+  diff:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      KUBECONFORM_VERSION: v0.8.0
+      KUBECONFORM_SHA256: 9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883
+      DYFF_VERSION: 1.12.0
+      DYFF_SHA256: 50b43017a7474c2216694d0b5387439488a1d3c2b5eefe1674cd0e5c18bc0316
+    steps:
+      - name: Checkout head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Checkout base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .base
+          persist-credentials: false
+
+      - name: Install kubeconform
+        run: |
+          curl -fsSLo /tmp/kubeconform.tgz "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          echo "${KUBECONFORM_SHA256}  /tmp/kubeconform.tgz" | sha256sum -c -
+          tar -xzf /tmp/kubeconform.tgz -C /usr/local/bin kubeconform
+
+      - name: Install dyff
+        run: |
+          curl -fsSLo /tmp/dyff.tgz "https://github.com/homeport/dyff/releases/download/v${DYFF_VERSION}/dyff_${DYFF_VERSION}_linux_amd64.tar.gz"
+          echo "${DYFF_SHA256}  /tmp/dyff.tgz" | sha256sum -c -
+          tar -xzf /tmp/dyff.tgz -C /usr/local/bin dyff
+
+      - name: Render head
+        run: .github/scripts/render-manifests.sh deploy /tmp/head.yaml
+
+      - name: Validate head
+        run: kubeconform -strict -summary /tmp/head.yaml
+
+      - name: Render base
+        # The head's script renders the base tree, so a script change can't make the base fail.
+        # The base contract isn't this PR's problem, so its result is ignored.
+        run: |
+          if [ -d .base/deploy ]; then
+            .github/scripts/render-manifests.sh .base/deploy /tmp/base.yaml || true
+          fi
+          touch /tmp/base.yaml
+
+      - name: Build report
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          yq -o=json -I=0 '.' /tmp/base.yaml > /tmp/base.jsonl
+          yq -o=json -I=0 '.' /tmp/head.yaml > /tmp/head.jsonl
+          python3 .github/scripts/manifest-report.py /tmp/base.jsonl /tmp/head.jsonl "$RUN_URL" > /tmp/report.md
+          cat /tmp/report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post sticky PR comment
+        # Fork and Dependabot PRs get a read-only token; they still have the job summary.
+        if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          id="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- manifest-diff -->"))) | .id' | head -n1)"
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -F body=@/tmp/report.md > /dev/null
+          else
+            gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" -F body=@/tmp/report.md > /dev/null
+          fi
