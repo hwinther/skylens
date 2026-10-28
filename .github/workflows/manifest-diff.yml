@@ -62,6 +62,12 @@ jobs:
       - name: Validate head
         run: kubeconform -strict -summary /tmp/head.yaml
 
+      - name: Validate preview render
+        # pr-preview.yml ships deploy/ with the preview component; catch a broken patch here too.
+        run: |
+          .github/scripts/render-manifests.sh deploy /tmp/preview.yaml "" components/preview
+          kubeconform -strict -summary /tmp/preview.yaml
+
       - name: Render base
         # The head's script renders the base tree, so a script change can't make the base fail.
         # The base contract isn't this PR's problem, so its result is ignored.

@@ -8,8 +8,10 @@ Workload manifests for the skylens API. On every release, the `manifests` job in
 3. pushes it as an OCI artifact to `ghcr.io/hwinther/skylens/manifests:<version>`;
 4. signs it with cosign (keyless).
 
-On pull requests, `manifest-diff.yml` posts the rendered diff against the base branch to the job
-summary. Don't commit rendered output.
+On pull requests, `manifest-diff.yml` posts the rendered diff against the base branch as a PR
+comment. PRs labelled `deploy-feature` also get `manifests:pr-<N>` from `pr-preview.yml`: the same
+manifests plus `components/preview` (Development mode with replayed fixtures, no Secret), signed
+by that workflow. Don't commit rendered output.
 
 The cluster repo (hwinther/proxmox) consumes the artifact through a Flux `OCIRepository` and
 `Kustomization`. It provides everything that isn't in here:
@@ -45,6 +47,9 @@ quotes, so a number or boolean would come out as the wrong YAML type.
 - `AEROAPI__APIKEY`
 - `FEED__LAT`, `FEED__LON`, `FEED__RADIUSKM`
 
+In preview, `skylens-secrets` isn't used: `components/preview` drops the `envFrom`. `MQTT_HOST`
+must still be non-empty (the ingest service skips the replay transport when it's empty).
+
 ### Resource names
 
 `Deployment/skylens-api`, `Service/skylens-api`, `Ingress/skylens`. Flux prunes anything that
@@ -54,4 +59,5 @@ disappears from the artifact, so rename deliberately.
 
 ```bash
 .github/scripts/render-manifests.sh deploy /tmp/skylens.yaml
+.github/scripts/render-manifests.sh deploy /tmp/preview.yaml "" components/preview
 ```

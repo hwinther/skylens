@@ -1,0 +1,61 @@
+# PR preview mode, rendered into the ghcr.io/hwinther/skylens/manifests:pr-<N> artifacts by
+# pr-preview.yml. The backend runs in Development so it can replay the fixtures baked into the image
+# through the real ingest -> SignalR pipeline: no broker, no Secret, no database. Auth stays real
+# (Auth__Disabled=false is explicit, because appsettings.Development.json bakes Disabled=true).
+# Previews never fetch CelesTrak (parallel previews would hit its usage policy), so the satellite
+# domain loads baked fixtures too.
+#
+# The cluster repo supplies the rest through the usual contract: APP_HOST, MQTT_HOST (any non-empty
+# value; replay ignores it), APP_ENVIRONMENT=preview, plus its own ingress forward-auth.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+- target:
+    kind: Deployment
+    name: skylens-api
+  patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: skylens-api
+    spec:
+      template:
+        spec:
+          containers:
+          - name: skylens-api
+            env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Development"
+            - name: Auth__Disabled
+              value: "false"
+            - name: AircraftDb__Path
+              value: "/app/data/aircraft.csv.gz"
+            - name: Mqtt__Replay
+              value: "true"
+            - name: Mqtt__ReplayFile
+              value: "/app/fixtures/aircraft.json"
+            - name: Mqtt__AisReplay
+              value: "true"
+            - name: Mqtt__AisReplayFile
+              value: "/app/fixtures/ais.jsonl"
+            - name: Satellites__TleFile
+              value: "/app/fixtures/tle.json"
+            - name: Satellites__TransmittersFile
+              value: "/app/fixtures/transmitters.json"
+            - name: AdsbLol__Enabled
+              value: "false"
+            # Centroid of the replay fixture's aircraft, rounded to one decimal (~11 km). Never put
+            # precise home coordinates in this public repo.
+            - name: FEED__LAT
+              value: "59.9"
+            - name: FEED__LON
+              value: "11.1"
+            - name: FEED__RADIUSKM
+              value: "500"
+# Nothing in preview reads the production Secret, and it doesn't exist in preview namespaces.
+- target:
+    kind: Deployment
+    name: skylens-api
+  patch: |-
+    - op: remove
+      path: /spec/template/spec/containers/0/envFrom
