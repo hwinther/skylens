@@ -1,7 +1,8 @@
 # deploy/
 
 Workload manifests for the skylens API. On every release, the `manifests` job in
-`.github/workflows/container.yml`:
+`.github/workflows/container.yml` runs the `manifests` action from hwinther/reusable-workflows,
+which:
 
 1. renders this directory, with the API image pinned to `tag@digest`;
 2. validates the output with kubeconform;
@@ -57,7 +58,11 @@ disappears from the artifact, so rename deliberately.
 
 ## Render locally
 
+`kubectl kustomize deploy` shows the production manifests. For both variants with the contract
+check and kubeconform, as CI runs them, use the action's script from a hwinther/reusable-workflows
+checkout (needs kubectl and kubeconform on `PATH`):
+
 ```bash
-.github/scripts/render-manifests.sh deploy /tmp/skylens.yaml
-.github/scripts/render-manifests.sh deploy /tmp/preview.yaml "" components/preview
+RENDERS=$'skylens.yaml=deploy\npreview.yaml=deploy,components/preview' \
+  bash ../reusable-workflows/.github/actions/manifests/scripts/render-all.sh . /tmp/manifests /tmp/renders.txt validate
 ```
