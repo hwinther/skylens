@@ -38,9 +38,14 @@ spec:
       containers:
       - name: skylens-api
         image: ghcr.io/hwinther/skylens/api
-        imagePullPolicy: Always
+        # Releases pin tag@digest, so a cached image is always the right one, and a restart doesn't
+        # depend on GHCR being reachable.
+        imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false
+          # The app only reads files (the baked /app/data DBs and fixtures). /tmp is the one writable
+          # path, for the .NET runtime's diagnostics socket and temp files.
+          readOnlyRootFilesystem: true
           capabilities:
             drop:
             - ALL
@@ -121,7 +126,16 @@ spec:
           periodSeconds: 30
           timeoutSeconds: 5
           failureThreshold: 6
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        # The kubelet's own sleep action: the chiseled image has no shell or sleep binary, so the
+        # old `exec: sh -c "sleep 20"` hook failed and the pod got SIGTERM with no drain window.
         lifecycle:
           preStop:
-            exec:
-              command: [ "sh", "-c", "sleep 20" ]
+            sleep:
+              seconds: 20
+      volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: 64Mi
