@@ -61,7 +61,7 @@ jobs:
       # the cluster's OCIRepository pins. A single file at the root: the Flux Kustomization applies
       # everything under its path.
       - name: Render, validate, push and sign
-        uses: hwinther/reusable-workflows/.github/actions/manifests@1e9758076ae2bfdaedec524c2a9834c9488207cf # feat/manifests-action (pre-release)
+        uses: hwinther/reusable-workflows/.github/actions/manifests@ea2e22d0328718f318217ef055d244c3fade0323 # v2.1.0
         with:
           mode: push
           artifact: ghcr.io/hwinther/skylens/manifests
