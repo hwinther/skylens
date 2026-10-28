@@ -15,3 +15,24 @@ ignore:
   - vulnerability: CVE-2026-39883
     package:
       name: OpenTelemetry
+  # The same generic-CPE false match on the .NET package, for medium/low findings. They don't fail the
+  # gate (it's high-only), but they bury real findings in the report. CPE target_sw in brackets; the
+  # "fixed in" versions are that other project's, several of them below the .NET 1.20.0 we run.
+  - vulnerability: CVE-2026-54285 # OpenTelemetry JavaScript (node.js), "fixed in" 2.8.0
+    package:
+      name: OpenTelemetry
+  - vulnerability: CVE-2026-41178 # OpenTelemetry-Go (go), "fixed in" 1.42.0
+    package:
+      name: OpenTelemetry
+  - vulnerability: CVE-2026-39882 # OpenTelemetry-Go (go), "fixed in" 1.43.0
+    package:
+      name: OpenTelemetry
+  - vulnerability: CVE-2026-81869 # OpenTelemetry-Go (go), "fixed in" 1.33.0
+    package:
+      name: OpenTelemetry
+  - vulnerability: CVE-2026-81870 # OpenTelemetry-Go (go), "fixed in" 1.45.0
+    package:
+      name: OpenTelemetry
+  - vulnerability: CVE-2026-44967 # OpenTelemetry C++ (c++), "fixed in" 1.27.0
+    package:
+      name: OpenTelemetry
