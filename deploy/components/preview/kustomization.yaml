@@ -30,6 +30,13 @@ patches:
               value: "false"
             - name: AircraftDb__Path
               value: "/app/data/aircraft.csv.gz"
+            # Development's paths point into the source tree; the image bakes the real DBs here.
+            - name: Airports__AirportsPath
+              value: "/app/data/airports.csv.gz"
+            - name: Airports__RunwaysPath
+              value: "/app/data/runways.csv.gz"
+            - name: Airports__FrequenciesPath
+              value: "/app/data/airport-frequencies.csv.gz"
             - name: Mqtt__Replay
               value: "true"
             - name: Mqtt__ReplayFile
