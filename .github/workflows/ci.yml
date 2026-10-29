@@ -22,7 +22,7 @@ jobs:
     uses: hwinther/reusable-workflows/.github/workflows/pr-build.yml@00fef736b925dfc7b70ab0476276ae1f59e1683b # v2.0.1
     with:
       node_enabled: true
-      node_version: "24.x"
+      node_version: "26.x"
       node_working_directory: "app"
       # Include the backend contract so a PR that touches openapi.json re-runs the node job; the extra
       # command regenerates the typed client and the workflow fails on any uncommitted drift.
