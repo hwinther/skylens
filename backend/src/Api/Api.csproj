@@ -29,11 +29,11 @@
     <!-- MQTTnet v5: hand-rolled reconnect BackgroundService (ManagedClient was removed in v5). -->
     <PackageReference Include="MQTTnet" Version="5.2.0.1603" />
     <!-- OpenTelemetry stack mirrors the proven test-api versions. -->
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.0" />
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.20.0" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.0" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.20.0" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.20.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.1" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.1" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.20.1" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.20.1" />
   </ItemGroup>
 
   <!-- Restore the local swagger CLI (.config/dotnet-tools.json lives in THIS project folder so the
