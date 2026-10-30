@@ -1,5 +1,5 @@
 /**
- * Container-mode Playwright config (CI: pr-preview.yml -> reusable playwright-e2e.yml).
+ * Container-mode Playwright config (CI: pr-e2e.yml -> reusable playwright-e2e.yml).
  *
  * Unlike playwright.config.ts (source mode, which starts dotnet + `expo start --web` itself via
  * webServer), this drives the ALREADY-RUNNING combined skylens image from docker-compose.e2e.yml:

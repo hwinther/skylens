@@ -44,7 +44,7 @@ jobs:
       packages: write
       # v2.4.0 looks up open PRs to keep their pr-<N> / PullRequest<N> tags.
       pull-requests: read
-    uses: hwinther/reusable-workflows/.github/workflows/prune-ghcr.yml@890802b1a0a1921dcd64867c4fbe4037b8260c00 # v2.5.0
+    uses: hwinther/reusable-workflows/.github/workflows/prune-ghcr.yml@c1e80ad637dcdd38bb6de0f447475c40a8625141 # v2.9.0
     with:
       # Scheduled runs prune for real; manual runs use the input. The old expression handed the
       # required boolean input a null on a schedule, so no scheduled run ever started.
