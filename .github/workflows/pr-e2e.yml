@@ -24,6 +24,7 @@ on:
     paths:
       - "backend/**"
       - "app/**"
+      - "e2e/**"
       - "Dockerfile"
       - ".dockerignore"
       - "docker-compose.e2e.yml"
@@ -76,13 +77,13 @@ jobs:
     uses: hwinther/reusable-workflows/.github/workflows/playwright-e2e.yml@c1e80ad637dcdd38bb6de0f447475c40a8625141 # v2.9.0
     with:
       compose_file: docker-compose.e2e.yml
-      playwright_working_directory: app
+      playwright_working_directory: e2e
       playwright_cache_enabled: true
       node_modules_cache_enabled: true
       # setup-node's registry-url defaults to GitHub Packages, which would repoint the GLOBAL npm
-      # registry and break `npm ci` of the app's public deps. Pin it back to public npm.
+      # registry and break `npm ci` of the public deps. Pin it back to public npm.
       npm_registry_url: https://registry.npmjs.org
-      playwright_run_command: npm run e2e:ci
+      playwright_run_command: npm run test:ci
       # Base URL the CI config reads (defaults to the same value; set explicitly for clarity).
       playwright_env: |
         E2E_BASE_URL=http://localhost:8081

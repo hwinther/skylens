@@ -1,0 +1,22 @@
+{
+  "name": "skylens-e2e",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Playwright e2e: drives the web build against a real backend (source mode) or the combined image (container mode)",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:ci": "playwright test --config playwright.ci.config.ts",
+    "report": "playwright show-report",
+    "typecheck": "tsc",
+    "lint": "eslint . --report-unused-disable-directives --max-warnings 0"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "@wshno/eslint-config": "0.2.0",
+    "@wshno/playwright-config": "0.1.0",
+    "@wshno/tsconfig": "0.1.1",
+    "eslint": "10.13.0",
+    "typescript": "6.0.3"
+  }
+}

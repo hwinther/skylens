@@ -56,7 +56,7 @@ test("overhead list shows satellites from fixture TLEs", async ({ page }) => {
   // The row shows a "<elevation>° <DIR>" cell (compass8 direction after the degree elevation). A bare
   // degree sign is the elevation readout — the range cell uses "km", so "°" is unambiguously elevation.
   const rowText = ((await satRow.textContent()) ?? "").trim();
-  expect(rowText, "sat row shows a degree elevation").toMatch(/\d+\s*°/);
+  expect(rowText, "sat row shows a degree elevation").toMatch(/\d\s*°/);
 });
 
 test("satellite detail sheet shows transmitters", async ({ page }) => {

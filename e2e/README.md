@@ -1,6 +1,6 @@
 # Web ↔ backend E2E (Playwright)
 
-`npm run e2e` builds the app for **web** (react-native-web) and drives it against a **real backend**,
+`npm test` (in `e2e/`) builds the app for **web** (react-native-web) and drives it against a **real backend**,
 proving the browser frontend renders aircraft that came from the backend API over SignalR.
 
 ## What it wires up
@@ -15,7 +15,7 @@ proving the browser frontend renders aircraft that came from the backend API ove
 The feed origin (`Feed:Lat/Lon`) and the app's home are the same point, so the backend serves an
 own-feed (`src: "adsb"`) snapshot rather than falling back to away-mode/ADSBx.
 
-## The tests (`live.spec.ts`)
+## The tests (`tests/live.spec.ts`)
 
 1. **AR** — load `/`, assert the status strip's aircraft count rises above 0 (the SignalR snapshot
    reached the browser).
@@ -27,10 +27,15 @@ react-native-web exposes as `data-testid`.
 ## Running
 
 ```bash
-cd app
-npm run e2e            # starts both servers, runs Chromium, tears down
-npm run e2e:report     # open the last HTML report
+cd e2e
+npm install
+npm test               # starts both servers, runs Chromium, tears down
+npm run report         # open the last HTML report
+npm run test:ci        # container mode against docker-compose.e2e.yml (what CI runs)
 ```
+
+`e2e/` is its own npm package on `@wshno/playwright-config`, which pins Playwright and supplies the
+shared defaults. Source mode still starts `expo start` in `../app`, so `npm install` there too.
 
 Requirements: the .NET 10 SDK on `PATH` (the backend server is `dotnet run`) and the Chromium browser
 (`npx playwright install chromium`, run once). No MQTT broker, OIDC provider, or device is needed.
