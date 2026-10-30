@@ -19,7 +19,7 @@ on:
       images:
         description: "Comma-separated package names to prune. Blank = auto-discover by prefix."
         type: string
-        default: "skylens/api"
+        default: "skylens/api,skylens/manifests"
       nuke_package:
         description: "DESTRUCTIVE. Package name to delete entirely — leave blank for normal prune."
         type: string
@@ -31,6 +31,7 @@ on:
 permissions:
   contents: read
   packages: write
+  pull-requests: read
 
 concurrency:
   group: prune-ghcr
@@ -41,10 +42,14 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: hwinther/reusable-workflows/.github/workflows/prune-ghcr.yml@00fef736b925dfc7b70ab0476276ae1f59e1683b # v2.0.1
+      # v2.4.0 looks up open PRs to keep their pr-<N> / PullRequest<N> tags.
+      pull-requests: read
+    uses: hwinther/reusable-workflows/.github/workflows/prune-ghcr.yml@fa4b94a22f6df1f509a2bd37d67b9596eb41e359 # v2.4.0
     with:
-      dry_run: ${{ github.event_name == 'schedule' && false || inputs.dry_run }}
-      images: ${{ inputs.images || 'skylens/api' }}
+      # Scheduled runs prune for real; manual runs use the input. The old expression handed the
+      # required boolean input a null on a schedule, so no scheduled run ever started.
+      dry_run: ${{ github.event_name != 'schedule' && inputs.dry_run }}
+      images: ${{ inputs.images || 'skylens/api,skylens/manifests' }}
       package_namespace_prefix: skylens/
       nuke_package: ${{ inputs.nuke_package || '' }}
     # Passes the optional GHCR_PRUNE_TOKEN through to the pinned reusable prune workflow (which reads
