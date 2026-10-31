@@ -21,54 +21,51 @@
  * app-side jest tests; keeping it out of e2e stays faithful to the repo's conventions.
  */
 
-import { test, expect } from "@playwright/test";
+import { test, expect } from '@playwright/test'
 
-test("list tab shows AIS vessels streamed from the backend", async ({ page }) => {
-  await page.goto("/list");
+test('list tab shows AIS vessels streamed from the backend', async ({ page }) => {
+  await page.goto('/list')
 
   // The combined Traffic heading is visible immediately; ships need the AIS replay to populate the
   // store plus a 0.2 Hz vessel broadcast, so allow a generous window for the first row to arrive.
-  await expect(page.getByTestId("list-count")).toBeVisible();
+  await expect(page.getByTestId('list-count')).toBeVisible()
 
-  const shipRow = page.locator('[data-testid^="list-ship-"]').first();
-  await expect(shipRow).toBeVisible({ timeout: 30_000 });
+  const shipRow = page.locator('[data-testid^="list-ship-"]').first()
+  await expect(shipRow).toBeVisible({ timeout: 30_000 })
 
   // The row is keyed by a real AIS identity (MMSI) — proves it's a vessel row, not a stray match.
-  const testId = (await shipRow.getAttribute("data-testid")) ?? "";
-  const mmsi = testId.replace("list-ship-", "");
-  expect(Number(mmsi), "ship rows are keyed list-ship-<mmsi>").toBeGreaterThan(0);
+  const testId = (await shipRow.getAttribute('data-testid')) ?? ''
+  const mmsi = testId.replace('list-ship-', '')
+  expect(Number(mmsi), 'ship rows are keyed list-ship-<mmsi>').toBeGreaterThan(0)
 
   // The row shows a distance ("<d.d> km <DIR>"); SOG/COG use "kn"/"°", so a decimal + "km" is
   // unambiguously the distance cell.
-  const rowText = ((await shipRow.textContent()) ?? "").trim();
-  expect(rowText, "ship row shows a distance from the observer").toMatch(/\d\.\d\s*km/);
+  const rowText = ((await shipRow.textContent()) ?? '').trim()
+  expect(rowText, 'ship row shows a distance from the observer').toMatch(/\d\.\d\s*km/)
 
   // The row shows an identity: the vessel name (letters) or, when no static name has arrived, the
   // numeric MMSI fallback. Everything before the distance cell is that identity label.
-  const label = rowText.slice(0, rowText.search(/(?<!\d)\d+\.\d\s*km/));
-  expect(
-    label.includes(mmsi) || /[A-Za-z]{2,}/.test(label),
-    "ship row shows a name or the MMSI",
-  ).toBe(true);
-});
+  const label = rowText.slice(0, rowText.search(/(?<!\d)\d+\.\d\s*km/))
+  expect(label.includes(mmsi) || /[A-Za-z]{2,}/.test(label), 'ship row shows a name or the MMSI').toBe(true)
+})
 
-test("tapping a vessel row opens the detail sheet", async ({ page }) => {
-  await page.goto("/list");
+test('tapping a vessel row opens the detail sheet', async ({ page }) => {
+  await page.goto('/list')
 
-  const shipRow = page.locator('[data-testid^="list-ship-"]').first();
-  await expect(shipRow).toBeVisible({ timeout: 30_000 });
+  const shipRow = page.locator('[data-testid^="list-ship-"]').first()
+  await expect(shipRow).toBeVisible({ timeout: 30_000 })
 
   // Tapping the row opens the VesselDetailSheet; its title renders immediately from the live DTO
   // (name or MMSI fallback), independent of the GET /api/vessels/{mmsi} metadata fetch.
-  await shipRow.click();
-  await expect(page.getByTestId("vessel-detail-title")).toBeVisible();
-});
+  await shipRow.click()
+  await expect(page.getByTestId('vessel-detail-title')).toBeVisible()
+})
 
-test("radar plots AIS vessels streamed from the backend", async ({ page }) => {
-  await page.goto("/map");
+test('radar plots AIS vessels streamed from the backend', async ({ page }) => {
+  await page.goto('/map')
 
   // Radar is the default map view. Ships plot as their own blips; the radar auto-scales its range to
   // the farthest target, so vessels never clip the outer ring regardless of the observer offset.
-  const shipBlip = page.getByTestId("map-web").locator('[data-testid^="map-ship-"]').first();
-  await expect(shipBlip).toBeVisible({ timeout: 30_000 });
-});
+  const shipBlip = page.getByTestId('map-web').locator('[data-testid^="map-ship-"]').first()
+  await expect(shipBlip).toBeVisible({ timeout: 30_000 })
+})

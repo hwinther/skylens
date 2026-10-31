@@ -13,22 +13,22 @@
  * own-feed radius and the browser receives an "adsb" snapshot over SignalR.
  */
 
-import { devices } from "@playwright/test";
-import { definePlaywrightConfig } from "@wshno/playwright-config";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { devices } from '@playwright/test'
+import { definePlaywrightConfig } from '@wshno/playwright-config'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const here = path.dirname(fileURLToPath(import.meta.url));
+const here = path.dirname(fileURLToPath(import.meta.url))
 
-const BACKEND_PORT = 5099;
-const WEB_PORT = 8081;
-const BACKEND_URL = `http://localhost:${BACKEND_PORT}`;
-const WEB_URL = `http://localhost:${WEB_PORT}`;
+const BACKEND_PORT = 5099
+const WEB_PORT = 8081
+const BACKEND_URL = `http://localhost:${BACKEND_PORT}`
+const WEB_URL = `http://localhost:${WEB_PORT}`
 
 // Fixture centre (Oslo TMA) — shared by the app's live observer and the backend feed origin.
-const HOME_LAT = "59.914";
-const HOME_LON = "11.063";
-const REPLAY_FILE = path.resolve(here, "../backend/tests/Api.Tests/fixtures/aircraft.json");
+const HOME_LAT = '59.914'
+const HOME_LON = '11.063'
+const REPLAY_FILE = path.resolve(here, '../backend/tests/Api.Tests/fixtures/aircraft.json')
 
 // Shared defaults (testDir ./tests, forbidOnly, reporters, trace, screenshot and video on failure) come
 // from @wshno/playwright-config; only what differs is set here.
@@ -41,47 +41,47 @@ export default definePlaywrightConfig({
   use: {
     baseURL: WEB_URL,
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [
     {
       // --no-launch-profile: ignore Properties/launchSettings.json so the E2E is driven purely by the
       // env below (Development + port 5099). -c Release: build to bin/Release so the E2E can run even
       // while a local Debug `dotnet run` is up (they'd otherwise fight over Skylens.Api.exe).
-      command: "dotnet run --project src/Api -c Release --no-launch-profile",
-      cwd: path.resolve(here, "../backend"),
+      command: 'dotnet run --project src/Api -c Release --no-launch-profile',
+      cwd: path.resolve(here, '../backend'),
       url: `${BACKEND_URL}/healthz`,
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
-      stdout: "pipe",
-      stderr: "pipe",
+      stdout: 'pipe',
+      stderr: 'pipe',
       env: {
-        ASPNETCORE_ENVIRONMENT: "Development",
+        ASPNETCORE_ENVIRONMENT: 'Development',
         ASPNETCORE_URLS: BACKEND_URL,
-        Auth__Disabled: "true",
-        Mqtt__Replay: "true",
-        Mqtt__Host: "replay",
+        Auth__Disabled: 'true',
+        Mqtt__Replay: 'true',
+        Mqtt__Host: 'replay',
         Mqtt__ReplayFile: REPLAY_FILE,
         Feed__Lat: HOME_LAT,
         Feed__Lon: HOME_LON,
-        Feed__RadiusKm: "500",
+        Feed__RadiusKm: '500',
         Cors__Origins: WEB_URL,
       },
     },
     {
       command: `npx expo start --web --port ${WEB_PORT}`,
       // Needs the app's own dependencies (`npm ci` in app/).
-      cwd: path.resolve(here, "../app"),
+      cwd: path.resolve(here, '../app'),
       url: WEB_URL,
       timeout: 180_000,
       reuseExistingServer: !process.env.CI,
       env: {
-        BROWSER: "none",
-        EXPO_NO_TELEMETRY: "1",
+        BROWSER: 'none',
+        EXPO_NO_TELEMETRY: '1',
         EXPO_PUBLIC_API_BASE_URL: BACKEND_URL,
-        EXPO_PUBLIC_FORCE_LIVE: "1",
+        EXPO_PUBLIC_FORCE_LIVE: '1',
         EXPO_PUBLIC_HOME_LAT: HOME_LAT,
         EXPO_PUBLIC_HOME_LON: HOME_LON,
       },
     },
   ],
-});
+})

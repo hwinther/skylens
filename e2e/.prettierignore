@@ -1,0 +1,2 @@
+# Prettier pads Markdown tables to the widest cell; keep docs hand-formatted (as in wshno).
+*.md

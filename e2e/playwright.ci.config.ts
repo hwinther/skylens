@@ -18,10 +18,10 @@
  * map/list/detail) via stable testIDs and never touch sign-in, mock-auth texts, or baked env, so
  * they are mode-agnostic.
  */
-import { devices } from "@playwright/test";
-import { definePlaywrightConfig } from "@wshno/playwright-config";
+import { devices } from '@playwright/test'
+import { definePlaywrightConfig } from '@wshno/playwright-config'
 
-const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:8081";
+const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8081'
 
 // Shared defaults (testDir ./tests, forbidOnly, the github/html/json CI reporters at the paths the
 // reusable reads, trace, screenshot and video on failure) come from @wshno/playwright-config.
@@ -35,8 +35,8 @@ export default definePlaywrightConfig({
     baseURL: BASE_URL,
     // Production web bundle has no baked home coords -> the app reads browser geolocation. Grant the
     // permission and pin to the compose FEED origin (coarse, 1-decimal) so aircraft are in range.
-    permissions: ["geolocation"],
+    permissions: ['geolocation'],
     geolocation: { latitude: 59.9, longitude: 11.1 },
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
-});
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+})
