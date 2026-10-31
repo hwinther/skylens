@@ -25,57 +25,57 @@
  * that fragility. The AR-side SatelliteLabel rendering is already covered by the app-side jest tests.
  */
 
-import { test, expect } from "@playwright/test";
+import { test, expect } from '@playwright/test'
 
-test("overhead list shows satellites from fixture TLEs", async ({ page }) => {
-  await page.goto("/list");
+test('overhead list shows satellites from fixture TLEs', async ({ page }) => {
+  await page.goto('/list')
 
   // The Overhead header renders once the showSatellites toggle is on (default) and the section mounts;
   // the count itself needs the /api/satellites fetch plus the first 1 Hz propagate tick to populate,
   // so allow a generous window for the MEO satellites to be selected above the mask.
-  const count = page.getByTestId("list-sat-count");
-  await expect(count).toBeVisible();
+  const count = page.getByTestId('list-sat-count')
+  await expect(count).toBeVisible()
 
   // Match ONLY the numeric row testIDs (list-sat-<noradId>) — a bare `^="list-sat-"` prefix also
   // matches the `list-sat-count` header, which renders immediately with "Overhead (0)" and would let
   // the test race ahead of the first propagate tick. Waiting on a numeric row waits for real data.
-  const satRow = page.getByTestId(/^list-sat-\d+$/).first();
-  await expect(satRow).toBeVisible({ timeout: 30_000 });
+  const satRow = page.getByTestId(/^list-sat-\d+$/).first()
+  await expect(satRow).toBeVisible({ timeout: 30_000 })
 
   // "Overhead (N)" with N >= 1 — the MEO GNSS constellations guarantee at least one is always up.
-  const countText = ((await count.textContent()) ?? "").trim();
-  const m = countText.match(/Overhead \((\d+)\)/);
-  expect(m, 'header reads "Overhead (N)"').not.toBeNull();
-  expect(Number(m![1]), "at least one satellite is overhead").toBeGreaterThanOrEqual(1);
+  const countText = ((await count.textContent()) ?? '').trim()
+  const m = countText.match(/Overhead \((\d+)\)/)
+  expect(m, 'header reads "Overhead (N)"').not.toBeNull()
+  expect(Number(m![1]), 'at least one satellite is overhead').toBeGreaterThanOrEqual(1)
 
   // The row is keyed by a real NORAD catalogue id — proves it's a satellite row, not a stray match.
-  const testId = (await satRow.getAttribute("data-testid")) ?? "";
-  const noradId = testId.replace("list-sat-", "");
-  expect(Number(noradId), "sat rows are keyed list-sat-<noradId>").toBeGreaterThan(0);
+  const testId = (await satRow.getAttribute('data-testid')) ?? ''
+  const noradId = testId.replace('list-sat-', '')
+  expect(Number(noradId), 'sat rows are keyed list-sat-<noradId>').toBeGreaterThan(0)
 
   // The row shows a "<elevation>° <DIR>" cell (compass8 direction after the degree elevation). A bare
   // degree sign is the elevation readout — the range cell uses "km", so "°" is unambiguously elevation.
-  const rowText = ((await satRow.textContent()) ?? "").trim();
-  expect(rowText, "sat row shows a degree elevation").toMatch(/\d\s*°/);
-});
+  const rowText = ((await satRow.textContent()) ?? '').trim()
+  expect(rowText, 'sat row shows a degree elevation').toMatch(/\d\s*°/)
+})
 
-test("satellite detail sheet shows transmitters", async ({ page }) => {
-  await page.goto("/list");
+test('satellite detail sheet shows transmitters', async ({ page }) => {
+  await page.goto('/list')
 
   // Tap the FIRST overhead row, whatever it is (highest-elevation satellite — may be a GNSS member with
   // no transmitters, or the ISS/an amateur sat with many). The sheet must open either way. The numeric-
   // only regex testID skips the `list-sat-count` header (a plain Text with no press handler).
-  const firstRow = page.getByTestId(/^list-sat-\d+$/).first();
-  await expect(firstRow).toBeVisible({ timeout: 30_000 });
-  await firstRow.click();
+  const firstRow = page.getByTestId(/^list-sat-\d+$/).first()
+  await expect(firstRow).toBeVisible({ timeout: 30_000 })
+  await firstRow.click()
 
   // GET /api/satellites/{noradId} drives the sheet; the title renders once that fetch resolves.
-  await expect(page.getByTestId("sat-detail-title")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('sat-detail-title')).toBeVisible({ timeout: 15_000 })
 
   // Robust to which satellite is up: a sat WITH transmitters shows sat-tx-0; one WITHOUT (e.g. a GNSS
   // member — the endpoint returns 200 with an empty list) shows the sat-detail-empty placeholder. Either
   // proves the transmitter fetch + render path ran; a stuck spinner / error would show neither.
-  const tx0 = page.getByTestId("sat-tx-0");
-  const empty = page.getByTestId("sat-detail-empty");
-  await expect(tx0.or(empty)).toBeVisible({ timeout: 15_000 });
-});
+  const tx0 = page.getByTestId('sat-tx-0')
+  const empty = page.getByTestId('sat-detail-empty')
+  await expect(tx0.or(empty)).toBeVisible({ timeout: 15_000 })
+})
