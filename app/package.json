@@ -16,9 +16,6 @@
     "build:web": "expo export --platform web",
     "test": "jest",
     "coverage:ci": "jest --coverage",
-    "e2e": "playwright test",
-    "e2e:ci": "playwright test --config playwright.ci.config.ts",
-    "e2e:report": "playwright show-report",
     "openapi:generate": "openapi-typescript ../backend/src/Api/openapi.json -o src/api/generated/schema.ts"
   },
   "dependencies": {
@@ -57,7 +54,6 @@
     "zustand": "5.0.8"
   },
   "devDependencies": {
-    "@playwright/test": "^1.64.1",
     "@react-native/jest-preset": "^0.88.0",
     "@types/jest": "30.0.0",
     "@types/leaflet": "^1.9.21",

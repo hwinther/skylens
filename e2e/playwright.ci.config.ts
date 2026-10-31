@@ -14,27 +14,25 @@
  *    navigator.geolocation. We grant the geolocation permission and pin coordinates to the compose
  *    FEED origin so the replayed aircraft fall inside the own-feed radius.
  *
- * The e2e/ specs are shared with source mode: they assert on backend-driven data (aircraft counts,
+ * The tests/ specs are shared with source mode: they assert on backend-driven data (aircraft counts,
  * map/list/detail) via stable testIDs and never touch sign-in, mock-auth texts, or baked env, so
  * they are mode-agnostic.
  */
-import { defineConfig, devices } from "@playwright/test";
+import { devices } from "@playwright/test";
+import { definePlaywrightConfig } from "@wshno/playwright-config";
 
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:8081";
 
-export default defineConfig({
-  testDir: "./e2e",
+// Shared defaults (testDir ./tests, forbidOnly, the github/html/json CI reporters at the paths the
+// reusable reads, trace, screenshot and video on failure) come from @wshno/playwright-config.
+export default definePlaywrightConfig({
   timeout: 60_000,
   expect: { timeout: 30_000 },
   fullyParallel: false,
-  forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: 1,
-  // JSON report at the reusable's default results_json_path so it can build the PR-comment summary.
-  reporter: [["list"], ["json", { outputFile: "playwright-report/results.json" }]],
   use: {
     baseURL: BASE_URL,
-    trace: "on-first-retry",
     // Production web bundle has no baked home coords -> the app reads browser geolocation. Grant the
     // permission and pin to the compose FEED origin (coarse, 1-decimal) so aircraft are in range.
     permissions: ["geolocation"],

@@ -65,12 +65,15 @@ test("AR overlay renders aircraft on web and drag-to-look aims the view", async 
   let sawLabel = (await labels.count()) > 0;
   let sawIcon = (await icons.count()) > 0;
   let sawCompass = (await compass.count()) > 0;
+  // A drag sweep that stops once each element has been seen; the asserts below are unconditional.
+  /* eslint-disable playwright/no-conditional-in-test */
   for (let i = 0; i < 20 && !(sawLabel && sawIcon && sawCompass); i++) {
     await drag(cx + 80, cy, cx - 80, cy); // rotate heading ~24° per step
     if (!sawLabel) sawLabel = (await labels.count()) > 0;
     if (!sawIcon) sawIcon = (await icons.count()) > 0;
     if (!sawCompass) sawCompass = (await compass.count()) > 0;
   }
+  /* eslint-enable playwright/no-conditional-in-test */
   expect(sawLabel, "a drag sweep should bring at least one aircraft label into the FOV").toBe(true);
   expect(sawIcon, "each aircraft label shows a type icon (plane/helicopter)").toBe(true);
   expect(sawCompass, "a compass hint (N/E/S/W) should appear while sweeping the heading").toBe(true);

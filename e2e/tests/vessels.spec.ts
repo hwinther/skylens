@@ -41,11 +41,11 @@ test("list tab shows AIS vessels streamed from the backend", async ({ page }) =>
   // The row shows a distance ("<d.d> km <DIR>"); SOG/COG use "kn"/"°", so a decimal + "km" is
   // unambiguously the distance cell.
   const rowText = ((await shipRow.textContent()) ?? "").trim();
-  expect(rowText, "ship row shows a distance from the observer").toMatch(/\d+\.\d\s*km/);
+  expect(rowText, "ship row shows a distance from the observer").toMatch(/\d\.\d\s*km/);
 
   // The row shows an identity: the vessel name (letters) or, when no static name has arrived, the
   // numeric MMSI fallback. Everything before the distance cell is that identity label.
-  const label = rowText.slice(0, rowText.search(/\d+\.\d\s*km/));
+  const label = rowText.slice(0, rowText.search(/(?<!\d)\d+\.\d\s*km/));
   expect(
     label.includes(mmsi) || /[A-Za-z]{2,}/.test(label),
     "ship row shows a name or the MMSI",

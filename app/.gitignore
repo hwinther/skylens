@@ -45,11 +45,6 @@ google-play-service-account.json
 coverage/
 eslint-report.json
 
-# playwright e2e
-/test-results
-/playwright-report
-/playwright/.cache
-
 # generated native folders
 /ios
 /android
