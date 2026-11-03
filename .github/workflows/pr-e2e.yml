@@ -42,7 +42,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: hwinther/reusable-workflows/.github/workflows/build-image-docker.yml@c1e80ad637dcdd38bb6de0f447475c40a8625141 # v2.9.0
+    uses: hwinther/reusable-workflows/.github/workflows/build-image-docker.yml@05a0d634a4402c78a8d233ba1945baf22b9ca3c1 # v2.10.0
     with:
       container_registry: ghcr.io
       container_image_name_postfix: api
@@ -58,7 +58,7 @@ jobs:
       actions: read
       security-events: write
       pull-requests: write
-    uses: hwinther/reusable-workflows/.github/workflows/scan-image.yml@c1e80ad637dcdd38bb6de0f447475c40a8625141 # v2.9.0
+    uses: hwinther/reusable-workflows/.github/workflows/scan-image.yml@05a0d634a4402c78a8d233ba1945baf22b9ca3c1 # v2.10.0
     with:
       image: ${{ needs.build.outputs.image }}
       container_image_name_postfix: api
@@ -74,7 +74,7 @@ jobs:
       packages: read
       pull-requests: write
       actions: read
-    uses: hwinther/reusable-workflows/.github/workflows/playwright-e2e.yml@c1e80ad637dcdd38bb6de0f447475c40a8625141 # v2.9.0
+    uses: hwinther/reusable-workflows/.github/workflows/playwright-e2e.yml@05a0d634a4402c78a8d233ba1945baf22b9ca3c1 # v2.10.0
     with:
       compose_file: docker-compose.e2e.yml
       playwright_working_directory: e2e
@@ -99,7 +99,7 @@ jobs:
       id-token: write
       attestations: write
       actions: read
-    uses: hwinther/reusable-workflows/.github/workflows/image-push.yml@c1e80ad637dcdd38bb6de0f447475c40a8625141 # v2.9.0
+    uses: hwinther/reusable-workflows/.github/workflows/image-push.yml@05a0d634a4402c78a8d233ba1945baf22b9ca3c1 # v2.10.0
     with:
       container_registry: ghcr.io
       container_image_name_postfix: api
@@ -134,7 +134,7 @@ jobs:
 
       - name: Render, validate, push and sign
         id: push
-        uses: hwinther/reusable-workflows/.github/actions/manifests@c1e80ad637dcdd38bb6de0f447475c40a8625141 # v2.9.0
+        uses: hwinther/reusable-workflows/.github/actions/manifests@05a0d634a4402c78a8d233ba1945baf22b9ca3c1 # v2.10.0
         with:
           mode: push
           artifact: ghcr.io/hwinther/skylens/manifests
@@ -148,7 +148,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    uses: hwinther/reusable-workflows/.github/workflows/gitops-preview-upsert.yml@c1e80ad637dcdd38bb6de0f447475c40a8625141 # v2.9.0
+    uses: hwinther/reusable-workflows/.github/workflows/gitops-preview-upsert.yml@05a0d634a4402c78a8d233ba1945baf22b9ca3c1 # v2.10.0
     with:
       target_repo: hwinther/proxmox
       preview_base_path: clusters/production/apps/previews/skylens
