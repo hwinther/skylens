@@ -16,6 +16,7 @@ using Skylens.Api.Extensions;
 using Skylens.Api.Hubs;
 using Skylens.Api.Ingest;
 using Skylens.Api.Options;
+using Skylens.Api.Security;
 using Skylens.Api.State;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -264,10 +265,14 @@ var exportToOtlp = !builder.Environment.IsDevelopment()
                    || !string.IsNullOrWhiteSpace(configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
 var otlpEndpoint = configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]?.Trim() ?? "http://localhost:4317";
 
+// IncludeFormattedMessage: the Loki line is the rendered message rather than the raw template.
 if (exportToOtlp)
     builder.Logging.AddOpenTelemetry(options =>
+    {
+        options.IncludeFormattedMessage = true;
         options.SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(serviceName))
-               .AddOtlpExporter(otlp => otlp.Endpoint = new Uri(otlpEndpoint)));
+               .AddOtlpExporter(otlp => otlp.Endpoint = new Uri(otlpEndpoint));
+    });
 
 builder.Services.AddOpenTelemetry()
        .ConfigureResource(static resource => resource.AddService(serviceName))
@@ -310,6 +315,10 @@ app.Use((context, next) =>
     });
     return next(context);
 });
+
+// HSTS, nosniff, frame/referrer/permissions policies and the CSP (Report-Only unless CSP_MODE=enforce)
+// on every response, static files included. See Security/SecurityHeaders.cs.
+app.UseSecurityHeaders(app.Configuration);
 
 // OpenAPI (/openapi, /swagger) before auth so the docs stay anonymous.
 app.UseOpenApiDocumentation(oidcConfig);
@@ -361,6 +370,7 @@ app.UseAuthorization();
 app.UseRateLimiter();
 
 app.MapHealthEndpoints();
+app.MapCspReports();
 app.MapApiEndpoints();
 app.MapHub<AircraftHub>("/hubs/aircraft").RequireAuthorization();
 

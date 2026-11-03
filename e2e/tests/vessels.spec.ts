@@ -21,7 +21,7 @@
  * app-side jest tests; keeping it out of e2e stays faithful to the repo's conventions.
  */
 
-import { test, expect } from '@playwright/test'
+import { expect, test } from './fixtures'
 
 test('list tab shows AIS vessels streamed from the backend', async ({ page }) => {
   await page.goto('/list')

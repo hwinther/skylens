@@ -25,7 +25,7 @@
  * that fragility. The AR-side SatelliteLabel rendering is already covered by the app-side jest tests.
  */
 
-import { test, expect } from '@playwright/test'
+import { expect, test } from './fixtures'
 
 test('overhead list shows satellites from fixture TLEs', async ({ page }) => {
   await page.goto('/list')

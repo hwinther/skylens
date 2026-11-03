@@ -7,7 +7,7 @@
  * worked end to end. See playwright.config.ts for how the two servers are wired.
  */
 
-import { test, expect, type Page } from '@playwright/test'
+import { expect, type Page, test } from './fixtures'
 
 /** Read the leading integer from the AR status strip's "N ac" label. */
 async function statusCount(page: Page): Promise<number> {
