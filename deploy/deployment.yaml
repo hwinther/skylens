@@ -99,6 +99,10 @@ spec:
           value: "otlp"
         - name: OTEL_RESOURCE_ATTRIBUTES
           value: "service.namespace=$(POD_NAMESPACE),deployment.environment=${APP_ENVIRONMENT:=production}"
+        # report-only: the CSP is sent as Content-Security-Policy-Report-Only (reported, not
+        # enforced). enforce: sent as Content-Security-Policy. See Security/SecurityHeaders.cs.
+        - name: CSP_MODE
+          value: "${CSP_MODE:=report-only}"
         envFrom:
         # MQTT__USERNAME / MQTT__PASSWORD / OPENSKY__CLIENTID / OPENSKY__CLIENTSECRET /
         # ADSBX__RAPIDAPIKEY / AEROAPI__APIKEY / FEED__LAT / FEED__LON / FEED__RADIUSKM

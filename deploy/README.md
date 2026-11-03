@@ -36,6 +36,7 @@ quotes, so a number or boolean would come out as the wrong YAML type.
 | `OIDC_AUDIENCE` | `skylens-api` | `Oidc__Audience` |
 | `MQTT_HOST` | (required) | Broker carrying `adsb/aircraft` and `ais/data` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | (required) | OTLP gRPC collector endpoint |
+| `CSP_MODE` | `report-only` | `report-only` sends the CSP as Content-Security-Policy-Report-Only (violations are logged, and exported with the other logs); `enforce` blocks |
 | `APP_ENVIRONMENT` | `production` | `deployment.environment` resource attribute |
 
 ### Secret
