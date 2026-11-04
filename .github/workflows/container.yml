@@ -30,7 +30,7 @@ jobs:
       actions: write
       security-events: write
       pull-requests: write
-    uses: hwinther/reusable-workflows/.github/workflows/docker-container.yml@284c084358fdd7bb4e8af07bd626d11e07d8ecf9 # v2.15.1
+    uses: hwinther/reusable-workflows/.github/workflows/docker-container.yml@3b5de55cb09d04c5ee0ddca13297bd22ad2e9170 # v2.16.0
     with:
       container_registry: ghcr.io
       container_image_name_postfix: api
@@ -61,7 +61,7 @@ jobs:
       # the cluster's OCIRepository pins. A single file at the root: the Flux Kustomization applies
       # everything under its path.
       - name: Render, validate, push and sign
-        uses: hwinther/reusable-workflows/.github/actions/manifests@284c084358fdd7bb4e8af07bd626d11e07d8ecf9 # v2.15.1
+        uses: hwinther/reusable-workflows/.github/actions/manifests@3b5de55cb09d04c5ee0ddca13297bd22ad2e9170 # v2.16.0
         with:
           mode: push
           artifact: ghcr.io/hwinther/skylens/manifests
