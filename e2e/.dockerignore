@@ -1,0 +1,9 @@
+node_modules
+playwright
+playwright-report
+test-results
+blob-report
+.env*
+Dockerfile
+.dockerignore
+otel-out

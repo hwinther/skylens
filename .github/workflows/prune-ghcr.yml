@@ -19,7 +19,7 @@ on:
       images:
         description: "Comma-separated package names to prune. Blank = auto-discover by prefix."
         type: string
-        default: "skylens/api,skylens/manifests"
+        default: "skylens/api,skylens/e2e,skylens/manifests,skylens/quality"
       nuke_package:
         description: "DESTRUCTIVE. Package name to delete entirely — leave blank for normal prune."
         type: string
@@ -49,7 +49,7 @@ jobs:
       # Scheduled runs prune for real; manual runs use the input. The old expression handed the
       # required boolean input a null on a schedule, so no scheduled run ever started.
       dry_run: ${{ github.event_name != 'schedule' && inputs.dry_run }}
-      images: ${{ inputs.images || 'skylens/api,skylens/manifests' }}
+      images: ${{ inputs.images || 'skylens/api,skylens/e2e,skylens/manifests,skylens/quality' }}
       package_namespace_prefix: skylens/
       nuke_package: ${{ inputs.nuke_package || '' }}
     # Passes the optional GHCR_PRUNE_TOKEN through to the pinned reusable prune workflow (which reads
