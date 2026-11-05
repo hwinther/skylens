@@ -71,7 +71,7 @@ jobs:
       checks: write
       pull-requests: write
       packages: read
-    uses: hwinther/reusable-workflows/.github/workflows/pr-build.yml@3b5de55cb09d04c5ee0ddca13297bd22ad2e9170 # v2.16.0
+    uses: hwinther/reusable-workflows/.github/workflows/pr-build.yml@e94d3301a8dcd0c859ef7d357604c7fe30057224 # v2.18.1
     with:
       node_enabled: true
       node_version: "26.x"
@@ -90,7 +90,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: hwinther/reusable-workflows/.github/workflows/build-image-docker.yml@3b5de55cb09d04c5ee0ddca13297bd22ad2e9170 # v2.16.0
+    uses: hwinther/reusable-workflows/.github/workflows/build-image-docker.yml@e94d3301a8dcd0c859ef7d357604c7fe30057224 # v2.18.1
     with:
       container_registry: ghcr.io
       container_image_name_postfix: api
@@ -106,7 +106,7 @@ jobs:
       actions: read
       security-events: write
       pull-requests: write
-    uses: hwinther/reusable-workflows/.github/workflows/scan-image.yml@3b5de55cb09d04c5ee0ddca13297bd22ad2e9170 # v2.16.0
+    uses: hwinther/reusable-workflows/.github/workflows/scan-image.yml@e94d3301a8dcd0c859ef7d357604c7fe30057224 # v2.18.1
     with:
       image: ${{ needs.build.outputs.image }}
       container_image_name_postfix: api
@@ -146,7 +146,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: hwinther/reusable-workflows/.github/workflows/build-image-docker.yml@3b5de55cb09d04c5ee0ddca13297bd22ad2e9170 # v2.16.0
+    uses: hwinther/reusable-workflows/.github/workflows/build-image-docker.yml@e94d3301a8dcd0c859ef7d357604c7fe30057224 # v2.18.1
     with:
       container_registry: ghcr.io
       container_image_name_postfix: e2e
@@ -162,7 +162,7 @@ jobs:
       packages: read
       pull-requests: write
       actions: read
-    uses: hwinther/reusable-workflows/.github/workflows/playwright-e2e.yml@3b5de55cb09d04c5ee0ddca13297bd22ad2e9170 # v2.16.0
+    uses: hwinther/reusable-workflows/.github/workflows/playwright-e2e.yml@e94d3301a8dcd0c859ef7d357604c7fe30057224 # v2.18.1
     with:
       compose_file: docker-compose.e2e.yml
       # The suite runs from the e2e image as a compose service (`npm run test:ci`), not with Node and
@@ -187,7 +187,7 @@ jobs:
       id-token: write
       attestations: write
       actions: read
-    uses: hwinther/reusable-workflows/.github/workflows/image-push.yml@3b5de55cb09d04c5ee0ddca13297bd22ad2e9170 # v2.16.0
+    uses: hwinther/reusable-workflows/.github/workflows/image-push.yml@e94d3301a8dcd0c859ef7d357604c7fe30057224 # v2.18.1
     with:
       container_registry: ghcr.io
       container_image_name_postfix: api
@@ -222,7 +222,7 @@ jobs:
 
       - name: Render, validate, push and sign
         id: push
-        uses: hwinther/reusable-workflows/.github/actions/manifests@3b5de55cb09d04c5ee0ddca13297bd22ad2e9170 # v2.16.0
+        uses: hwinther/reusable-workflows/.github/actions/manifests@e94d3301a8dcd0c859ef7d357604c7fe30057224 # v2.18.1
         with:
           mode: push
           artifact: ghcr.io/hwinther/skylens/manifests
@@ -236,7 +236,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    uses: hwinther/reusable-workflows/.github/workflows/gitops-preview-upsert.yml@3b5de55cb09d04c5ee0ddca13297bd22ad2e9170 # v2.16.0
+    uses: hwinther/reusable-workflows/.github/workflows/gitops-preview-upsert.yml@e94d3301a8dcd0c859ef7d357604c7fe30057224 # v2.18.1
     with:
       target_repo: hwinther/proxmox
       preview_base_path: clusters/production/apps/previews/skylens
@@ -292,7 +292,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    uses: hwinther/reusable-workflows/.github/workflows/quality-artifact.yml@3b5de55cb09d04c5ee0ddca13297bd22ad2e9170 # v2.16.0
+    uses: hwinther/reusable-workflows/.github/workflows/quality-artifact.yml@e94d3301a8dcd0c859ef7d357604c7fe30057224 # v2.18.1
     with:
       tags: |
         ${{ needs.main-tag.outputs.tag }}
