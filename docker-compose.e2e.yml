@@ -11,6 +11,12 @@
 #   API_IMAGE=ghcr.io/hwinther/skylens/api@sha256:...
 # pr-preview.yml sets it (via the reusable's install command) to the digest the PR build just pushed.
 # For a local run: export API_IMAGE=... then `docker compose -f docker-compose.e2e.yml up --wait`.
+#
+# The suite runs as the `playwright` service (profile e2e) from the image e2e/Dockerfile builds:
+#   docker build -t skylens-e2e:local e2e
+#   docker compose -f docker-compose.e2e.yml --profile e2e run --rm playwright
+# The API traces to `otel-collector`, which writes e2e/otel-out/traces.jsonl for the slow-request
+# report in playwright-e2e.yml.
 
 services:
   app:
@@ -42,12 +48,15 @@ services:
       FEED__LAT: "59.9"
       FEED__LON: "11.1"
       FEED__RADIUSKM: "500"
-      # No OTLP collector in the e2e stack — disable the SDK so there is no export retry noise.
-      OTEL_SDK_DISABLED: "true"
+      # Traces (and the logs/metrics, which the collector drops) go to the stack's collector.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
     ports:
       # Playwright (on the runner/host) browses the container's own origin; the production web bundle
       # resolves the API base URL to window.location.origin, so the SPA and API are same-origin here.
       - "8081:8080"
+    depends_on:
+      otel-collector:
+        condition: service_started
 
   # Readiness gate. The mcr.microsoft.com/dotnet/aspnet:10.0 base image ships no curl/wget, so `app`
   # carries no healthcheck of its own. This tiny curl sidecar polls /healthz (which always returns
@@ -66,3 +75,29 @@ services:
       timeout: 3s
       retries: 40
       start_period: 3s
+
+  # Receives the API's traces (and drops its logs and metrics) while the suite runs.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.163.2
+    user: "0:0"
+    command: ["--config=/etc/otelcol/collector.yaml"]
+    volumes:
+      - ./e2e/otel/collector.yaml:/etc/otelcol/collector.yaml:ro
+      - ./e2e/otel-out:/out
+
+  # The Playwright suite (e2e/Dockerfile on @wshno/playwright-config's runner image). Host network,
+  # so the specs reach the image on http://localhost:8081 exactly as a local run does.
+  playwright:
+    image: ${E2E_IMAGE:-skylens-e2e:local}
+    profiles: [e2e]
+    network_mode: host
+    environment:
+      - CI
+      - E2E_BASE_URL
+    # Reports land in e2e/ on the host, where the workflow's summary and upload look for them.
+    volumes:
+      - ./e2e/playwright-report:/e2e/playwright-report
+      - ./e2e/test-results:/e2e/test-results
+    depends_on:
+      app-ready:
+        condition: service_healthy

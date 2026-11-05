@@ -1,0 +1,33 @@
+# OpenTelemetry collector for the e2e compose stack: the API exports OTLP here while the suite runs,
+# and the traces land in /out/traces.jsonl (e2e/otel-out/ on the host), from which
+# playwright-e2e.yml reports the slow API requests. Metrics and logs are accepted and dropped, so the
+# API's exporters don't log errors about them.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 1s
+
+exporters:
+  file:
+    path: /out/traces.jsonl
+  nop:
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [file]
+    metrics:
+      receivers: [otlp]
+      exporters: [nop]
+    logs:
+      receivers: [otlp]
+      exporters: [nop]

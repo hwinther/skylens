@@ -31,7 +31,18 @@ cd e2e
 npm install
 npm test               # starts both servers, runs Chromium, tears down
 npm run report         # open the last HTML report
-npm run test:ci        # container mode against docker-compose.e2e.yml (what CI runs)
+npm run test:ci        # container mode against docker-compose.e2e.yml
+```
+
+CI runs container mode from its own image: `e2e/Dockerfile` bakes the suite into an image on
+`ghcr.io/wshno/playwright-config` (same version as the lock file), run as the `playwright` service of
+`docker-compose.e2e.yml`. The API traces to the stack's OTel collector (`e2e/otel-out/traces.jsonl`)
+and the PR comment lists API requests over 2 s. The same locally:
+
+```bash
+docker build -t skylens-e2e:local e2e
+API_IMAGE=... docker compose -f docker-compose.e2e.yml up -d --wait
+API_IMAGE=... docker compose -f docker-compose.e2e.yml --profile e2e run --rm playwright
 ```
 
 `e2e/` is its own npm package on `@wshno/playwright-config`, which pins Playwright and supplies the
