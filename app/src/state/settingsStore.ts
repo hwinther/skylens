@@ -225,8 +225,14 @@ export const useSettingsStore = create<SettingsState>()(
       storage: createJSONStorage(() => settingsStorage),
       // Flip the hydration flag once persisted settings load, so the onboarding gate can wait for it
       // and never flash the intro at a returning user. Fires even on a fresh install (empty storage).
-      onRehydrateStorage: () => () =>
-        useSettingsStore.setState({ _hydrated: true, polarisCalibrating: false }),
+      //
+      // Deferred to a microtask: web storage (localStorage) is synchronous, so persist finishes
+      // rehydrating INSIDE create(), before `useSettingsStore` is assigned. Touching it there threw a
+      // ReferenceError that persist swallowed, `_hydrated` never became true, and the onboarding gate
+      // never opened on web. Native (async SecureStore) was unaffected.
+      onRehydrateStorage: () => () => {
+        queueMicrotask(() => useSettingsStore.setState({ _hydrated: true, polarisCalibrating: false }));
+      },
     },
   ),
 );

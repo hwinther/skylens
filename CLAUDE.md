@@ -93,8 +93,10 @@ npm run test:ci                   # container mode against docker-compose.e2e.ym
   lives in pure-TS `src/sim/` (jest-tested). Following works by re-centring the hub subscription on the
   target (`simStore` → `_layout.tsx`), not by any new backend call. Esri hosts are allowed in the CSP.
 - **Hidden routes**: in expo-router 58, `href: null` on a `Tabs.Screen` makes it `hidden`, and hidden
-  routes redirect to `/`. To keep a route navigable without a tab button, hide the button with
-  `tabBarItemStyle: { display: "none" }` instead (see the `sim` screen in `app/_layout.tsx`).
+  routes redirect to `/`. To keep a route navigable without a tab button, use `HIDDEN_ROUTE`
+  (`tabBarItemStyle: { display: "none" }`) in `app/_layout.tsx` instead.
+- **E2E onboarding**: a fresh browser is routed to `/onboarding`. The shared fixture
+  (`e2e/tests/fixtures.ts`) marks onboarding done by default; opt out with `test.use({ onboarded: false })`.
 - E2E relies on stable `testID`s (`status-aircraft-count`, `map-aircraft-count`, `map-ac-<hex>`,
   `sim-*`); keep them when touching those components.
 

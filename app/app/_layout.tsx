@@ -31,6 +31,13 @@ WebBrowser.maybeCompleteAuthSession();
 // does not accept. The tab tints are always theme strings, so narrow the type here.
 const iconColor = (c: ColorValue) => (typeof c === "number" || c == null ? undefined : c);
 
+/**
+ * Routes that exist but get no tab button. NOT `href: null`: expo-router 58 turns that into
+ * `hidden`, and hidden routes redirect to "/", which made /onboarding, /sign-in and the web OAuth
+ * popup's /oauth unreachable. Hiding only the button keeps them navigable.
+ */
+const HIDDEN_ROUTE = { tabBarItemStyle: { display: "none" } } as const;
+
 export default function RootLayout() {
   const setStatus = useAuthStore((s) => s.setStatus);
   const demoMode = useSettingsStore((s) => s.demoMode);
@@ -128,15 +135,11 @@ export default function RootLayout() {
               ),
             }}
           />
-          <Tabs.Screen name="sign-in" options={{ href: null }} />
-          <Tabs.Screen name="oauth" options={{ href: null }} />
-          <Tabs.Screen name="onboarding" options={{ href: null }} />
-          {/* Not `href: null`: expo-router 58 turns that into `hidden`, and hidden routes redirect to
-              "/". Hiding only the tab button keeps /sim routable; the full-screen view drops the bar. */}
-          <Tabs.Screen
-            name="sim"
-            options={{ tabBarItemStyle: { display: "none" }, tabBarStyle: { display: "none" } }}
-          />
+          <Tabs.Screen name="sign-in" options={HIDDEN_ROUTE} />
+          <Tabs.Screen name="oauth" options={HIDDEN_ROUTE} />
+          <Tabs.Screen name="onboarding" options={HIDDEN_ROUTE} />
+          {/* The simulator is full-screen, so it also drops the tab bar itself. */}
+          <Tabs.Screen name="sim" options={{ ...HIDDEN_ROUTE, tabBarStyle: { display: "none" } }} />
         </Tabs>
       </SafeAreaProvider>
     </GestureHandlerRootView>
