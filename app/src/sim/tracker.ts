@@ -21,6 +21,9 @@ export const MAX_EXTRAPOLATE_S = 30;
 /** A sample older than this marks the pose stale ("signal lost"). */
 export const STALE_AFTER_S = 15;
 
+/** Above this ground speed a repeated identical position is treated as "no new position". */
+export const MOVING_MPS = 1;
+
 /** Time constant for the heading / pitch low-pass. */
 export const ANGLE_TAU_S = 0.6;
 
@@ -45,7 +48,6 @@ export class SimTracker {
   private heading: number | null = null;
   private pitch: number | null = null;
   private lastPoseMs: number | null = null;
-  private last: TrackedPose | null = null;
 
   get latest(): SimSample | null {
     return this.sample;
@@ -53,18 +55,40 @@ export class SimTracker {
 
   /** Feed a new sample. `nowMs` is the render clock at the moment it arrives. */
   update(sample: SimSample, nowMs: number): void {
-    if (this.sample && sample.timeMs < this.sample.timeMs) return; // out of order
-    const shown = this.last;
+    const prev = this.sample;
+    if (prev && sample.timeMs < prev.timeMs) return; // out of order
+    // A MOVING object reporting exactly the same position again carries no new position: the snapshot
+    // just repeated it (a position message hadn't arrived yet, or a replayed fixture). Taking it as-is
+    // would drag the camera back to where the object was. Keep the original position and its time, so
+    // dead reckoning carries on and the position keeps ageing (the HUD goes stale if nothing new comes),
+    // but take the new velocity: a turn or climb can arrive before the next position. A stationary
+    // object (moored vessel, parked aircraft) legitimately repeats its position, so that is accepted.
+    if (prev && sample.lat === prev.lat && sample.lon === prev.lon && sample.speedMps > MOVING_MPS) {
+      sample = { ...sample, altM: prev.altM, timeMs: prev.timeMs };
+    }
+    // What the camera would show right now from the previous state (its prediction plus whatever is left
+    // of its own correction). Comparing against this, not the last rendered frame, keeps the hand-over
+    // seamless however long ago that frame was drawn.
+    const shown = prev ? this.positionAt(prev, nowMs) : null;
     this.sample = sample;
     if (shown) {
       const fresh = this.predict(sample, nowMs);
       this.offset = {
         dLat: shown.lat - fresh.lat,
         dLon: wrapLon(shown.lon - fresh.lon),
-        dAlt: shown.altM - fresh.alt,
+        dAlt: shown.alt - fresh.alt,
         atMs: nowMs,
       };
     }
+  }
+
+  /** `s` dead-reckoned to `nowMs`, plus the part of the current correction not yet faded out. */
+  private positionAt(s: SimSample, nowMs: number) {
+    const p = this.predict(s, nowMs);
+    const o = this.offset;
+    const k = o ? 1 - (nowMs - o.atMs) / BLEND_MS : 0;
+    if (!o || k <= 0) return p;
+    return { lat: p.lat + o.dLat * k, lon: p.lon + o.dLon * k, alt: p.alt + o.dAlt * k };
   }
 
   /** The camera pose at `nowMs`, or null before the first sample. `terrainM` keeps it above ground. */
@@ -72,18 +96,8 @@ export class SimTracker {
     const s = this.sample;
     if (!s) return null;
 
-    const p = this.predict(s, nowMs);
-    let { lat, lon, alt } = p;
-    if (this.offset) {
-      const k = 1 - (nowMs - this.offset.atMs) / BLEND_MS;
-      if (k > 0) {
-        lat += this.offset.dLat * k;
-        lon += this.offset.dLon * k;
-        alt += this.offset.dAlt * k;
-      } else {
-        this.offset = null;
-      }
-    }
+    const { lat, lon, alt } = this.positionAt(s, nowMs);
+    if (this.offset && nowMs - this.offset.atMs >= BLEND_MS) this.offset = null;
 
     // Time-constant low-pass on the angles, so behaviour doesn't depend on the frame rate.
     const dtS = this.lastPoseMs == null ? 0 : Math.max(0, (nowMs - this.lastPoseMs) / 1000);
@@ -95,7 +109,7 @@ export class SimTracker {
     this.pitch = this.pitch == null ? targetPitch : this.pitch + a * (targetPitch - this.pitch);
 
     const ageS = Math.max(0, (nowMs - s.timeMs) / 1000);
-    this.last = {
+    return {
       lat,
       lon: wrapLon(lon),
       altM: clampToTerrain(alt, terrainM),
@@ -105,7 +119,6 @@ export class SimTracker {
       ageS,
       stale: ageS > STALE_AFTER_S,
     };
-    return this.last;
   }
 
   private predict(s: SimSample, nowMs: number) {

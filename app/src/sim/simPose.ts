@@ -76,12 +76,16 @@ export interface SimPose {
 const finite = (v: number | null | undefined): v is number => typeof v === "number" && Number.isFinite(v);
 
 /**
- * An aircraft DTO received at `receivedAtMs` as a sample. `seen` (seconds since the last message)
- * backdates it so dead reckoning starts from when the position was true. Null without a position.
+ * An aircraft DTO received at `receivedAtMs` as a sample, backdated by the position's age so dead
+ * reckoning starts from when the position was true. That is `seenPos` (seconds since the last
+ * position), not `seen` (seconds since ANY message): a fresh altitude/velocity message can arrive while
+ * the position is seconds old. `seen` is the fallback for sources that don't report it. Null without a
+ * position.
  */
 export function aircraftSample(ac: AircraftDto, receivedAtMs: number): SimSample | null {
   if (!finite(ac.lat) || !finite(ac.lon)) return null;
-  const seenS = finite(ac.seen) ? Math.max(0, ac.seen) : 0;
+  const age = finite(ac.seenPos) ? ac.seenPos : ac.seen;
+  const seenS = finite(age) ? Math.max(0, age) : 0;
   return {
     lat: ac.lat,
     lon: ac.lon,

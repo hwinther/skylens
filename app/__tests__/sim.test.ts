@@ -67,6 +67,13 @@ describe("aircraftSample", () => {
     expect(aircraftSample(ac({ cat: "A7" }), T0)!.basePitchDeg).toBe(HELICOPTER_PITCH_DEG);
   });
 
+  it("times the position by seenPos, not by the age of the last message", () => {
+    // A fresh velocity message (seen 0.2 s) while the position itself is 2.8 s old.
+    expect(aircraftSample(ac({ seen: 0.2, seenPos: 2.8 }), T0)!.timeMs).toBe(T0 - 2800);
+    // Sources without seenPos fall back to seen.
+    expect(aircraftSample(ac({ seen: 0.2, seenPos: null }), T0)!.timeMs).toBe(T0 - 200);
+  });
+
   it("returns null without a position", () => {
     expect(aircraftSample(ac({ lat: null }), T0)).toBeNull();
   });
@@ -155,6 +162,28 @@ describe("SimTracker", () => {
     const b = t.pose(T0 + (MAX_EXTRAPOLATE_S + 60) * 1000)!;
     expect(b.lat).toBeCloseTo(a.lat, 9);
     expect(t.pose(T0 + (STALE_AFTER_S + 1) * 1000)!.stale).toBe(true);
+  });
+
+  it("keeps flying when a moving object repeats the same position", () => {
+    // A replayed fixture (or a snapshot before the next position message) repeats the position with a
+    // fresh timestamp. The camera must not be dragged back to it every second.
+    const t = new SimTracker();
+    t.update(sample({ headingDeg: 0, speedMps: 111.32 }), T0);
+    t.pose(T0);
+    for (let i = 1; i <= 5; i++) {
+      t.update(sample({ headingDeg: 0, speedMps: 111.32, timeMs: T0 + i * 1000 }), T0 + i * 1000);
+      t.pose(T0 + i * 1000);
+    }
+    const p = t.pose(T0 + 5000)!;
+    expect(p.lat).toBeCloseTo(60.005, 4); // 5 s north at ~0.001°/s, not back at 60
+    expect(p.ageS).toBeCloseTo(5, 3); // the position keeps ageing, so the HUD can go stale
+  });
+
+  it("accepts a repeated position from a stationary object", () => {
+    const t = new SimTracker();
+    t.update(sample({ speedMps: 0 }), T0);
+    t.update(sample({ speedMps: 0, timeMs: T0 + 20_000 }), T0 + 20_000);
+    expect(t.pose(T0 + 20_000)!.stale).toBe(false); // a moored vessel isn't "signal lost"
   });
 
   it("ignores out-of-order samples", () => {

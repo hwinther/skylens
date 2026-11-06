@@ -1304,6 +1304,11 @@
             "format": "double",
             "nullable": true
           },
+          "seenPos": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
           "cat": {
             "type": "string",
             "nullable": true

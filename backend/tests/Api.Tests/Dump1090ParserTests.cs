@@ -1,5 +1,6 @@
 using Xunit;
 using Skylens.Api.Ingest;
+using Skylens.Api.State;
 
 namespace Skylens.Api.Tests;
 
@@ -69,6 +70,15 @@ public sealed class Dump1090ParserTests
         var ryr = aircraft.Single(a => a.Hex == "4ca7b5");
         Assert.Equal(0.1, ryr.Seen);
         Assert.Equal(0.4, ryr.SeenPos);
+    }
+
+    [Fact]
+    public void Dto_carries_the_position_age_separately_from_the_message_age()
+    {
+        var dto = AircraftDto.FromState(new AircraftState { Hex = "4ca7b5", Seen = 0.1, SeenPos = 2.8 });
+
+        Assert.Equal(0.1, dto.Seen);
+        Assert.Equal(2.8, dto.SeenPos);
     }
 
     [Fact]

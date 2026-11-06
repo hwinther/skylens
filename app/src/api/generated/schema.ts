@@ -515,6 +515,8 @@ export interface components {
             vr?: number | null;
             /** Format: double */
             seen?: number | null;
+            /** Format: double */
+            seenPos?: number | null;
             cat?: string | null;
             src?: string | null;
         };
