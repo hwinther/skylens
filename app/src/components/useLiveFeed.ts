@@ -11,7 +11,14 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { HubConnectionState, type HubConnection } from "@microsoft/signalr";
-import { createAircraftHubConnection, onSnapshot, onStatus, onVessels, subscribe } from "@/api/signalr";
+import {
+  createAircraftHubConnection,
+  onSnapshot,
+  onStatus,
+  onVessels,
+  RECONNECT_DELAYS_MS,
+  subscribe,
+} from "@/api/signalr";
 import { flushClientLog } from "@/api/clientLog";
 import { useAircraftStore } from "@/state/aircraftStore";
 import { useVesselStore } from "@/state/vesselStore";
@@ -42,8 +49,8 @@ export function useLiveFeed({ enabled, baseUrl, observer, radiusKm }: UseLiveFee
   const setVessels = useVesselStore((s) => s.setSnapshot);
   const clearVessels = useVesselStore((s) => s.clear);
   // In production the hub requires a bearer (RequireAuthorization), so an anonymous connect 401s
-  // at the WS handshake. accessTokenFactory reads the token store at connect time, but a FAILED
-  // start is never retried — so sign-in/out must tear the connection down and reconnect. Keyed on
+  // at the WS handshake. A failed start is retried below with backoff, but sign-in/out still tears
+  // the connection down so the new token is used straight away instead of at the next retry. Keyed on
   // the boolean (not the raw status) so unknown→unauthenticated and the transient "authenticating"
   // state don't flap the connection; environments where sign-in never happens (preview DevAuth,
   // container e2e) see a constant false and behave exactly as before.
@@ -91,31 +98,58 @@ export function useLiveFeed({ enabled, baseUrl, observer, radiusKm }: UseLiveFee
       // Hub connectivity is back — flush any client failures buffered during the outage.
       void flushClientLog(baseUrl);
     });
+    let cancelled = false;
+    let failedStarts = 0;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    // withAutomaticReconnect only covers a connection that was up. A start() that fails (backend
+    // restarting, network blip, token rejected at the handshake) would otherwise leave the app
+    // connected to nothing until the auth status flipped, so retry it on the same backoff
+    // schedule (2 s, 5 s, 10 s, then every 30 s; a close after a good connection restarts at once).
+    const scheduleStart = () => {
+      if (cancelled) return;
+      if (retryTimer) clearTimeout(retryTimer);
+      const delay = RECONNECT_DELAYS_MS[Math.min(failedStarts, RECONNECT_DELAYS_MS.length - 1)];
+      retryTimer = setTimeout(start, delay);
+    };
+
+    const start = () => {
+      retryTimer = null;
+      if (cancelled || conn.state !== HubConnectionState.Disconnected) return;
+      setConnection("connecting");
+      // Dev aid: surface the resolved hub URL so device networking is debuggable from the Metro log.
+      if (__DEV__) console.log(`[skylens] hub connecting → ${baseUrl}/hubs/aircraft`);
+      conn
+        .start()
+        .then(() => {
+          if (cancelled) return;
+          failedStarts = 0;
+          setConnection("connected");
+          void flushClientLog(baseUrl);
+          return subscribeNow();
+        })
+        .catch((err: unknown) => {
+          if (cancelled) return;
+          setConnection("disconnected");
+          console.warn("hub start failed", err);
+          failedStarts++;
+          scheduleStart();
+        });
+    };
+
     conn.onclose(() => {
       setConnection("disconnected");
       clearVessels();
+      // Closed for good (the server ended the connection, or automatic reconnect gave up): start
+      // over rather than staying dark. Not reached on unmount, where `cancelled` is already set.
+      scheduleStart();
     });
 
-    let cancelled = false;
-    setConnection("connecting");
-    // Dev aid: surface the resolved hub URL so device networking is debuggable from the Metro log.
-    if (__DEV__) console.log(`[skylens] hub connecting → ${baseUrl}/hubs/aircraft`);
-    conn
-      .start()
-      .then(() => {
-        if (cancelled) return;
-        setConnection("connected");
-        void flushClientLog(baseUrl);
-        return subscribeNow();
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setConnection("disconnected");
-        console.warn("hub start failed", err);
-      });
+    start();
 
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
       offSnapshot();
       offVessels();
       offStatus();

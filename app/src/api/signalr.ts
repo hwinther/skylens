@@ -4,7 +4,8 @@
  * We force the WebSockets transport (React Native has no EventSource/long-poll story
  * worth relying on, and WS is what the backend expects), pull the bearer token via
  * accessTokenFactory from the in-memory token store (so reconnects always use a
- * fresh token), and enable automatic reconnect with a bounded backoff schedule.
+ * fresh token), and enable automatic reconnect with a bounded backoff schedule. Automatic
+ * reconnect only covers a connection that was up; useLiveFeed retries a failed start().
  *
  * The hub contract:
  *  - server → client "snapshot" (AircraftDto[]) at 1 Hz
@@ -17,29 +18,32 @@ import {
   HubConnectionBuilder,
   LogLevel,
 } from "@microsoft/signalr";
-import { getAccessTokenSync } from "@/auth/tokenStore";
+import { ensureFreshAccessToken } from "@/auth/refresh";
 import type { AircraftDto, VesselDto } from "./types";
 
 export interface HubFactoryConfig {
   /** Base URL of the backend, e.g. "https://skylens.wsh.no". */
   baseUrl: string;
-  /** Token source override (defaults to the secure token store). */
-  getToken?: () => string | null;
+  /**
+   * Token source override. Defaults to the token store, refreshing an expired token first so a
+   * reconnect never presents a stale one.
+   */
+  getToken?: () => string | null | Promise<string | null>;
   /** Log level; quiet by default. */
   logLevel?: LogLevel;
 }
 
 /** Backoff schedule (ms) for withAutomaticReconnect: 0,2s,5s,10s,then 30s steady. */
-const RECONNECT_DELAYS_MS = [0, 2000, 5000, 10000, 30000];
+export const RECONNECT_DELAYS_MS = [0, 2000, 5000, 10000, 30000];
 
 export function createAircraftHubConnection(config: HubFactoryConfig): HubConnection {
-  const getToken = config.getToken ?? getAccessTokenSync;
+  const getToken = config.getToken ?? ensureFreshAccessToken;
   return new HubConnectionBuilder()
     .withUrl(`${config.baseUrl.replace(/\/+$/, "")}/hubs/aircraft`, {
       transport: HttpTransportType.WebSockets,
       // Force WS: no negotiation fallback to SSE/long-poll on native.
       skipNegotiation: true,
-      accessTokenFactory: () => getToken() ?? "",
+      accessTokenFactory: async () => (await getToken()) ?? "",
       // The handshake's User-Agent — which our CrowdSec edge gateway 403s as "okhttp/…" — is set
       // natively via an okhttp interceptor (the withAndroidUserAgent config plugin). RN's
       // WebSocketModule builds on OkHttpClientProvider.getOkHttpClient(), so the interceptor

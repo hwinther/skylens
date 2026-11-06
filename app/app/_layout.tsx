@@ -13,6 +13,7 @@ import { StatusBar } from "expo-status-bar";
 import { router, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
+import { ensureFreshAccessToken } from "@/auth/refresh";
 import { hydrateTokens } from "@/auth/tokenStore";
 import { useAuthStore } from "@/state/authStore";
 import { useSettingsStore } from "@/state/settingsStore";
@@ -58,6 +59,13 @@ export default function RootLayout() {
       setStatus(tokens ? "authenticated" : "unauthenticated");
     })();
   }, [setStatus]);
+
+  // Keep the access token fresh app-wide, not only while Settings/Sign-in (useAuth) is mounted.
+  // REST calls read the token synchronously; the hub also refreshes on demand at each connect.
+  useEffect(() => {
+    const id = setInterval(() => void ensureFreshAccessToken(), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   // One-time onboarding: route to it once persisted settings have hydrated and the user hasn't been
   // through it. Waiting on `hydrated` is what stops the intro flashing for returning users.
