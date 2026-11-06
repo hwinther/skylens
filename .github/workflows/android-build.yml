@@ -107,6 +107,13 @@ jobs:
       - name: Build signed release bundle (AAB)
         working-directory: app/android
         env:
+          # The JS bundle and the embedded Expo config are generated here, not at prebuild: without
+          # these the About screen read app.json's version ("0.1.0 · dev") while Play showed 0.19.0.
+          EXPO_PUBLIC_APP_VERSION: ${{ steps.ver.outputs.version }}
+          EXPO_PUBLIC_GIT_SHA: ${{ github.sha }}
+          ANDROID_VERSION_NAME: ${{ steps.ver.outputs.version }}
+          ANDROID_VERSION_CODE: ${{ steps.ver.outputs.code }}
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
           KEYSTORE_PATH: ${{ runner.temp }}/upload.keystore
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}

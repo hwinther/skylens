@@ -1,13 +1,21 @@
 /**
- * App version line for display. The hosted web Docker build bakes EXPO_PUBLIC_APP_VERSION
- * (semver from GitVersion) and EXPO_PUBLIC_GIT_SHA (the full 40-char commit sha) into the
- * bundle; we render "<version> · <sha7>". Native dev builds have neither baked, so we fall
- * back to the app.json version (Constants.expoConfig?.version) with a "dev" marker.
+ * App version line for display, in order of preference:
+ *
+ *  1. Baked EXPO_PUBLIC_APP_VERSION / EXPO_PUBLIC_GIT_SHA → "<version> · <sha7>". The hosted web
+ *     Docker build and the Android release workflow (android-build.yml) both set them.
+ *  2. The installed native version (expo-application's nativeApplicationVersion, i.e. the Android
+ *     versionName the Play Store shows). Release builds fall back to it when nothing is baked, so
+ *     the About screen can never disagree with the store listing.
+ *  3. The app.json version (Constants.expoConfig?.version).
+ *
+ * The "dev" marker appears only in __DEV__ bundles. Release builds used to show "0.1.0 · dev"
+ * because the CI Gradle step had no version env, so the embedded config kept app.json's 0.1.0.
  *
  * Mirrors the proven pattern in the sibling clutterstock repo (frontend/app/lib/version.ts),
  * adapted from Vite's import.meta.env to Expo's process.env.EXPO_PUBLIC_* + expo-constants.
  */
 
+import * as Application from "expo-application";
 import Constants from "expo-constants";
 
 export function getVersionLine(): { line: string; sha: string } {
@@ -20,7 +28,9 @@ export function getVersionLine(): { line: string; sha: string } {
     return { line: parts.join(" · "), sha };
   }
 
-  // Env not baked (native dev build): fall back to the app.json version + a dev marker.
-  const fallbackVersion = Constants.expoConfig?.version ?? "";
+  // Nothing baked: use the installed native version (null on web), then app.json.
+  const fallbackVersion =
+    Application.nativeApplicationVersion || Constants.expoConfig?.version || "";
+  if (!__DEV__) return { line: fallbackVersion || "unknown", sha: "" };
   return { line: fallbackVersion ? `${fallbackVersion} · dev` : "dev", sha: "" };
 }
