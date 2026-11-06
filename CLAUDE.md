@@ -86,8 +86,17 @@ npm run test:ci                   # container mode against docker-compose.e2e.ym
   mode), `EXPO_PUBLIC_HOME_LAT/LON`. `npm run reverse:android` maps the device's port 5000 to the host.
 - **Demo mode** (`src/mock/`) replays `recorded-aircraft.json` with a drag-to-look pose, so the AR
   overlay works on an emulator or desktop with no feed.
-- E2E relies on stable `testID`s (`status-aircraft-count`, `map-aircraft-count`, `map-ac-<hex>`);
-  keep them when touching those components.
+- **Simulator / cockpit view** (`/sim`, web only for now): `src/screens/SimScreen.web.tsx` renders a
+  Cesium globe (Esri World Imagery + terrain) with the camera on the followed aircraft/vessel/satellite.
+  Cesium is NOT bundled by Metro: `scripts/copy-cesium.mjs` (postinstall) copies its prebuilt runtime
+  to `public/cesium/` (gitignored), and `src/sim/loadCesium.ts` loads it with a `<script>` tag. Pose math
+  lives in pure-TS `src/sim/` (jest-tested). Following works by re-centring the hub subscription on the
+  target (`simStore` → `_layout.tsx`), not by any new backend call. Esri hosts are allowed in the CSP.
+- **Hidden routes**: in expo-router 58, `href: null` on a `Tabs.Screen` makes it `hidden`, and hidden
+  routes redirect to `/`. To keep a route navigable without a tab button, hide the button with
+  `tabBarItemStyle: { display: "none" }` instead (see the `sim` screen in `app/_layout.tsx`).
+- E2E relies on stable `testID`s (`status-aircraft-count`, `map-aircraft-count`, `map-ac-<hex>`,
+  `sim-*`); keep them when touching those components.
 
 ## Conventions & hard rules
 

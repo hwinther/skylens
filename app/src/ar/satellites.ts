@@ -689,6 +689,64 @@ export function subSatellitePoint(satrec: SatRec, date: Date): GroundTrackPoint 
   return { lat, lon, timeMs: date.getTime() };
 }
 
+/** Geodetic state of one satellite at an instant, for the simulator's cockpit camera. */
+export interface SatelliteState {
+  lat: number;
+  /** Longitude in [-180, 180). */
+  lon: number;
+  /** Height above the WGS-84 ellipsoid in km. */
+  altKm: number;
+  /** Direction of travel over the ground, degrees true (0 = north, clockwise). */
+  headingDeg: number;
+  /** Speed of the sub-satellite point over the ground in km/s (earth rotation included). */
+  groundSpeedKmS: number;
+}
+
+/**
+ * Propagate `satrec` to `date` and return its geodetic position plus its ground-relative heading and
+ * speed, or null when SGP4 errors / returns a non-finite position. Heading and speed come from a second
+ * sample one second ahead, reduced in the earth-fixed frame, so they already include earth rotation
+ * (what a camera riding the satellite sees the ground do). Cheap enough to call every frame for one
+ * satellite; the batch path (propagateAll) stays at 1 Hz.
+ */
+export function satelliteStateAt(satrec: SatRec, date: Date): SatelliteState | null {
+  const sample = (d: Date) => {
+    const pv = propagate(satrec, d);
+    if (!pv || !pv.position) return null;
+    const p = pv.position;
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z)) return null;
+    const geo = eciToGeodetic(p, gstime(d));
+    const lat = rad2deg(geo.latitude);
+    const lon = normalizeLon(rad2deg(geo.longitude));
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(geo.height)) return null;
+    return { lat, lon, altKm: geo.height };
+  };
+
+  const a = sample(date);
+  if (!a) return null;
+  const b = sample(new Date(date.getTime() + RATE_SAMPLE_S * 1000));
+
+  let headingDeg = 0;
+  let groundSpeedKmS = 0;
+  if (b) {
+    // Initial great-circle bearing and haversine distance between the two sub-points.
+    const φ1 = deg2rad(a.lat);
+    const φ2 = deg2rad(b.lat);
+    const Δλ = deg2rad(b.lon - a.lon);
+    const y = Math.sin(Δλ) * Math.cos(φ2);
+    const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+    const bearing = normalizeAzimuth(rad2deg(Math.atan2(y, x)));
+    const h =
+      Math.sin((φ2 - φ1) / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
+    const distKm = 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
+    if (Number.isFinite(bearing)) headingDeg = bearing;
+    if (Number.isFinite(distKm)) groundSpeedKmS = distKm / RATE_SAMPLE_S;
+  }
+  return { lat: a.lat, lon: a.lon, altKm: a.altKm, headingDeg, groundSpeedKmS };
+}
+
+const EARTH_RADIUS_KM = 6371;
+
 /**
  * Split a run of sub-satellite points into segments at each antimeridian crossing: whenever two
  * consecutive samples' longitude jumps by more than 180°, the current segment is closed and a new one

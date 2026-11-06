@@ -8,7 +8,7 @@ const expoConfig = require("eslint-config-expo/flat");
 module.exports = defineConfig([
   ...expoConfig,
   {
-    ignores: ["dist/**", "node_modules/**", ".expo/**", "expo-env.d.ts"],
+    ignores: ["dist/**", "node_modules/**", ".expo/**", "expo-env.d.ts", "public/cesium/**"],
   },
   {
     files: ["**/*.{ts,tsx}"],
@@ -45,7 +45,7 @@ module.exports = defineConfig([
   },
   {
     // src/ar/ must be pure TypeScript so jest can run it without the RN runtime.
-    files: ["src/ar/**/*.ts"],
+    files: ["src/ar/**/*.ts", "src/sim/**/*.ts"],
     rules: {
       "no-restricted-imports": [
         "error",

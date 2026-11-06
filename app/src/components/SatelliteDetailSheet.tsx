@@ -14,6 +14,7 @@ import { alpha, color } from "@/theme";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Sheet } from "./Sheet";
+import { SimulatorButton } from "./SimulatorButton";
 import { useRouter } from "expo-router";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
@@ -215,6 +216,14 @@ export function SatelliteDetailSheet({
           >
             <Text style={styles.trackButtonText}>Show ground track</Text>
           </Pressable>
+        ) : null}
+        {noradId != null ? (
+          <SimulatorButton
+            testID="sat-cockpit"
+            target={{ kind: "satellite", id: String(noradId) }}
+            accent={color.entity.orbit}
+            onClose={onClose}
+          />
         ) : null}
 
         <ScrollView style={styles.txScroll} contentContainerStyle={styles.txContent}>

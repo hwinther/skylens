@@ -31,18 +31,30 @@ internal static class SecurityHeaders
     /// <summary>OpenStreetMap tiles for the Leaflet web map (components/webmap/LeafletMap.tsx).</summary>
     private const string MapTiles = "https://tile.openstreetmap.org";
 
+    /// <summary>
+    ///     Esri World Imagery tiles + metadata and World Elevation terrain for the simulator's Cesium globe
+    ///     (app/src/screens/SimScreen.web.tsx). Cesium itself is served same-origin from /cesium.
+    /// </summary>
+    private const string EsriHosts =
+        "https://services.arcgisonline.com https://server.arcgisonline.com https://elevation3d.arcgis.com";
+
     internal const string PermissionsPolicy =
         "camera=(self), geolocation=(self), accelerometer=(self), gyroscope=(self), magnetometer=(self), "
         + "microphone=(), payment=(), usb=()";
 
     internal static readonly string ContentSecurityPolicy = string.Join("; ",
         "default-src 'self'",
-        "script-src 'self'",
+        // 'wasm-unsafe-eval' lets Cesium compile WebAssembly (it probes its meshopt/draco decoders on
+        // load). It allows WebAssembly compilation only, not JavaScript eval.
+        "script-src 'self' 'wasm-unsafe-eval'",
+        // Cesium runs its terrain/imagery decoders in workers; it starts them from blob: URLs whenever it
+        // considers the worker script cross-origin.
+        "worker-src 'self' blob:",
         "style-src 'self' 'unsafe-inline'",
-        $"img-src 'self' data: blob: {MapTiles}",
+        $"img-src 'self' data: blob: {MapTiles} {EsriHosts}",
         "font-src 'self' data:",
         // 'self' covers the SignalR hub's same-host wss:// connection.
-        $"connect-src 'self' {OidcAuthority}",
+        $"connect-src 'self' {OidcAuthority} {EsriHosts}",
         "object-src 'none'",
         "base-uri 'none'",
         "form-action 'self'",

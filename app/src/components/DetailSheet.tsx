@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Sheet } from "./Sheet";
 import { ShowOnMapButton } from "./ShowOnMapButton";
+import { SimulatorButton } from "./SimulatorButton";
 import type { ApiClient } from "@/api/client";
 import { useAircraftStore } from "@/state/aircraftStore";
 import type { AircraftDetail, RouteResponse } from "@/api/types";
@@ -121,6 +122,14 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
           <ShowOnMapButton
             testID="detail-show-on-map"
             focus={{ kind: "aircraft", hex }}
+            accent={color.entity.air}
+            onClose={onClose}
+          />
+        )}
+        {hex && state?.lat != null && state?.lon != null && (
+          <SimulatorButton
+            testID="detail-cockpit"
+            target={{ kind: "aircraft", id: hex }}
             accent={color.entity.air}
             onClose={onClose}
           />

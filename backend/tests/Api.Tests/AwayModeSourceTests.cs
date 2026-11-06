@@ -27,7 +27,7 @@ public sealed class AwayModeSourceTests
     private const string Body =
         """
         {"ac":[
-          {"hex":"4AC9E1","flight":"SAS4123 ","lat":60.42,"lon":5.25,"alt_baro":12000,"gs":320.5,"track":95.0,"baro_rate":-640,"category":"A3","seen":0.4},
+          {"hex":"4AC9E1","flight":"SAS4123 ","lat":60.42,"lon":5.25,"alt_baro":12000,"gs":320.5,"track":95.0,"baro_rate":-640,"category":"A3","seen":0.4,"seen_pos":2.5},
           {"hex":"478123","flight":"NOZ612","lat":61.7,"lon":5.9,"alt_baro":"ground","gs":0,"track":0,"category":"A3","seen":1.2},
           {"hex":"abc000","flight":"NOPOS"}
         ],"msg":"No error","now":1793016000000,"total":3,"ctime":1793016000000,"ptime":3}
@@ -78,6 +78,8 @@ public sealed class AwayModeSourceTests
         Assert.Equal(12000, a.Alt);
         Assert.Equal(120, a.Fl);
         Assert.Equal(-640, a.Vr);
+        Assert.Equal(0.4, a.Seen);
+        Assert.Equal(2.5, a.SeenPos); // position age, distinct from the last-message age
         Assert.Equal("adsblol", a.Src);
     }
 

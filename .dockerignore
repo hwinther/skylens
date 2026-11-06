@@ -34,3 +34,6 @@ Thumbs.db
 
 # Docs (no build stage consumes markdown; the aircraft.json fixture below is deliberately NOT ignored).
 **/*.md
+
+# Cesium runtime copied by app/scripts/copy-cesium.mjs; the web stage regenerates it at npm ci.
+app/public/cesium

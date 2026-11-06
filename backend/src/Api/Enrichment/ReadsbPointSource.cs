@@ -145,6 +145,7 @@ public abstract class ReadsbPointSource : IAwayModeSource
                 Trk = a.Track,
                 Vr = a.BaroRate,
                 Seen = a.Seen,
+                SeenPos = a.SeenPos,
                 Cat = a.Category,
                 Src = SourceTag,
             });
@@ -209,5 +210,6 @@ public abstract class ReadsbPointSource : IAwayModeSource
         [property: JsonPropertyName("track")] double? Track,
         [property: JsonPropertyName("baro_rate")] int? BaroRate,
         [property: JsonPropertyName("category")] string? Category,
-        [property: JsonPropertyName("seen")] double? Seen);
+        [property: JsonPropertyName("seen")] double? Seen,
+        [property: JsonPropertyName("seen_pos")] double? SeenPos);
 }

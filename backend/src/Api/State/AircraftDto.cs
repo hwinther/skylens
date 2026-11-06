@@ -4,7 +4,8 @@ namespace Skylens.Api.State;
 ///     The slim, ~140-byte-per-aircraft wire DTO pushed to clients (never the raw dump1090 blob).
 ///     Short property names keep cellular payloads small: flight=callsign, fl=flight level (hundreds
 ///     of feet), gs=ground speed, trk=track, vr=vertical rate, cat=category, src=data source
-///     ("adsb" own feed / "adsbx" away).
+///     ("adsb" own feed / "adsbx" away). seen = seconds since any message; seenPos = seconds since the
+///     last position (what dead reckoning and the simulator time the position by).
 /// </summary>
 public sealed record AircraftDto
 {
@@ -18,6 +19,7 @@ public sealed record AircraftDto
     public double? Trk { get; init; }
     public int? Vr { get; init; }
     public double? Seen { get; init; }
+    public double? SeenPos { get; init; }
     public string? Cat { get; init; }
     public string Src { get; init; } = "adsb";
 
@@ -34,6 +36,7 @@ public sealed record AircraftDto
         Trk = s.Track,
         Vr = s.BaroRate,
         Seen = s.Seen,
+        SeenPos = s.SeenPos,
         Cat = s.Category,
         Src = src,
     };

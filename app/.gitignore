@@ -48,3 +48,6 @@ eslint-report.json
 # generated native folders
 /ios
 /android
+
+# Cesium runtime copied from node_modules by scripts/copy-cesium.mjs (postinstall)
+public/cesium/
