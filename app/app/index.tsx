@@ -37,6 +37,7 @@ import {
   usePoseRefs,
   useRadioSky,
   useSatellites,
+  VesselDetailSheet,
 } from "@/components";
 import { airportFilter } from "@/components/webmap/airportStyle";
 import { RADIO_SOURCES, satGroupsFromSettings } from "@/ar";
@@ -73,6 +74,7 @@ export default function ArScreen() {
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [selectedHex, setSelectedHex] = useState<string | null>(null);
+  const [selectedMmsi, setSelectedMmsi] = useState<string | null>(null);
   const [selectedPlanet, setSelectedPlanet] = useState<string | null>(null);
   const [selectedRadioKey, setSelectedRadioKey] = useState<string | null>(null);
   const [selectedAirportIdent, setSelectedAirportIdent] = useState<string | null>(null);
@@ -232,6 +234,7 @@ export default function ArScreen() {
       hFovDeg={hFovDeg}
       onSelect={setSelectedHex}
       onSelectSatellite={setSelectedNoradId}
+      onSelectVessel={setSelectedMmsi}
       // No camera feed (native without permission, or web without a working AR camera) → synthetic horizon.
       showHorizon={!demoMode && !cameraPermission?.granted && !webCamShown}
     />
@@ -330,6 +333,11 @@ export default function ArScreen() {
       ) : null}
 
       <DetailSheet hex={selectedHex} client={client} onClose={() => setSelectedHex(null)} />
+      <VesselDetailSheet
+        mmsi={selectedMmsi}
+        vessel={selectedMmsi != null ? vessels.find((v) => v.mmsi === selectedMmsi) : undefined}
+        onClose={() => setSelectedMmsi(null)}
+      />
       <SatelliteDetailSheet
         noradId={selectedNoradId}
         view={selectedNoradId != null ? satHook.byNoradId.get(selectedNoradId) : undefined}
