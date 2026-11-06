@@ -69,3 +69,20 @@ test('radar plots AIS vessels streamed from the backend', async ({ page }) => {
   const shipBlip = page.getByTestId('map-web').locator('[data-testid^="map-ship-"]').first()
   await expect(shipBlip).toBeVisible({ timeout: 30_000 })
 })
+
+test.describe('AR view', () => {
+  // The web AR view opens facing east (azimuth 90). From the default observer (59.9, 11.1) the Oslo
+  // cluster lies to the WEST, so stand west of the fjord instead: the vessels around 10.7°E are then
+  // straight ahead, 15-20 km off, inside the surface band's 40 km cap. No drag-to-look needed.
+  test.use({ geolocation: { latitude: 59.9, longitude: 10.4 } })
+
+  test('tapping a vessel name opens its detail sheet', async ({ page }) => {
+    await page.goto('/')
+
+    // Only the icon/name row is the tap target; it opens the same sheet as the List and Map.
+    const name = page.locator('[data-testid^="ves-name-"]').first()
+    await expect(name, 'vessels ahead should show tappable names in the surface band').toBeVisible()
+    await name.click()
+    await expect(page.getByTestId('vessel-detail-title')).toBeVisible({ timeout: 15_000 })
+  })
+})

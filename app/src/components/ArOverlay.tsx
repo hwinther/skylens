@@ -79,6 +79,8 @@ export interface ArOverlayProps {
   onSelect: (hex: string) => void;
   /** Tap handler for a satellite label (opens the Phase 5 detail sheet). */
   onSelectSatellite?: (noradId: number) => void;
+  /** Tapping a vessel label's icon/name; omitted → vessel labels stay display-only. */
+  onSelectVessel?: (mmsi: string) => void;
   /** Airports (already filtered by the small-airfields toggle) for the fixed-infrastructure pass. */
   airports?: AirportDto[];
   /** Draw the airports pass. */
@@ -207,6 +209,7 @@ export function ArOverlay({
   hFovDeg,
   onSelect,
   onSelectSatellite,
+  onSelectVessel,
   showHorizon = false,
 }: ArOverlayProps) {
   const { width, height } = useWindowDimensions();
@@ -650,6 +653,7 @@ export function ArOverlay({
           y={v.y}
           anchorY={v.anchorY}
           rangeKm={v.rangeKm}
+          onPress={onSelectVessel}
         />
       ))}
       {vesselClusters.map((c, i) => (

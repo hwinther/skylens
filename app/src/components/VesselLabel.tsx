@@ -4,16 +4,18 @@
  * band). Marine styling — a teal/cyan family distinct from the blue AircraftLabel, tinted per class
  * by iconForVessel — so ships read as clearly "not aircraft".
  *
- * Deliberately display-only (pointerEvents: none): a vessel detail sheet now exists and is reachable
- * from the List and Map tabs, but the AR surface band is intentionally dense — many labels crowd a
- * narrow horizon strip — so making them tappable here would mostly produce mis-taps and steal taps
- * from the aircraft labels / camera behind them. Tap-to-open stays on the roomier list/map surfaces.
+ * Only the title row (icon + name) is tappable, and only when `onPress` is given: it opens the vessel
+ * detail sheet, like tapping an aircraft label. The rest of the chip (range/speed line, border, leader)
+ * stays pass-through (pointerEvents box-none). The AR surface band is dense — many labels crowd a narrow
+ * horizon strip — so a whole-chip target with a generous hitSlop, as aircraft labels have, would mostly
+ * produce mis-taps and steal taps from the camera / drag-to-look behind it. The labels are already
+ * decluttered (no two overlap), and aircraft labels render on top, so they win where the two meet.
  */
 
 import { alpha, color } from "@/theme";
 import { textHalo } from "./textHalo";
-import { memo } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { memo, type ReactNode } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { VesselDto } from "@/api/types";
 import { iconForVessel } from "./vesselIcon";
@@ -28,9 +30,43 @@ export interface VesselLabelProps {
   anchorY: number;
   /** Slant range in km, for the range line. */
   rangeKm: number | null;
+  /** Tapping the icon/name opens the vessel's detail sheet. Omit for a display-only label. */
+  onPress?: (mmsi: string) => void;
 }
 
-function VesselLabelBase({ vessel, x, y, anchorY, rangeKm }: VesselLabelProps) {
+/** Small, so neighbouring labels in the band don't steal each other's taps. */
+const NAME_HIT_SLOP = { top: 4, bottom: 4, left: 4, right: 4 };
+
+/**
+ * The icon + name row: a Pressable when the label is selectable, else a plain View (pass-through).
+ */
+function TitleRow({
+  mmsi,
+  title,
+  onPress,
+  children,
+}: {
+  mmsi: string;
+  title: string;
+  onPress?: (mmsi: string) => void;
+  children: ReactNode;
+}) {
+  if (!onPress) return <View style={styles.titleRow}>{children}</View>;
+  return (
+    <Pressable
+      testID={`ves-name-${mmsi}`}
+      accessibilityRole="button"
+      accessibilityLabel={`Open details for ${title}`}
+      onPress={() => onPress(mmsi)}
+      hitSlop={NAME_HIT_SLOP}
+      style={styles.titleRow}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
+function VesselLabelBase({ vessel, x, y, anchorY, rangeKm, onPress }: VesselLabelProps) {
   const { name: iconName, color, tag } = iconForVessel(vessel);
   const isAton = vessel.kind === "aton";
   const isVirtualAton = isAton && !!vessel.virtual;
@@ -57,7 +93,7 @@ function VesselLabelBase({ vessel, x, y, anchorY, rangeKm }: VesselLabelProps) {
             isVirtualAton && styles.atonVirtual,
           ]}
         >
-          <View style={styles.titleRow}>
+          <TitleRow mmsi={vessel.mmsi} title={title} onPress={onPress}>
             <MaterialCommunityIcons
               testID={`ves-icon-${vessel.mmsi}`}
               name={iconName}
@@ -68,7 +104,7 @@ function VesselLabelBase({ vessel, x, y, anchorY, rangeKm }: VesselLabelProps) {
             <Text style={[styles.title, styles.atonTitle]} numberOfLines={1}>
               {title}
             </Text>
-          </View>
+          </TitleRow>
         </View>
       </>
     );
@@ -88,7 +124,7 @@ function VesselLabelBase({ vessel, x, y, anchorY, rangeKm }: VesselLabelProps) {
         style={[styles.label, { left: x, top: y, borderColor: color }]}
       >
         <View style={[styles.tick, { backgroundColor: color }]} />
-        <View style={styles.titleRow}>
+        <TitleRow mmsi={vessel.mmsi} title={title} onPress={onPress}>
           <MaterialCommunityIcons
             testID={`ves-icon-${vessel.mmsi}`}
             name={iconName}
@@ -102,7 +138,7 @@ function VesselLabelBase({ vessel, x, y, anchorY, rangeKm }: VesselLabelProps) {
           {tag ? (
             <Text style={[styles.classTag, { backgroundColor: color }]}>{tag}</Text>
           ) : null}
-        </View>
+        </TitleRow>
         {sub ? (
           <Text style={styles.sub} numberOfLines={1}>
             {sub}
@@ -124,7 +160,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 3,
     maxWidth: 150,
-    pointerEvents: "none",
+    // box-none: the chip itself passes touches through; only the TitleRow Pressable (when the label
+    // is selectable) receives them. A display-only label has no touchable child, so it stays fully
+    // pass-through as before.
+    pointerEvents: "box-none",
   },
   aton: {
     opacity: 0.9,
@@ -140,7 +179,8 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 0,
   },
-  titleRow: { flexDirection: "row", alignItems: "center" },
+  // The row is the tap target: let the name ellipsize inside it instead of overflowing the chip.
+  titleRow: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", maxWidth: "100%" },
   icon: { marginRight: 3 },
   title: {
     color: "#CFF6EE",
