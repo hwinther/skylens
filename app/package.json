@@ -24,6 +24,7 @@
     "@microsoft/signalr": "10.0.0",
     "astronomy-engine": "^2.1.19",
     "expo": "~58.0.3",
+    "expo-application": "~58.1.2",
     "expo-auth-session": "~58.0.14",
     "expo-build-properties": "~58.0.11",
     "expo-camera": "~58.0.12",
