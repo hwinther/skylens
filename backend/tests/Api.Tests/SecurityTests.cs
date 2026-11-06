@@ -60,9 +60,20 @@ public sealed class SecurityTests : IClassFixture<SmokeTests.SkylensFactory>
     [Fact]
     public void The_policy_keeps_scripts_to_the_site()
     {
-        Assert.Contains("script-src 'self';", SecurityHeaders.ContentSecurityPolicy);
-        Assert.DoesNotMatch("script-src[^;]*unsafe", SecurityHeaders.ContentSecurityPolicy);
+        // WebAssembly compilation (Cesium) is the only exception: no JS eval, no inline scripts.
+        Assert.Contains("script-src 'self' 'wasm-unsafe-eval';", SecurityHeaders.ContentSecurityPolicy);
+        Assert.DoesNotMatch("script-src[^;]*'unsafe-(eval|inline|hashes)'", SecurityHeaders.ContentSecurityPolicy);
         Assert.Contains("frame-ancestors 'none'", SecurityHeaders.ContentSecurityPolicy);
+    }
+
+    [Theory]
+    [InlineData("img-src")]
+    [InlineData("connect-src")]
+    public void The_simulator_globe_can_reach_esri_imagery_and_terrain(string directive)
+    {
+        var policy = SecurityHeaders.ContentSecurityPolicy.Split("; ").Single(d => d.StartsWith(directive + " "));
+        Assert.Contains("https://services.arcgisonline.com", policy);
+        Assert.Contains("https://elevation3d.arcgis.com", policy);
     }
 
     [Theory]

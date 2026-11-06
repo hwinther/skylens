@@ -18,6 +18,7 @@ import { hydrateTokens } from "@/auth/tokenStore";
 import { useAuthStore } from "@/state/authStore";
 import { useSettingsStore } from "@/state/settingsStore";
 import { useObserverStore } from "@/state/observerStore";
+import { SIM_RADIUS_KM, useSimStore } from "@/state/simStore";
 import { getApiBaseUrl } from "@/api/config";
 import { useLiveFeed, useObserverLocation } from "@/components";
 
@@ -48,10 +49,16 @@ export default function RootLayout() {
     setObserverPosition(observer);
   }, [observer, setObserverPosition]);
 
+  // While the simulator follows an aircraft or vessel, centre the subscription on it instead of the
+  // observer so it stays in the feed (own feed or away mode) after leaving the observer's radius.
+  const simCentre = useSimStore((s) => s.centre);
+  const feedCentre = simCentre ?? observer;
+  const feedRadiusKm = simCentre ? SIM_RADIUS_KM : radiusKm;
+
   // App-wide live SignalR feed: populate the shared aircraft store here (not in the AR screen)
   // so every tab — AR and Map — sees the same 1 Hz data regardless of which mounts first. Demo
   // mode leaves this disabled; the AR screen drives the mock feed instead.
-  useLiveFeed({ enabled: !demoMode, baseUrl, observer, radiusKm });
+  useLiveFeed({ enabled: !demoMode, baseUrl, observer: feedCentre, radiusKm: feedRadiusKm });
 
   useEffect(() => {
     (async () => {
@@ -124,6 +131,12 @@ export default function RootLayout() {
           <Tabs.Screen name="sign-in" options={{ href: null }} />
           <Tabs.Screen name="oauth" options={{ href: null }} />
           <Tabs.Screen name="onboarding" options={{ href: null }} />
+          {/* Not `href: null`: expo-router 58 turns that into `hidden`, and hidden routes redirect to
+              "/". Hiding only the tab button keeps /sim routable; the full-screen view drops the bar. */}
+          <Tabs.Screen
+            name="sim"
+            options={{ tabBarItemStyle: { display: "none" }, tabBarStyle: { display: "none" } }}
+          />
         </Tabs>
       </SafeAreaProvider>
     </GestureHandlerRootView>

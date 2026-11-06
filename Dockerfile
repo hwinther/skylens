@@ -14,6 +14,9 @@ WORKDIR /src/app
 # (uuid@7 via expo -> @expo/config-plugins -> xcode) is upstream Expo's and harmless: that chain is
 # iOS-prebuild tooling, never executed here and never part of the exported bundle.
 COPY app/package.json app/package-lock.json app/.npmrc ./
+# postinstall (scripts/copy-cesium.mjs) copies Cesium's runtime into public/cesium, which
+# `expo export` ships into dist → wwwroot for the simulator.
+COPY app/scripts/ ./scripts/
 RUN npm ci --omit=dev --no-audit --no-fund
 COPY app/ ./
 # Version metadata + force-live are compiled into the public JS bundle. NEVER add EXPO_PUBLIC_HOME_LAT/LON/ALT
