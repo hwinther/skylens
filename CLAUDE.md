@@ -1,74 +1,120 @@
 # CLAUDE.md
 
-Guidance for working in this repo.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## What this is
 
-`skylens` is an Android **AR plane-spotter**: an Expo/React Native app plus an ASP.NET Core 10
-gateway. The app overlays aircraft labels on the camera preview using GPS + compass/gyro sensor
-fusion (pinhole projection, no ARCore). The backend consumes a live ADS-B MQTT feed, keeps aircraft
-state in memory, streams slim snapshots over a SignalR hub, and enriches on demand from OpenSky /
-FlightAware AeroAPI behind caches and per-provider budgets. Viewers outside the home feed's range
-get away-mode traffic from adsb.lol (free), with ADS-B Exchange as an optional paid fallback. Auth is Authelia OIDC +
-PKCE; the backend validates the JWT with audience `skylens-api`.
+`skylens` is an Android **AR sky-spotter**: an Expo/React Native app plus an ASP.NET Core 10
+gateway. The app overlays labels on the camera preview using GPS + compass/gyro sensor fusion
+(pinhole projection, no ARCore — targets are effectively at infinity). Aircraft are the core layer;
+it also shows AIS vessels, satellites (CelesTrak TLEs, SatNOGS transmitters), planets/moon/sky
+events, airports, and fishing layers.
+
+The backend consumes live ADS-B and AIS MQTT feeds, keeps state in memory, streams slim snapshots
+over a SignalR hub (~1 Hz), and enriches on demand from OpenSky / FlightAware AeroAPI behind caches
+and per-provider budgets. Viewers outside the home feed's range get away-mode traffic from adsb.lol
+(free), with ADS-B Exchange as an optional paid fallback (vessels: BarentsWatch). Auth is Authelia
+OIDC + PKCE; the backend validates the RFC 9068 JWT with audience `skylens-api`.
 
 ## Layout
 
 - `app/` — Expo (React Native, TypeScript) app.
-  - `app/app/` — expo-router screens (AR, map, settings, sign-in).
-  - `app/src/ar/` — pure-TS geo + projection + orientation math (jest-testable on any OS).
-  - `app/src/api|auth|state|mock|components/` — API/SignalR client, PKCE auth, zustand stores,
-    demo-mode feed, UI components.
+  - `app/app/` — expo-router screens (AR `index`, map, list, settings, sign-in, onboarding, oauth).
+  - `app/src/ar/` — pure-TS geo, projection, orientation, and astronomy math (jest-testable on any OS).
+  - `app/src/api|auth|state|mock|components|screens/` — API/SignalR client, PKCE auth, zustand
+    stores, demo-mode feed, UI components and hooks.
+  - `*.web.tsx` / `*.web.ts` siblings are the react-native-web variants (e.g. the map screen
+    becomes a Leaflet/list view, web camera + DeviceOrientation sensors).
 - `backend/` — ASP.NET Core 10 Minimal API + SignalR (`Skylens.slnx`, project `src/Api`, tests
-  `tests/Api.Tests`). Ingest / State / Hubs / Broadcast / Enrichment / Endpoints.
-- `Dockerfile` — backend image (publish + bake the pinned aircraft.csv.gz enrichment DB → aspnet runtime).
+  `tests/Api.Tests`, xunit v3 on Microsoft.Testing.Platform).
+- `e2e/` — Playwright web ↔ backend suite, its own npm package (see `e2e/README.md`).
+- `deploy/` — kustomize workload manifests, rendered and pushed as a signed OCI artifact on release
+  (see `deploy/README.md` for the variable contract). Don't commit rendered output.
+- `firmware/rotator-esp32/` — ESP32 antenna-rotator sketch (`docs/rotator-concept.md`).
+- `Dockerfile` — single image: exports the web app into `wwwroot`, publishes the API, bakes the
+  pinned aircraft/airport CSV DBs and replay fixtures → chiseled aspnet runtime.
 
 ## Commands
 
 ```bash
 # Backend — run from backend/ so the MTP test runner picks up global.json.
 cd backend
-dotnet build
+dotnet build                      # Debug build also regenerates src/Api/openapi.json
 dotnet test
+dotnet test --project tests/Api.Tests --filter-class "*AircraftStateStoreTests"   # one class
+dotnet test --project tests/Api.Tests --filter-method "*SomeTestName"              # one test
 dotnet run --project src/Api      # http://localhost:8080
 
 # App
 cd app
 npm install
 npm run typecheck                 # tsc --noEmit
-npm run lint:ci                   # eslint --format json
-npm test                          # jest
-npx expo start
-npx expo start --web              # react-native-web build (map screen → map.web.tsx list)
+npm run lint                      # eslint, --max-warnings 0 (lint:ci = JSON output)
+npm test                          # jest (preset jest-expo/node)
+npx jest src/ar/projection        # one file;  add -t "name" for one test
+npm run openapi:generate          # regenerate src/api/generated/schema.ts from backend openapi.json
+npx expo start                    # dev build needed for OAuth; Expo Go is fine for sensors/demo
+npx expo start --web              # react-native-web build
 
-# E2E (its own package on @wshno/playwright-config; needs app/ installed too)
+# E2E (own package on @wshno/playwright-config; needs app/ installed too, plus
+# `npx playwright install chromium` once)
 cd e2e
 npm install
-npm test                          # Playwright web ↔ backend E2E (see e2e/README.md)
+npm test                          # source mode: starts backend (5099) + expo web (8081)
+npm run test:ci                   # container mode against docker-compose.e2e.yml
 ```
+
+## Architecture notes
+
+- **Backend pipeline** (wired in `Program.cs`): `Ingest/MqttIngestService` reads an `IMqttTransport`
+  (`MqttNetTransport`, or `ReplayMqttTransport` when `Mqtt:Replay=true`, which replays committed
+  fixtures through the real pipeline) → `Dump1090Parser` / `AisCatcherParser` → `State/*StateStore`
+  (hosted services; also prune stale entries) → `Broadcast/SnapshotBroadcaster` / `VesselBroadcaster`
+  push per-viewer filtered DTOs to `Hubs/AircraftHub` (`/hubs/aircraft`). `ViewerRegistry` tracks
+  each subscriber's centre/radius; viewers outside the own-feed range are served from
+  `AwayModeChain` (adsb.lol → ADSBx). `/healthz` degrades if no MQTT message arrives for 30 s.
+- **Enrichment** (`Enrichment/`): offline `AircraftDbService` / `AirportDbService` (CSV.gz baked into
+  the image), with `MetadataService` falling back to OpenSky; every remote client goes through
+  `EnrichmentCache` (single-flight) and `UpstreamBudget`.
+- **OpenAPI contract**: Debug builds run `dotnet swagger tofile` to write `src/Api/openapi.json`
+  (kept byte-stable; CI fails on changes after build). After changing endpoints, build, commit the
+  updated `openapi.json`, and run `npm run openapi:generate` in `app/`.
+- The same API process serves the exported web app from `wwwroot` (SPA fallback to `index.html`)
+  with security headers + CSP (`Security/`); CSP reports post back to the API.
+- **Local/dev escape hatches**: `Auth:Disabled=true` (Development only) swaps in `DevAuthHandler`
+  with a fixed principal. App env: `EXPO_PUBLIC_API_BASE_URL`, `EXPO_PUBLIC_FORCE_LIVE=1` (skip demo
+  mode), `EXPO_PUBLIC_HOME_LAT/LON`. `npm run reverse:android` maps the device's port 5000 to the host.
+- **Demo mode** (`src/mock/`) replays `recorded-aircraft.json` with a drag-to-look pose, so the AR
+  overlay works on an emulator or desktop with no feed.
+- E2E relies on stable `testID`s (`status-aircraft-count`, `map-aircraft-count`, `map-ac-<hex>`);
+  keep them when touching those components.
 
 ## Conventions & hard rules
 
 - **The user commits and pushes.** Do not run `git add` / `git commit` / `git push` — leave the
-  working tree staged for the user to review.
+  working tree for the user to review.
 - **`dotnet test` must run from `backend/`** — `global.json` (which selects the SDK and the
   Microsoft.Testing.Platform runner) lives there. Running from the repo root will not find it.
-- **Lockfiles are committed** — `backend/**/packages.lock.json` and `app/package-lock.json` are in
-  git (locked-mode restore). Do not add them to `.gitignore`; when a NuGet bump lands, the
-  `dependabot-update-dotnet-lockfiles` workflow regenerates them on the PR branch.
-- **Never relay the raw ADS-B blob** to clients — the hub sends a slim per-aircraft DTO. Keep the
-  filtering (radius, positioned-only) and the DTO shape as the bandwidth contract.
-- **Enrichment spend is gated**: adsb.lol / ADS-B Exchange / AeroAPI calls go through single-flight caching and
-  per-provider budgets that fail closed. Route lookups are on-tap only. Do not add uncached fan-out
-  to these providers.
-- **No secrets or home coordinates in the repo.** MQTT credentials, provider API keys, and the
-  home lat/lon live in the `skylens-secrets` Kubernetes Secret (created out-of-band), not in git.
-- Reusable CI workflows are pinned to `hwinther/reusable-workflows` at a specific SHA (v2.0.0); keep
-  every `uses:` pinned to a full commit SHA with the version in a trailing comment.
+- **Lockfiles are committed** — `backend/**/packages.lock.json`, `app/package-lock.json` and
+  `e2e/package-lock.json` are in git (locked-mode restore). Do not add them to `.gitignore`; when a
+  NuGet bump lands, the `dependabot-update-dotnet-lockfiles` workflow regenerates them on the PR branch.
+- **Never relay the raw ADS-B/AIS blob** to clients — the hub sends a slim per-object DTO
+  (`AircraftDto`, `VesselDto`). Keep the filtering (radius, positioned-only) and the DTO shape as
+  the bandwidth contract.
+- **Enrichment spend is gated**: adsb.lol / ADS-B Exchange / AeroAPI (and other upstream) calls go
+  through single-flight caching and per-provider budgets that fail closed. Route lookups are on-tap
+  only. Do not add uncached fan-out to these providers.
+- **No secrets or home coordinates in the repo.** MQTT credentials, provider API keys, and the home
+  lat/lon live in the `skylens-secrets` Kubernetes Secret (created out-of-band), not in git.
+- Reusable CI workflows come from `hwinther/reusable-workflows`; keep every `uses:` pinned to a
+  full commit SHA with the version in a trailing comment.
 
 ## Deployment
 
-Kubernetes manifests live in the infra repo at `proxmox/clusters/production/apps/skylens-production/`
-(plain namespace, Traefik ingress on `skylens.wsh.no`, JWT validated in-app — no forward-auth
-middleware). The image `ghcr.io/hwinther/skylens/api` is built by the container workflow on tag and
-deployed by Flux. Secrets are created out-of-band — see `skylens-secrets.md` there.
+Releases are tag-driven (`tag-and-release.yml`, or push `vX.Y.Z`). `container.yml` builds
+`ghcr.io/hwinther/skylens/api` and renders `deploy/` into the signed OCI artifact
+`ghcr.io/hwinther/skylens/manifests:<version>`, which the cluster repo (hwinther/proxmox) consumes
+via Flux and supplies the namespace, network policies, Secret, and substitution variables. Ingress is
+Traefik on `skylens.wsh.no`; the JWT is validated in-app (no forward-auth). PRs labelled
+`deploy-feature` get a preview deployment (Development mode, replayed fixtures). The Android app is
+sideloaded (`android-build.yml`); Play setup is in `docs/google-play-setup.md`.
