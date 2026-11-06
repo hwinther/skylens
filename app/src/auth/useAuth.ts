@@ -7,7 +7,7 @@
  *  - useAuthRequest builds a PKCE (S256) request for the `skylens` public client.
  *  - On success we exchange the code for tokens (exchangeCodeAsync), persist them,
  *    and mark the session authenticated.
- *  - refreshIfNeeded() uses the refresh token to renew silently before expiry.
+ *  - Refresh lives in ./refresh (hook-free) so the hub and the root layout can use it too.
  *
  * Mock mode (dev-only default, see authStore) short-circuits all of this and mints
  * a fake token so the app is usable in Expo Go without touching the IdP.
@@ -25,13 +25,8 @@ import {
   OIDC_SCOPES,
 } from "./config";
 import { mintMockToken } from "./mockAuth";
-import {
-  clearTokens,
-  getTokensSync,
-  isExpired,
-  setTokens,
-  type StoredTokens,
-} from "./tokenStore";
+import { ensureFreshAccessToken, toStored } from "./refresh";
+import { clearTokens, setTokens } from "./tokenStore";
 import { useAuthStore } from "@/state/authStore";
 
 // Required so the OAuth popup dismisses cleanly on native.
@@ -74,16 +69,6 @@ function useOidcDiscovery(
   // Ignore any previously-fetched doc while disabled (mock mode) so the real flow
   // never runs against stale discovery.
   return enabled ? discovery : null;
-}
-
-function toStored(result: AuthSession.TokenResponse, now = Date.now()): StoredTokens {
-  const expiresInMs = (result.expiresIn ?? 3600) * 1000;
-  return {
-    accessToken: result.accessToken,
-    refreshToken: result.refreshToken ?? null,
-    idToken: result.idToken ?? null,
-    expiresAt: now + expiresInMs,
-  };
 }
 
 export function useAuth() {
@@ -143,32 +128,10 @@ export function useAuth() {
     setStatus("unauthenticated");
   }, [setStatus]);
 
+  // The periodic refresh runs app-wide from the root layout; this is for explicit callers.
   const refreshIfNeeded = useCallback(async () => {
-    const tokens = getTokensSync();
-    if (!tokens || tokens.mock) return;
-    if (!isExpired()) return;
-    if (!tokens.refreshToken || !discovery) {
-      await signOut();
-      return;
-    }
-    try {
-      const refreshed = await AuthSession.refreshAsync(
-        { clientId: OIDC_CLIENT_ID, refreshToken: tokens.refreshToken },
-        discovery,
-      );
-      await setTokens({ ...toStored(refreshed), refreshToken: refreshed.refreshToken ?? tokens.refreshToken });
-    } catch {
-      await signOut();
-    }
-  }, [discovery, signOut]);
-
-  useEffect(() => {
-    // Keep the token fresh while the app is open.
-    const id = setInterval(() => {
-      void refreshIfNeeded();
-    }, 60_000);
-    return () => clearInterval(id);
-  }, [refreshIfNeeded]);
+    await ensureFreshAccessToken();
+  }, []);
 
   return useMemo(
     () => ({ status, signIn, signOut, refreshIfNeeded, ready: !!request || mockMode }),
