@@ -8,7 +8,7 @@ namespace Skylens.Api.Enrichment;
 
 /// <summary>
 ///     Shared away-mode plumbing for point-radius providers that answer in the readsb/tar1090 JSON shape
-///     (<c>{"ac":[{hex,flight,lat,lon,alt_baro,…}]}</c>) — ADSBx via RapidAPI and adsb.lol. Requests are
+///     (<c>{"ac":[{hex,flight,lat,lon,alt_baro,…}]}</c>) — adsb.lol, airplanes.live, adsb.fi and ADSBx via RapidAPI. Requests are
 ///     bucketed into 0.5° grid cells; each cell is fetched at most once per 10 s, shared across every
 ///     viewer in it, behind a per-cell single-flight gate and an <see cref="UpstreamBudget" /> that fails
 ///     closed. The provider is always asked for the cell CENTRE with the radius padded to cover the whole
@@ -20,7 +20,7 @@ public abstract class ReadsbPointSource : IAwayModeSource
 {
     internal const double CellSizeDeg = 0.5;
 
-    /// <summary>Point-radius ceiling shared by both providers' APIs.</summary>
+    /// <summary>Point-radius ceiling shared by every provider's API.</summary>
     internal const double MaxRadiusNm = 250;
 
     internal static readonly TimeSpan CellInterval = TimeSpan.FromSeconds(10);
@@ -49,6 +49,34 @@ public abstract class ReadsbPointSource : IAwayModeSource
 
     /// <summary>Build the provider request for a point-radius query (radius already capped).</summary>
     protected abstract HttpRequestMessage BuildRequest(double lat, double lon, double radiusNm);
+
+    /// <summary>
+    ///     Minimum gap between two requests to this provider, across all cells. Zero (the default) means
+    ///     the cell interval alone paces it; providers with a published per-second limit (airplanes.live,
+    ///     adsb.fi: 1 req/s) set this so several busy cells can't burst past it.
+    /// </summary>
+    protected virtual TimeSpan MinRequestSpacing => TimeSpan.Zero;
+
+    private readonly SemaphoreSlim _spacingGate = new(1, 1);
+    private DateTimeOffset _nextRequestAt = DateTimeOffset.MinValue;
+
+    private async Task WaitForRequestSlotAsync(CancellationToken ct)
+    {
+        if (MinRequestSpacing <= TimeSpan.Zero)
+            return;
+        await _spacingGate.WaitAsync(ct);
+        try
+        {
+            var wait = _nextRequestAt - _time.GetUtcNow();
+            if (wait > TimeSpan.Zero)
+                await Task.Delay(wait, _time, ct);
+            _nextRequestAt = _time.GetUtcNow() + MinRequestSpacing;
+        }
+        finally
+        {
+            _spacingGate.Release();
+        }
+    }
 
     public async Task<AwayModeResult> GetAsync(double lat, double lon, double radiusKm, CancellationToken ct)
     {
@@ -120,15 +148,16 @@ public abstract class ReadsbPointSource : IAwayModeSource
 
     private async Task<IReadOnlyList<AircraftDto>> FetchAsync(double lat, double lon, double radiusNm, CancellationToken ct)
     {
+        await WaitForRequestSlotAsync(ct);
         using var req = BuildRequest(lat, lon, radiusNm);
         using var resp = await _http.SendAsync(req, ct);
         resp.EnsureSuccessStatusCode();
         var payload = await resp.Content.ReadFromJsonAsync<ReadsbResponse>(ct);
-        if (payload?.Aircraft is null)
+        if (payload?.Items is null)
             return [];
 
-        var result = new List<AircraftDto>(payload.Aircraft.Count);
-        foreach (var a in payload.Aircraft)
+        var result = new List<AircraftDto>(payload.Items.Count);
+        foreach (var a in payload.Items)
         {
             if (a.Hex is null || a.Lat is null || a.Lon is null)
                 continue;
@@ -200,7 +229,17 @@ public abstract class ReadsbPointSource : IAwayModeSource
     private readonly record struct CellCache(
         DateTimeOffset FetchedAt, double RadiusKm, IReadOnlyList<AircraftDto> Aircraft, string? FailureReason);
 
-    private sealed record ReadsbResponse([property: JsonPropertyName("ac")] List<ReadsbAircraft>? Aircraft);
+    /// <summary>
+    ///     readsb / ADSBx v2 put the list under <c>ac</c>; adsb.fi's v2 open-data endpoint calls the same list
+    ///     <c>aircraft</c>. Accept either — reading only <c>ac</c> made adsb.fi look like an empty sky.
+    /// </summary>
+    private sealed record ReadsbResponse(
+        [property: JsonPropertyName("ac")] List<ReadsbAircraft>? Ac,
+        [property: JsonPropertyName("aircraft")] List<ReadsbAircraft>? AircraftList)
+    {
+        [JsonIgnore]
+        public List<ReadsbAircraft>? Items => Ac ?? AircraftList;
+    }
 
     private sealed record ReadsbAircraft(
         [property: JsonPropertyName("hex")] string? Hex,

@@ -139,7 +139,7 @@ public static class ApiEndpoints
                    })
            .WithName("AircraftRouteCached");
 
-        // GET /api/area?lat=&lon=&radiusKm= — away-mode point-radius (adsb.lol, ADSBx fallback). Shares
+        // GET /api/area?lat=&lon=&radiusKm= — away-mode point-radius (adsb.lol → adsb.fi → ADSBx). Shares
         // the broadcaster's per-cell cache and budgets; tight rate limit.
         api.MapGet("/area",
                    async Task<Results<Ok<IReadOnlyList<AircraftDto>>, ProblemHttpResult>> (
