@@ -3,7 +3,14 @@
  * satellite opt-out, and the distance used to decide when to refetch airports.
  */
 
-import { airportLabelRangeM, distanceKm, minimapZoom, showsAirportOverlay } from "@/sim/overlay";
+import {
+  airportLabelRangeM,
+  distanceKm,
+  minimapZoom,
+  portLabelRangeM,
+  showsAirportOverlay,
+  showsPortOverlay,
+} from "@/sim/overlay";
 
 test("the minimap zooms out with altitude and furthest for satellites", () => {
   expect(minimapZoom("vessel", 12)).toBe(12);
@@ -35,4 +42,12 @@ test("distanceKm is a plain haversine", () => {
   const d = distanceKm(60.1939, 11.1004, 59.9139, 10.7522);
   expect(d).toBeGreaterThan(36);
   expect(d).toBeLessThan(37);
+});
+
+test("commercial ports show from furthest, marinas only close in; none from orbit", () => {
+  expect(portLabelRangeM("port")).toBeGreaterThan(portLabelRangeM("harbour"));
+  expect(portLabelRangeM("harbour")).toBeGreaterThan(portLabelRangeM("ferry"));
+  expect(portLabelRangeM("ferry")).toBeGreaterThan(portLabelRangeM("marina"));
+  expect(showsPortOverlay("vessel")).toBe(true);
+  expect(showsPortOverlay("satellite")).toBe(false);
 });

@@ -92,9 +92,11 @@ npm run test:ci                   # container mode against docker-compose.e2e.ym
   to `public/cesium/` (gitignored), and `src/sim/loadCesium.ts` loads it with a `<script>` tag. Pose math
   lives in pure-TS `src/sim/` (jest-tested). Following works by re-centring the hub subscription on the
   target (`simStore` → `_layout.tsx`), not by any new backend call. Esri hosts are allowed in the CSP.
-  Map aids: `src/components/SimMinimap.tsx` (Leaflet inset, web only) and airport labels drawn as Cesium
-  `LabelCollection`/`PointPrimitiveCollection` from `/api/airports`; the policy (zoom, ranges, refetch)
-  is pure TS in `src/sim/overlay.ts`.
+  Map aids: `src/components/SimMinimap.tsx` (Leaflet inset, web only) and airport + port labels drawn as
+  Cesium `LabelCollection`/`PointPrimitiveCollection` from `/api/airports` and `/api/ports`; the policy
+  (zoom, ranges, refetch) is pure TS in `src/sim/overlay.ts`. Looking around (drag, or "Pan/tilt" with
+  the phone's DeviceOrientation via `useWebArSensors`) is an offset from the direction of travel; a
+  "straight ahead" marker and Recenter keep it findable (`src/sim/look.ts`).
 - **Ports layer** (`GET /api/ports`, `PortDbService`): an offline file committed at
   `data/ports/ports.csv.gz`, built by `node data/ports/extract-osm-ports.mjs [--wpi UpdatedPub150.csv]`:
   OpenStreetMap (Overpass) for Norway + the NGA World Port Index elsewhere. Refresh by re-running the

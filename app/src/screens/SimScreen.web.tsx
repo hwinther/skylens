@@ -10,22 +10,36 @@
  *
  * Everything (Cesium widget, store subscriptions, the session itself) is tied to screen focus, not
  * mount: tabs stay mounted, and the subscription must go back to the observer when the user leaves.
- * Dragging adds a look offset to the direction of travel; a double click resets it.
+ *
+ * Looking around: dragging adds a look offset to the direction of travel; on a phone, "Pan/tilt" uses
+ * the device's own orientation instead (the AR view's DeviceOrientation sensors), relative to the pose
+ * it had when switched on. A flight-path-style marker shows where straight ahead is (clamped to the edge
+ * with an arrow when out of view), and "Recenter" (or a double click) snaps back to it. Math: src/sim/look.ts.
  *
  * Map aids: a minimap inset (SimMinimap) keeps the object centred with a heading arrow; tapping it opens
- * the full Map on the target. Nearby airports (GET /api/airports, refetched as the object moves) are
- * labelled in the 3D scene, each class from its own distance (src/sim/overlay.ts).
+ * the full Map on the target. Nearby airports (GET /api/airports) and ports (GET /api/ports), refetched as
+ * the object moves, are labelled in the 3D scene, each class from its own distance (src/sim/overlay.ts).
  */
 
 import { color } from "@/theme";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import type { SatRec } from "satellite.js";
-import type { CesiumWidget, LabelCollection, PointPrimitiveCollection } from "cesium";
-import type { AirportDto } from "@/api/types";
+import type { Cartesian3, CesiumWidget, LabelCollection, PointPrimitiveCollection } from "cesium";
 import { SimMinimap } from "@/components/SimMinimap";
+import { useWebArSensors } from "@/components/useWebArSensors";
 import { AIRPORT_COLOR, airportShortLabel } from "@/components/webmap/airportStyle";
+import { PORT_COLOR, portTitle } from "@/components/webmap/portStyle";
+import {
+  describeLook,
+  forwardMarker,
+  isCentred,
+  lookFromDevice,
+  MAX_LOOK_PITCH_DEG,
+  wrap180,
+  type Look,
+} from "@/sim/look";
 import { useMapFocusStore } from "@/state/mapFocusStore";
 import { useSatelliteTrackStore } from "@/state/satelliteTrackStore";
 import {
@@ -34,7 +48,11 @@ import {
   airportLabelRangeM,
   distanceKm,
   minimapZoom,
+  PORT_FETCH_RADIUS_KM,
+  PORT_REFETCH_KM,
+  portLabelRangeM,
   showsAirportOverlay,
+  showsPortOverlay,
 } from "@/sim/overlay";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
@@ -61,7 +79,43 @@ const ESRI_TERRAIN_URL =
 const HUD_MS = 250;
 /** Drag sensitivity, degrees per pixel. */
 const LOOK_DEG_PER_PX = 0.15;
-const MAX_LOOK_PITCH_DEG = 80;
+/** How far ahead along the direction of travel the "straight ahead" marker is projected, metres. */
+const FORWARD_PROBE_M = 20_000;
+
+/** One labelled point in the 3D scene (airport or port). */
+interface OverlayItem {
+  lat: number;
+  lon: number;
+  altM: number;
+  /** Empty → point only. */
+  label: string;
+  rangeM: number;
+  pixelSize: number;
+}
+
+/** A phone/tablet browser with orientation sensors: the "Pan/tilt" look mode is offered there. */
+function deviceLookSupported(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    "DeviceOrientationEvent" in window &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(pointer: coarse)").matches
+  );
+}
+
+/** Flight-path-vector style symbol: a ring with wings and a fin, like a HUD's velocity marker. */
+const FPV_SVG =
+  '<svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#7CFC9A" stroke-width="2" ' +
+  'style="filter:drop-shadow(0 0 2px #000)"><circle cx="14" cy="14" r="5"/>' +
+  '<path d="M2 14h7M19 14h7M14 9V3"/></svg>';
+
+/** Edge arrow pointing towards straight ahead, `deg` clockwise from up. */
+function arrowSvg(deg: number): string {
+  return (
+    `<svg width="28" height="28" viewBox="0 0 28 28" style="transform:rotate(${deg}deg);filter:drop-shadow(0 0 2px #000)">` +
+    '<path d="M14 2 L24 22 L14 17 L4 22 Z" fill="#7CFC9A" stroke="#0B1622" stroke-width="1.5"/></svg>'
+  );
+}
 
 const KINDS: readonly SimKind[] = ["aircraft", "vessel", "satellite"];
 
@@ -73,7 +127,10 @@ function parseTarget(kind: unknown, id: unknown): SimTarget | null {
 interface Hud {
   pose: TrackedPose | null;
   name: string;
+  look: Look;
 }
+
+const LEVEL: Readonly<Look> = Object.freeze({ yaw: 0, pitch: 0 });
 
 export default function SimScreen() {
   const params = useLocalSearchParams<{ kind?: string; id?: string }>();
@@ -84,9 +141,46 @@ export default function SimScreen() {
   const setPosition = useSimStore((s) => s.setPosition);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const lookRef = useRef({ yaw: 0, pitch: 0 });
+  const lookRef = useRef<Look>(LEVEL);
+  const markerRef = useRef<HTMLDivElement | null>(null);
   const nameRef = useRef("");
-  const [hud, setHud] = useState<Hud>({ pose: null, name: "" });
+  const [hud, setHud] = useState<Hud>({ pose: null, name: "", look: LEVEL });
+
+  // Look mode: drag (default) or the device's own pan/tilt. The sensor hook runs only in device mode.
+  const [deviceLook, setDeviceLook] = useState(false);
+  const [canDeviceLook] = useState(() => deviceLookSupported());
+  const {
+    status: sensorStatus,
+    poseRef: sensorPoseRef,
+    request: requestSensors,
+    stop: stopSensors,
+  } = useWebArSensors({ enabled: deviceLook, trimDeg: 0 });
+  // Read by the render loop and the pointer handlers, which live outside React's render.
+  const deviceActiveRef = useRef(false);
+  const deviceActive = deviceLook && sensorStatus === "active";
+  useEffect(() => {
+    deviceActiveRef.current = deviceActive;
+  }, [deviceActive]);
+  /** Device pose that counts as "straight ahead"; null → the next sample becomes it. */
+  const deviceRefRef = useRef<{ azimuth: number; elevation: number } | null>(null);
+
+  const recenter = useCallback(() => {
+    lookRef.current = LEVEL;
+    deviceRefRef.current = null; // pan/tilt: wherever the phone points now becomes straight ahead
+  }, []);
+
+  const toggleDeviceLook = useCallback(() => {
+    if (deviceLook) {
+      setDeviceLook(false);
+      stopSensors();
+      recenter();
+      return;
+    }
+    deviceRefRef.current = null;
+    setDeviceLook(true);
+    // iOS asks for the sensor permission here, inside the tap (Android has no gate).
+    if (sensorStatus === "needs-permission") void requestSensors();
+  }, [deviceLook, sensorStatus, requestSensors, stopSensors, recenter]);
   const [error, setError] = useState<string | null>(null);
   const [engineReady, setEngineReady] = useState(false);
 
@@ -169,7 +263,7 @@ export default function SimScreen() {
         // loop has already advanced the tracker this frame.
         const pose = widget ? lastPose : tracker.pose(now);
         if (pose) setPosition(pose.lat, pose.lon);
-        setHud({ pose, name: nameRef.current });
+        setHud({ pose, name: nameRef.current, look: lookRef.current });
       }, HUD_MS);
       cleanups.push(() => clearInterval(hudTimer));
 
@@ -200,6 +294,11 @@ export default function SimScreen() {
             const pose = tracker.pose(now, terrain);
             if (!pose) return;
             lastPose = pose;
+            if (deviceActiveRef.current) {
+              const device = sensorPoseRef.current;
+              deviceRefRef.current ??= { azimuth: device.azimuth, elevation: device.elevation };
+              lookRef.current = lookFromDevice(device, deviceRefRef.current);
+            }
             const look = lookRef.current;
             widget?.camera.setView({
               destination: C.Cartesian3.fromDegrees(pose.lon, pose.lat, pose.altM),
@@ -211,35 +310,81 @@ export default function SimScreen() {
                 roll: 0,
               },
             });
+            placeForwardMarker(pose, look);
+          };
+
+          // "Straight ahead" marker: project a point FORWARD_PROBE_M along the direction of travel and
+          // draw it straight into the DOM every frame (no React state at 60 fps).
+          const enu = new C.Matrix4();
+          const probeLocal = new C.Cartesian3();
+          const probe = new C.Cartesian3();
+          const toProbe = new C.Cartesian3();
+          let markerState = "";
+          const placeForwardMarker = (pose: TrackedPose, look: Look) => {
+            const marker = markerRef.current;
+            const cam = widget?.camera;
+            if (!marker || !cam) return;
+            const origin: Cartesian3 = C.Cartesian3.fromDegrees(pose.lon, pose.lat, pose.altM);
+            C.Transforms.eastNorthUpToFixedFrame(origin, undefined, enu);
+            const h = C.Math.toRadians(pose.headingDeg);
+            const p = C.Math.toRadians(pose.pitchDeg);
+            probeLocal.x = Math.sin(h) * Math.cos(p) * FORWARD_PROBE_M;
+            probeLocal.y = Math.cos(h) * Math.cos(p) * FORWARD_PROBE_M;
+            probeLocal.z = Math.sin(p) * FORWARD_PROBE_M;
+            C.Matrix4.multiplyByPoint(enu, probeLocal, probe);
+            C.Cartesian3.normalize(C.Cartesian3.subtract(probe, cam.positionWC, toProbe), toProbe);
+            // Only trust the projection in front of the camera; behind it, fall back to the look offset.
+            const inFront = C.Cartesian3.dot(toProbe, cam.directionWC) > 0.05;
+            const win = inFront ? C.SceneTransforms.worldToWindowCoordinates(scene, probe) : undefined;
+            const m = forwardMarker(
+              look,
+              win ? { x: win.x, y: win.y } : null,
+              scene.canvas.clientWidth,
+              scene.canvas.clientHeight,
+            );
+            marker.style.transform = `translate(${m.x}px, ${m.y}px)`;
+            const state = m.onScreen ? "on" : `off:${Math.round(m.angleDeg)}`;
+            if (state !== markerState) {
+              markerState = state;
+              marker.dataset.onscreen = String(m.onScreen);
+              marker.innerHTML = m.onScreen ? FPV_SVG : arrowSvg(m.angleDeg);
+            }
           };
           cleanups.push(scene.preRender.addEventListener(onPreRender));
 
-          // --- airports overlay: labelled points, each class visible from its own distance ---------
-          if (showsAirportOverlay(target.kind)) {
+          // --- airports + ports: labelled points, each class visible from its own distance -----------
+          const client = new ApiClient({ baseUrl: getApiBaseUrl() });
+          /**
+           * One labelled-point layer that refetches once the object has moved `refetchKm` from the last
+           * fetch centre. Fail soft: a failed fetch draws nothing and the next tick retries.
+           */
+          const addOverlay = (
+            cssColor: string,
+            refetchKm: number,
+            load: (lat: number, lon: number) => Promise<OverlayItem[]>,
+          ) => {
             const labels: LabelCollection = scene.primitives.add(new C.LabelCollection());
             const points: PointPrimitiveCollection = scene.primitives.add(new C.PointPrimitiveCollection());
-            const airportColor = C.Color.fromCssColorString(AIRPORT_COLOR);
-            const draw = (airports: AirportDto[]) => {
+            const pointColor = C.Color.fromCssColorString(cssColor);
+            const draw = (items: OverlayItem[]) => {
               labels.removeAll();
               points.removeAll();
-              for (const a of airports) {
-                const range = airportLabelRangeM(a.type);
-                if (range == null) continue;
-                // Field elevation + a little, so the marker sits on the runway, not under the terrain.
-                const position = C.Cartesian3.fromDegrees(a.lon, a.lat, (a.elevationFt ?? 0) * FEET_TO_M + 20);
-                const shown = new C.DistanceDisplayCondition(0, range);
+              for (const it of items) {
+                const position = C.Cartesian3.fromDegrees(it.lon, it.lat, it.altM);
+                const shown = new C.DistanceDisplayCondition(0, it.rangeM);
                 points.add({
                   position,
-                  pixelSize: a.type === "large_airport" ? 9 : 6,
-                  color: airportColor,
+                  pixelSize: it.pixelSize,
+                  color: pointColor,
                   outlineColor: C.Color.BLACK,
                   outlineWidth: 1,
                   distanceDisplayCondition: shown,
                   disableDepthTestDistance: Number.POSITIVE_INFINITY,
                 });
+                if (!it.label) continue;
                 labels.add({
                   position,
-                  text: airportShortLabel(a),
+                  text: it.label,
                   font: "600 13px sans-serif",
                   fillColor: C.Color.WHITE,
                   outlineColor: C.Color.BLACK,
@@ -254,29 +399,63 @@ export default function SimScreen() {
             };
             let fetchedAt: { lat: number; lon: number } | null = null;
             let inFlight = false;
-            const client = new ApiClient({ baseUrl: getApiBaseUrl() });
             const maybeFetch = () => {
               const pose = lastPose;
               if (!pose || inFlight || cancelled) return;
-              if (fetchedAt && distanceKm(fetchedAt.lat, fetchedAt.lon, pose.lat, pose.lon) < AIRPORT_REFETCH_KM) return;
+              if (fetchedAt && distanceKm(fetchedAt.lat, fetchedAt.lon, pose.lat, pose.lon) < refetchKm) return;
               inFlight = true;
               const at = { lat: pose.lat, lon: pose.lon };
-              client
-                .airports(Math.round(at.lat * 100) / 100, Math.round(at.lon * 100) / 100, AIRPORT_FETCH_RADIUS_KM)
-                .then((res) => {
+              load(Math.round(at.lat * 100) / 100, Math.round(at.lon * 100) / 100)
+                .then((items) => {
                   if (cancelled || labels.isDestroyed()) return;
                   fetchedAt = at;
-                  draw(res.airports ?? []);
+                  draw(items);
                 })
                 .catch(() => {
-                  // Fail soft: no labels this time; the next tick retries.
+                  // Fail soft: nothing drawn this time; the next tick retries.
                 })
                 .finally(() => {
                   inFlight = false;
                 });
             };
-            const airportTimer = setInterval(maybeFetch, 2000);
-            cleanups.push(() => clearInterval(airportTimer));
+            const timer = setInterval(maybeFetch, 2000);
+            cleanups.push(() => clearInterval(timer));
+          };
+
+          if (showsAirportOverlay(target.kind)) {
+            addOverlay(AIRPORT_COLOR, AIRPORT_REFETCH_KM, async (lat, lon) => {
+              const res = await client.airports(lat, lon, AIRPORT_FETCH_RADIUS_KM);
+              const items: OverlayItem[] = [];
+              for (const a of res.airports ?? []) {
+                const rangeM = airportLabelRangeM(a.type);
+                if (rangeM == null) continue;
+                items.push({
+                  lat: a.lat,
+                  lon: a.lon,
+                  // Field elevation + a little, so the marker sits on the runway, not under the terrain.
+                  altM: (a.elevationFt ?? 0) * FEET_TO_M + 20,
+                  label: airportShortLabel(a),
+                  rangeM,
+                  pixelSize: a.type === "large_airport" ? 9 : 6,
+                });
+              }
+              return items;
+            });
+          }
+          if (showsPortOverlay(target.kind)) {
+            addOverlay(PORT_COLOR, PORT_REFETCH_KM, async (lat, lon) => {
+              const res = await client.ports(lat, lon, PORT_FETCH_RADIUS_KM);
+              return (res.ports ?? []).map((p) => ({
+                lat: p.lat,
+                lon: p.lon,
+                altM: 8, // quay level
+                // Unnamed quays and marinas get a dot only ("Marina" forty times along a fjord is noise);
+                // an unnamed commercial port is still a landmark, so it keeps its kind as the label.
+                label: p.name?.trim() || (p.kind === "port" ? portTitle(p) : ""),
+                rangeM: portLabelRangeM(p.kind),
+                pixelSize: p.kind === "port" ? 8 : 5,
+              }));
+            });
           }
         })
         .catch((e: unknown) => {
@@ -290,21 +469,23 @@ export default function SimScreen() {
         el.setPointerCapture(e.pointerId);
       };
       const onMove = (e: PointerEvent) => {
-        if (!drag) return;
+        if (!drag || deviceActiveRef.current) return; // pan/tilt mode: the phone aims the view
+        // A new object every time: mutating in place would also change LEVEL, which recenter() and the
+        // initial state share, so "Recenter" would snap back to the dragged offset.
         const look = lookRef.current;
-        look.yaw -= (e.clientX - drag.x) * LOOK_DEG_PER_PX;
-        look.pitch = Math.max(
-          -MAX_LOOK_PITCH_DEG,
-          Math.min(MAX_LOOK_PITCH_DEG, look.pitch + (e.clientY - drag.y) * LOOK_DEG_PER_PX),
-        );
+        lookRef.current = {
+          yaw: wrap180(look.yaw - (e.clientX - drag.x) * LOOK_DEG_PER_PX),
+          pitch: Math.max(
+            -MAX_LOOK_PITCH_DEG,
+            Math.min(MAX_LOOK_PITCH_DEG, look.pitch + (e.clientY - drag.y) * LOOK_DEG_PER_PX),
+          ),
+        };
         drag = { x: e.clientX, y: e.clientY };
       };
       const onUp = () => {
         drag = null;
       };
-      const onReset = () => {
-        lookRef.current = { yaw: 0, pitch: 0 };
-      };
+      const onReset = () => recenter();
       el.addEventListener("pointerdown", onDown);
       el.addEventListener("pointermove", onMove);
       el.addEventListener("pointerup", onUp);
@@ -325,10 +506,10 @@ export default function SimScreen() {
         widget = null;
         setEngineReady(false);
         setError(null);
-        setHud({ pose: null, name: "" });
+        setHud({ pose: null, name: "", look: LEVEL });
         stop();
       };
-    }, [target, start, stop, setPosition]),
+    }, [target, start, stop, setPosition, recenter, sensorPoseRef]),
   );
 
   if (!target) {
@@ -349,6 +530,20 @@ export default function SimScreen() {
         ref={containerRef}
         data-testid="sim-view"
         style={{ position: "absolute", inset: 0, touchAction: "none", cursor: "grab" }}
+      />
+      {/* "Straight ahead" marker, positioned every frame by the render loop (placeForwardMarker). */}
+      <div
+        ref={markerRef}
+        data-testid="sim-forward"
+        style={{
+          position: "absolute",
+          left: -14,
+          top: -14,
+          width: 28,
+          height: 28,
+          pointerEvents: "none",
+          display: engineReady ? "block" : "none",
+        }}
       />
 
       <View style={styles.hud} pointerEvents="box-none" testID="sim-hud">
@@ -378,9 +573,32 @@ export default function SimScreen() {
         />
       ) : null}
 
-      <Pressable testID="sim-exit" style={[styles.exit, styles.exitFloating]} onPress={exit}>
-        <Text style={styles.exitText}>Exit</Text>
-      </Pressable>
+      <View style={styles.topRight} pointerEvents="box-none">
+        <Pressable testID="sim-exit" style={styles.exit} onPress={exit}>
+          <Text style={styles.exitText}>Exit</Text>
+        </Pressable>
+        {canDeviceLook ? (
+          <Pressable
+            testID="sim-look-device"
+            accessibilityState={{ selected: deviceLook }}
+            style={[styles.chip, deviceLook && styles.chipOn]}
+            onPress={toggleDeviceLook}
+          >
+            <Text style={[styles.chipText, deviceLook && styles.chipTextOn]}>
+              {deviceLook ? (sensorStatus === "denied" ? "Pan/tilt denied" : "Pan/tilt on") : "Pan/tilt"}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      {!isCentred(hud.look) ? (
+        <Pressable testID="sim-recenter" style={styles.recenter} onPress={recenter}>
+          <Text style={styles.recenterText}>↺ Recenter</Text>
+          <Text testID="sim-look-offset" style={styles.recenterOffset}>
+            {describeLook(hud.look)}
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -461,6 +679,33 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 20,
   },
-  exitFloating: { position: "absolute", top: 16, right: 16 },
+  topRight: { position: "absolute", top: 16, right: 16, alignItems: "flex-end", gap: 8 },
+  chip: {
+    backgroundColor: "rgba(11, 22, 34, 0.72)",
+    borderColor: color.textMuted,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  chipOn: { borderColor: color.status.ok },
+  chipText: { color: color.textDim, fontSize: 13, fontWeight: "600" },
+  chipTextOn: { color: color.status.ok },
+  recenter: {
+    position: "absolute",
+    top: 16,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(11, 22, 34, 0.8)",
+    borderColor: color.status.ok,
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+  },
+  recenterText: { color: color.status.ok, fontSize: 14, fontWeight: "700" },
+  recenterOffset: { color: color.textDim, fontSize: 13, fontVariant: ["tabular-nums"] },
   exitText: { color: color.text, fontSize: 15, fontWeight: "600" },
 });
