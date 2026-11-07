@@ -95,6 +95,11 @@ npm run test:ci                   # container mode against docker-compose.e2e.ym
   Map aids: `src/components/SimMinimap.tsx` (Leaflet inset, web only) and airport labels drawn as Cesium
   `LabelCollection`/`PointPrimitiveCollection` from `/api/airports`; the policy (zoom, ranges, refetch)
   is pure TS in `src/sim/overlay.ts`.
+- **Ports layer** (`GET /api/ports`, `PortDbService`): an offline file committed at
+  `data/ports/ports.csv.gz`, built by `node data/ports/extract-osm-ports.mjs [--wpi UpdatedPub150.csv]`:
+  OpenStreetMap (Overpass) for Norway + the NGA World Port Index elsewhere. Refresh by re-running the
+  script and committing the output; the image bakes it and sets `Ports__PortsPath`. Show the
+  attribution (ODbL) wherever ports appear.
 - **Hidden routes**: in expo-router 58, `href: null` on a `Tabs.Screen` makes it `hidden`, and hidden
   routes redirect to `/`. To keep a route navigable without a tab button, use `HIDDEN_ROUTE`
   (`tabBarItemStyle: { display: "none" }`) in `app/_layout.tsx` instead.

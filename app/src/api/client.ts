@@ -12,6 +12,7 @@ import type {
   AircraftDetail,
   AircraftDto,
   AirportsResponse,
+  PortsResponse,
   FishingZonesResponse,
   HealthResponse,
   LostGearResponse,
@@ -201,5 +202,10 @@ export class ApiClient {
     return this.request<AirportsResponse>(
       `/api/airports?lat=${lat}&lon=${lon}&radiusKm=${radiusKm}`,
     );
+  }
+
+  /** GET /api/ports — nearby harbours / marinas / ferry quays / ports (offline dataset) + attribution. */
+  ports(lat: number, lon: number, radiusKm: number): Promise<PortsResponse> {
+    return this.request<PortsResponse>(`/api/ports?lat=${lat}&lon=${lon}&radiusKm=${radiusKm}`);
   }
 }

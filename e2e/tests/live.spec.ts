@@ -124,3 +124,14 @@ test('tapping an aircraft opens its detail sheet', async ({ page }) => {
   // (guards the fetch `this`-binding — browser fetch throws "Illegal invocation" otherwise).
   await expect(page.getByTestId('detail-title')).toBeVisible({ timeout: 15_000 })
 })
+
+test('map view: ports layer plots harbours and ferry quays', async ({ page }) => {
+  await page.goto('/map')
+  await page.getByTestId('map-view-map').click()
+  await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 15_000 })
+
+  // GET /api/ports (OpenStreetMap extract for Norway) around the observer: the Oslofjord has plenty.
+  await expect(page.locator('[data-testid^="map-port-"]').first()).toBeAttached({ timeout: 30_000 })
+  // The OSM-derived data carries its attribution on the map.
+  await expect(page.locator('.leaflet-control-attribution')).toContainText('World Port Index')
+})

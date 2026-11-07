@@ -18,6 +18,7 @@ import {
   AirportDetailSheet,
   VesselDetailSheet,
   useAirports,
+  usePorts,
   useFishingLayers,
   useSatelliteGroundTrack,
 } from "@/components";
@@ -39,6 +40,7 @@ export default function MapScreen() {
   const showCourseVectors = useSettingsStore((s) => s.showCourseVectors);
   const showAirports = useSettingsStore((s) => s.showAirports);
   const showSmallAirfields = useSettingsStore((s) => s.showSmallAirfields);
+  const showPorts = useSettingsStore((s) => s.showPorts);
   const showFishingZones = useSettingsStore((s) => s.showFishingZones);
   const showLostGear = useSettingsStore((s) => s.showLostGear);
   const radarRangeKm = useSettingsStore((s) => s.radarRangeKm);
@@ -100,6 +102,8 @@ export default function MapScreen() {
     () => airports.filter((a) => airportFilter(a.type, showSmallAirfields)),
     [airports, showSmallAirfields],
   );
+  // Ports: static reference data like the airports, map view only (the radar stays traffic-focused).
+  const { ports } = usePorts({ client, observer, enabled: showPorts });
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -129,6 +133,7 @@ export default function MapScreen() {
             gear={showLostGear ? gear : []}
             airports={shownAirports}
             onSelectAirport={setSelectedAirportIdent}
+            ports={ports}
             trackSegments={trackSegments}
             trackSubPoint={trackSubPoint}
             trackName={track.name}

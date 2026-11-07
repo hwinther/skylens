@@ -10,7 +10,8 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import MapView, { Marker, Polygon, Polyline } from "react-native-maps";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import type { AircraftDto, AirportDto, FishingZone, LostGear, VesselDto } from "@/api/types";
+import type { AircraftDto, AirportDto, FishingZone, LostGear, PortDto, VesselDto } from "@/api/types";
+import { PORT_COLOR, PORT_GLYPH, portGlyphSize, portSubtitle, portTitle } from "@/components/webmap/portStyle";
 import { useAircraftList } from "@/state/aircraftStore";
 import { useVesselList } from "@/state/vesselStore";
 import { useSettingsStore } from "@/state/settingsStore";
@@ -22,6 +23,7 @@ import {
   VesselDetailSheet,
   useAirports,
   useFishingLayers,
+  usePorts,
   useSatelliteGroundTrack,
 } from "@/components";
 import { iconForVessel } from "@/components/vesselIcon";
@@ -230,6 +232,29 @@ function AirportMarker({
 }
 
 /**
+ * One port / harbour / marina / ferry quay as its kind glyph in the muted port colour, upright. Same
+ * brief tracksViewChanges window as the airport markers; the callout shows name + kind + source.
+ */
+function PortMarker({ port: p }: { port: PortDto }) {
+  const [tracksViewChanges, setTracksViewChanges] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setTracksViewChanges(false), 800);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <Marker
+      coordinate={{ latitude: p.lat, longitude: p.lon }}
+      title={portTitle(p)}
+      description={portSubtitle(p)}
+      anchor={{ x: 0.5, y: 0.5 }}
+      tracksViewChanges={tracksViewChanges}
+    >
+      <MaterialCommunityIcons name={PORT_GLYPH[p.kind]} size={portGlyphSize(p.kind)} color={PORT_COLOR} />
+    </Marker>
+  );
+}
+
+/**
  * Ring drawn under the focused aircraft/vessel ("Show on map"). A static view, so it uses the same
  * brief tracksViewChanges window as the traffic markers and then only moves natively.
  */
@@ -389,6 +414,9 @@ export default function MapScreen() {
     () => airports.filter((a) => airportFilter(a.type, showSmallAirfields)),
     [airports, showSmallAirfields],
   );
+  // Ports: static reference markers like the airports (map view only).
+  const showPorts = useSettingsStore((s) => s.showPorts);
+  const { ports, attribution: portsAttribution } = usePorts({ client, observer, enabled: showPorts });
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -430,6 +458,9 @@ export default function MapScreen() {
                   <AirportMarker key={a.ident} airport={a} onSelect={setSelectedAirportIdent} />
                 ))
               : null}
+            {ports.map((p) => (
+              <PortMarker key={p.id} port={p} />
+            ))}
             {/* Course leaders: dashed, under the solid violet track and the markers. */}
             {showCourseVectors &&
               positioned.map((a) => {
@@ -498,6 +529,13 @@ export default function MapScreen() {
             ) : null}
           </MapView>
         )}
+        {/* The Google base map doesn't credit OpenStreetMap, so the OSM-derived ports carry their own
+            ODbL attribution while they're shown. */}
+        {view === "map" && ports.length > 0 && portsAttribution ? (
+          <Text style={styles.portsAttribution} pointerEvents="none">
+            Ports {portsAttribution}
+          </Text>
+        ) : null}
         {view === "map" && track.trackedNoradId != null ? (
           <Pressable testID="clear-track" style={styles.clearTrack} onPress={track.clear}>
             <Text style={styles.clearTrackText}>✕ Clear track</Text>
@@ -533,6 +571,16 @@ export default function MapScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
+  portsAttribution: {
+    position: "absolute",
+    left: 8,
+    bottom: 4,
+    fontSize: 10,
+    color: color.textDim,
+    backgroundColor: alpha(color.bg, 0.7),
+    paddingHorizontal: 4,
+    borderRadius: 3,
+  },
   body: { flex: 1 },
   clearTrack: {
     position: "absolute",

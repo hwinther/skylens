@@ -38,6 +38,7 @@ export default function SettingsScreen() {
     showCourseVectors,
     showAirports,
     showSmallAirfields,
+    showPorts,
     showSatellites,
     satAmateurStations,
     satWeather,
@@ -59,6 +60,7 @@ export default function SettingsScreen() {
     setShowCourseVectors,
     setShowAirports,
     setShowSmallAirfields,
+    setShowPorts,
     setShowSatellites,
     setSatAmateurStations,
     setSatWeather,
@@ -160,6 +162,16 @@ export default function SettingsScreen() {
             Airports as reference points — markers + runways on the Map, dim diamonds on the Radar. Large
             and medium airports always show; the second toggle adds small airfields, heliports and
             seaplane bases.
+          </Text>
+        </Section>
+
+        <Section title="Ports">
+          <Row label="Show ports & harbours">
+            <Switch testID="settings-show-ports" value={showPorts} onValueChange={setShowPorts} />
+          </Row>
+          <Text style={styles.hint}>
+            Ports, harbours, marinas and ferry quays as reference points on the Map. Norway from
+            OpenStreetMap; elsewhere the larger ports from the World Port Index.
           </Text>
         </Section>
 

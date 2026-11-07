@@ -19,7 +19,8 @@ import {
   useMap,
 } from "react-leaflet";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import type { AircraftDto, AirportDto, FishingZone, LostGear, VesselDto } from "@/api/types";
+import type { AircraftDto, AirportDto, FishingZone, LostGear, PortDto, VesselDto } from "@/api/types";
+import { PORT_COLOR, PORT_GLYPH, portGlyphSize, portSubtitle, portTitle } from "./portStyle";
 import { iconForCategory } from "@/components/aircraftIcon";
 import { iconForVessel } from "@/components/vesselIcon";
 import { lineLatLngs, pointLatLng, polygonRings, type GeoGeometry, type LatLngTuple } from "./geojson";
@@ -64,6 +65,8 @@ export interface LeafletMapProps {
   airports?: AirportDto[];
   /** Tap handler for an airport marker (opens the airport detail sheet). Markers inert when omitted. */
   onSelectAirport?: (ident: string) => void;
+  /** Ports / harbours / marinas / ferry quays to plot as reference markers; already gated by the caller. */
+  ports?: PortDto[];
   /** Satellite ground-track segments ([lat,lng] tuples, antimeridian-split); empty = no track drawn. */
   trackSegments?: LatLngTuple[][];
   /** Current sub-satellite point ([lat,lng]) for the live marker, or null when no track is shown. */
@@ -132,6 +135,40 @@ function airportIcon(type: string): L.DivIcon {
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
+}
+
+/** Port marker: its kind glyph in the muted port colour. Carries a testID for the e2e. */
+function portIcon(p: PortDto): L.DivIcon {
+  const code = glyphMap[PORT_GLYPH[p.kind]];
+  const glyph = code != null ? String.fromCodePoint(code) : "";
+  const size = portGlyphSize(p.kind);
+  return L.divIcon({
+    className: "",
+    html: `<span data-testid="map-port-${p.id}" style="font-family:'${iconFont}';font-size:${size}px;line-height:${size}px;color:${PORT_COLOR};text-shadow:0 0 3px #000">${glyph}</span>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
+}
+
+/**
+ * Ports reference layer: one marker per harbour / marina / ferry quay / port with a name + kind popup.
+ * Under the traffic markers like the airports. The base map already credits OpenStreetMap, which
+ * covers the ODbL attribution the OSM-derived ports need.
+ */
+function Ports({ ports }: { ports: PortDto[] }) {
+  return (
+    <>
+      {ports.map((p) => (
+        <Marker key={`port-${p.id}`} position={[p.lat, p.lon]} icon={portIcon(p)} title={portTitle(p)}>
+          <Popup>
+            {portTitle(p)}
+            <br />
+            {portSubtitle(p)}
+          </Popup>
+        </Marker>
+      ))}
+    </>
+  );
 }
 
 const observerIcon = L.divIcon({
@@ -368,6 +405,7 @@ export function LeafletMap({
   gear = [],
   airports = [],
   onSelectAirport,
+  ports = [],
   trackSegments = [],
   trackSubPoint = null,
   trackName = null,
@@ -395,7 +433,11 @@ export function LeafletMap({
     <MapContainer center={[observer.lat, observer.lon]} zoom={9} style={{ height: "100%", width: "100%" }} preferCanvas>
       <TileLayer
         url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        attribution={
+          ports.length > 0
+            ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · Ports: World Port Index (NGA)'
+            : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }
         maxZoom={19}
       />
       {/* Fishing overlays render first (overlay pane) so aircraft/vessel markers stay on top. */}
@@ -403,6 +445,7 @@ export function LeafletMap({
       <LostGearMarkers gear={gear} />
       {/* Airport reference layer under the traffic markers (runways + steel-blue class-sized markers). */}
       <Airports airports={airports} onSelectAirport={onSelectAirport} />
+      <Ports ports={ports} />
       <Marker position={[observer.lat, observer.lon]} icon={observerIcon} />
       {/* Focus ring under the traffic markers, so the target's own marker stays tappable. */}
       {focus?.position ? (
