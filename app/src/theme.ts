@@ -35,6 +35,10 @@ export const color = {
     radio: "#B6E14E", // signal-lime — fixed radio-astronomy sources (hydrogen line)
   },
 
+  // Military airframes (tar1090-db / readsb dbFlags): an orange accent instead of the aircraft blue,
+  // distinct from the planet gold and the radio lime.
+  military: "#F2995B",
+
   // Vessel class palette (from vesselIcon.ts)
   vessel: {
     ship: "#3FC9B0", // generic / passenger  (=== entity.sea)

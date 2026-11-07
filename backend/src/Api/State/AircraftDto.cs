@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Skylens.Api.State;
 
 /// <summary>
@@ -21,9 +23,16 @@ public sealed record AircraftDto
     public double? Seen { get; init; }
     public double? SeenPos { get; init; }
     public string? Cat { get; init; }
+
+    /// <summary>
+    ///     True for a military airframe (tar1090-db flag / readsb dbFlags), else omitted from the JSON
+    ///     entirely, so the snapshot payload only grows for the few aircraft that carry it.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Mil { get; init; }
     public string Src { get; init; } = "adsb";
 
-    public static AircraftDto FromState(AircraftState s, string src = "adsb") => new()
+    public static AircraftDto FromState(AircraftState s, string src = "adsb", bool military = false) => new()
     {
         Hex = s.Hex,
         Flight = s.Flight,
@@ -38,6 +47,7 @@ public sealed record AircraftDto
         Seen = s.Seen,
         SeenPos = s.SeenPos,
         Cat = s.Category,
+        Mil = military ? true : null,
         Src = src,
     };
 }

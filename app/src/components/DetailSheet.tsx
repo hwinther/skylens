@@ -83,6 +83,9 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
             <Row label="Registration" value={detail.metadata?.registration} />
             <Row label="Type" value={detail.metadata?.typeName ?? detail.metadata?.typeCode} />
             <Row label="Operator" value={detail.metadata?.operator} />
+            {detail.metadata?.military || state?.mil ? (
+              <Row label="Military" value="Yes (registry flag)" />
+            ) : null}
             <Row
               label="Altitude"
               value={state?.alt != null ? `${state.alt.toLocaleString()} ft` : null}

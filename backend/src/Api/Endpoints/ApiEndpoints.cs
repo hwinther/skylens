@@ -55,7 +55,7 @@ public static class ApiEndpoints
 
         // GET /api/aircraft[?lat=&lon=&radiusKm=] — current picture, optionally filtered to a radius.
         api.MapGet("/aircraft",
-                   Ok<IReadOnlyList<AircraftDto>> (AircraftStateStore store,
+                   Ok<IReadOnlyList<AircraftDto>> (AircraftStateStore store, AircraftDbService aircraftDb,
                                                    double? lat, double? lon, double? radiusKm) =>
                    {
                        var all = store.Snapshot();
@@ -68,7 +68,8 @@ public static class ApiEndpoints
                                                      Geo.DistanceKm(la, lo, a.Lat!.Value, a.Lon!.Value) <= r);
                        }
 
-                       var dtos = filtered.Select(static a => AircraftDto.FromState(a)).ToArray();
+                       var dtos = filtered.Select(a => AircraftDto.FromState(a, military: aircraftDb.IsMilitary(a.Hex)))
+                                          .ToArray();
                        return TypedResults.Ok<IReadOnlyList<AircraftDto>>(dtos);
                    })
            .WithName("AircraftList");
@@ -87,7 +88,7 @@ public static class ApiEndpoints
                        if (state is null && meta is null)
                            return TypedResults.NotFound();
 
-                       var dto = state is null ? null : AircraftDto.FromState(state);
+                       var dto = state is null ? null : AircraftDto.FromState(state, military: meta?.Military ?? false);
                        return TypedResults.Ok(new AircraftDetail(dto, meta));
                    })
            .WithName("AircraftDetail");

@@ -10,7 +10,7 @@ import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { AircraftDto } from "@/api/types";
-import { iconForCategory } from "./aircraftIcon";
+import { aircraftAccent, iconForCategory } from "./aircraftIcon";
 
 export interface AircraftLabelProps {
   aircraft: AircraftDto;
@@ -30,6 +30,8 @@ function AircraftLabelBase({ aircraft, x, y, anchorY, rangeKm, onPress }: Aircra
   const fl = aircraft.fl != null ? `FL${String(aircraft.fl).padStart(3, "0")}` : "—";
   const range = rangeKm != null ? `${rangeKm.toFixed(1)} km` : "";
   const pushed = Math.abs(y - anchorY) > 1;
+  // Military airframes swap the aircraft blue for the military orange and carry a MIL tag.
+  const accent = aircraftAccent(aircraft);
 
   return (
     <>
@@ -37,28 +39,38 @@ function AircraftLabelBase({ aircraft, x, y, anchorY, rangeKm, onPress }: Aircra
         <View
           style={[
             styles.leader,
-            { left: x, top: Math.min(anchorY, y), height: Math.abs(y - anchorY) },
+            {
+              left: x,
+              top: Math.min(anchorY, y),
+              height: Math.abs(y - anchorY),
+              backgroundColor: alpha(accent, 0.7),
+            },
           ]}
         />
       )}
       <Pressable
         testID={`ac-label-${aircraft.hex}`}
         onPress={() => onPress(aircraft.hex)}
-        style={[styles.label, { left: x, top: y }]}
+        style={[styles.label, { left: x, top: y, borderColor: accent }]}
         hitSlop={8}
       >
-        <View style={styles.tick} />
+        <View style={[styles.tick, { backgroundColor: alpha(accent, 0.95) }]} />
         <View style={styles.titleRow}>
           <MaterialCommunityIcons
             testID={`ac-icon-${aircraft.hex}`}
             name={iconForCategory(aircraft.cat)}
             size={13}
-            color={alpha(color.entity.air, 0.95)}
+            color={alpha(accent, 0.95)}
             style={styles.icon}
           />
           <Text style={styles.title} numberOfLines={1}>
             {title}
           </Text>
+          {aircraft.mil ? (
+            <Text testID={`ac-mil-${aircraft.hex}`} style={[styles.milTag, { backgroundColor: accent }]}>
+              MIL
+            </Text>
+          ) : null}
         </View>
         <Text style={styles.sub} numberOfLines={1}>
           {fl}
@@ -91,6 +103,16 @@ const styles = StyleSheet.create({
     backgroundColor: alpha(color.entity.air, 0.95),
   },
   titleRow: { flexDirection: "row", alignItems: "center" },
+  // Same badge shape as the vessel class tag (VesselLabel).
+  milTag: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: color.bg,
+    borderRadius: 3,
+    paddingHorizontal: 3,
+    marginLeft: 4,
+    overflow: "hidden",
+  },
   icon: { marginRight: 3 },
   title: {
     color: color.text,

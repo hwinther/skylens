@@ -1,5 +1,6 @@
 import type { ComponentProps } from "react";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { color } from "@/theme";
 
 export type AircraftIconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 
@@ -24,4 +25,9 @@ const CATEGORY_ICON: Partial<Record<string, AircraftIconName>> = {
 
 export function iconForCategory(cat: string | null | undefined): AircraftIconName {
   return (cat ? CATEGORY_ICON[cat] : undefined) ?? "airplane";
+}
+
+/** Accent colour for an aircraft: orange for military airframes (`mil`), else the aircraft blue. */
+export function aircraftAccent(ac: { mil?: boolean | null }): string {
+  return ac.mil ? color.military : color.entity.air;
 }

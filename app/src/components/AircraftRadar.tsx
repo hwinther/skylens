@@ -13,7 +13,7 @@ import { useEffect, useRef, useState, type ComponentRef } from "react";
 import { Platform, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { AircraftDto, AirportDto, VesselDto } from "@/api/types";
-import { iconForCategory } from "./aircraftIcon";
+import { aircraftAccent, iconForCategory } from "./aircraftIcon";
 import { iconForVessel } from "./vesselIcon";
 import { EmptyState } from "./EmptyState";
 import { isAutoRange, zoomIn, zoomOut } from "./radarRange";
@@ -283,7 +283,7 @@ export function AircraftRadar({
                 style={[styles.blip, beyond && styles.blipBeyond, { left: x - 12, top: y - 12 }]}
                 hitSlop={6}
               >
-                <MaterialCommunityIcons name={iconForCategory(a.cat)} size={18} color={alpha(color.entity.air, 0.95)} />
+                <MaterialCommunityIcons name={iconForCategory(a.cat)} size={18} color={alpha(aircraftAccent(a), 0.95)} />
               </Pressable>
             );
           })}

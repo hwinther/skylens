@@ -26,7 +26,7 @@ import {
   useSatellites,
   useSkyEvents,
 } from "@/components";
-import { iconForCategory } from "@/components/aircraftIcon";
+import { aircraftAccent, iconForCategory } from "@/components/aircraftIcon";
 import { useObserver } from "@/components/useObserver";
 import { feedStatusMessage } from "@/components/feedStatus";
 import { iconForVessel } from "@/components/vesselIcon";
@@ -76,6 +76,7 @@ const shortDate = (date: Date) => date.toLocaleDateString([], { day: "numeric", 
  */
 const AircraftRow = memo(function AircraftRow({
   hex,
+  mil,
   title,
   icon,
   distance,
@@ -89,13 +90,16 @@ const AircraftRow = memo(function AircraftRow({
   distance: string;
   level: string;
   speed: string;
+  /** Military airframe: orange icon + MIL badge. */
+  mil?: boolean;
   onSelect: (hex: string) => void;
 }) {
   return (
     <Pressable testID={`list-ac-${hex}`} onPress={() => onSelect(hex)} style={styles.row}>
-      <MaterialCommunityIcons name={icon} size={18} color={color.entity.air} />
+      <MaterialCommunityIcons name={icon} size={18} color={aircraftAccent({ mil })} />
       <Text style={styles.callsign} numberOfLines={1}>
         {title}
+        {mil ? <Text testID={`list-mil-${hex}`} style={styles.milBadge}> MIL</Text> : null}
       </Text>
       <Text style={styles.meta}>{distance}</Text>
       <Text style={styles.meta}>{level}</Text>
@@ -280,6 +284,7 @@ export default function ListScreen() {
               <AircraftRow
                 key={row.key}
                 hex={row.a.hex}
+                mil={row.a.mil ?? false}
                 title={row.a.flight?.trim() || row.a.hex.toUpperCase()}
                 icon={iconForCategory(row.a.cat)}
                 distance={`${row.distanceKm.toFixed(1)} km ${compass8(row.bearingDeg)}`}
@@ -515,6 +520,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   callsign: { color: color.text, fontSize: 14, fontWeight: "600", flex: 1 },
+  milBadge: { color: color.military, fontSize: 11, fontWeight: "700" },
   marineLabel: { flex: 1, flexDirection: "row", alignItems: "center", gap: 6 },
   shipName: { color: color.text, fontSize: 14, fontWeight: "600", flexShrink: 1 },
   flag: { color: color.textDim, fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
