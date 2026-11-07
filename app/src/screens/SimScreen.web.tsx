@@ -11,6 +11,10 @@
  * Everything (Cesium widget, store subscriptions, the session itself) is tied to screen focus, not
  * mount: tabs stay mounted, and the subscription must go back to the observer when the user leaves.
  * Dragging adds a look offset to the direction of travel; a double click resets it.
+ *
+ * Map aids: a minimap inset (SimMinimap) keeps the object centred with a heading arrow; tapping it opens
+ * the full Map on the target. Nearby airports (GET /api/airports, refetched as the object moves) are
+ * labelled in the 3D scene, each class from its own distance (src/sim/overlay.ts).
  */
 
 import { color } from "@/theme";
@@ -18,7 +22,20 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import type { SatRec } from "satellite.js";
-import type { CesiumWidget } from "cesium";
+import type { CesiumWidget, LabelCollection, PointPrimitiveCollection } from "cesium";
+import type { AirportDto } from "@/api/types";
+import { SimMinimap } from "@/components/SimMinimap";
+import { AIRPORT_COLOR, airportShortLabel } from "@/components/webmap/airportStyle";
+import { useMapFocusStore } from "@/state/mapFocusStore";
+import { useSatelliteTrackStore } from "@/state/satelliteTrackStore";
+import {
+  AIRPORT_FETCH_RADIUS_KM,
+  AIRPORT_REFETCH_KM,
+  airportLabelRangeM,
+  distanceKm,
+  minimapZoom,
+  showsAirportOverlay,
+} from "@/sim/overlay";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
 import { buildSatrec, satelliteStateAt } from "@/ar/satellites";
@@ -77,6 +94,17 @@ export default function SimScreen() {
     if (router.canGoBack()) router.back();
     else router.replace("/");
   }, [router]);
+
+  // Minimap tap: hand the target to the full Map (aircraft/vessel follow, satellite ground track).
+  const setMapFocus = useMapFocusStore((s) => s.setFocus);
+  const setTrackedSatellite = useSatelliteTrackStore((s) => s.setTracked);
+  const openOnMap = useCallback(() => {
+    if (!target) return;
+    if (target.kind === "aircraft") setMapFocus({ kind: "aircraft", hex: target.id });
+    else if (target.kind === "vessel") setMapFocus({ kind: "vessel", mmsi: target.id });
+    else setTrackedSatellite(Number(target.id));
+    router.push("/map");
+  }, [target, setMapFocus, setTrackedSatellite, router]);
 
   useFocusEffect(
     useCallback(() => {
@@ -185,6 +213,71 @@ export default function SimScreen() {
             });
           };
           cleanups.push(scene.preRender.addEventListener(onPreRender));
+
+          // --- airports overlay: labelled points, each class visible from its own distance ---------
+          if (showsAirportOverlay(target.kind)) {
+            const labels: LabelCollection = scene.primitives.add(new C.LabelCollection());
+            const points: PointPrimitiveCollection = scene.primitives.add(new C.PointPrimitiveCollection());
+            const airportColor = C.Color.fromCssColorString(AIRPORT_COLOR);
+            const draw = (airports: AirportDto[]) => {
+              labels.removeAll();
+              points.removeAll();
+              for (const a of airports) {
+                const range = airportLabelRangeM(a.type);
+                if (range == null) continue;
+                // Field elevation + a little, so the marker sits on the runway, not under the terrain.
+                const position = C.Cartesian3.fromDegrees(a.lon, a.lat, (a.elevationFt ?? 0) * FEET_TO_M + 20);
+                const shown = new C.DistanceDisplayCondition(0, range);
+                points.add({
+                  position,
+                  pixelSize: a.type === "large_airport" ? 9 : 6,
+                  color: airportColor,
+                  outlineColor: C.Color.BLACK,
+                  outlineWidth: 1,
+                  distanceDisplayCondition: shown,
+                  disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                });
+                labels.add({
+                  position,
+                  text: airportShortLabel(a),
+                  font: "600 13px sans-serif",
+                  fillColor: C.Color.WHITE,
+                  outlineColor: C.Color.BLACK,
+                  outlineWidth: 3,
+                  style: C.LabelStyle.FILL_AND_OUTLINE,
+                  pixelOffset: new C.Cartesian2(0, -14),
+                  distanceDisplayCondition: shown,
+                  // Like synthetic vision: labels stay readable even behind a ridge.
+                  disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                });
+              }
+            };
+            let fetchedAt: { lat: number; lon: number } | null = null;
+            let inFlight = false;
+            const client = new ApiClient({ baseUrl: getApiBaseUrl() });
+            const maybeFetch = () => {
+              const pose = lastPose;
+              if (!pose || inFlight || cancelled) return;
+              if (fetchedAt && distanceKm(fetchedAt.lat, fetchedAt.lon, pose.lat, pose.lon) < AIRPORT_REFETCH_KM) return;
+              inFlight = true;
+              const at = { lat: pose.lat, lon: pose.lon };
+              client
+                .airports(Math.round(at.lat * 100) / 100, Math.round(at.lon * 100) / 100, AIRPORT_FETCH_RADIUS_KM)
+                .then((res) => {
+                  if (cancelled || labels.isDestroyed()) return;
+                  fetchedAt = at;
+                  draw(res.airports ?? []);
+                })
+                .catch(() => {
+                  // Fail soft: no labels this time; the next tick retries.
+                })
+                .finally(() => {
+                  inFlight = false;
+                });
+            };
+            const airportTimer = setInterval(maybeFetch, 2000);
+            cleanups.push(() => clearInterval(airportTimer));
+          }
         })
         .catch((e: unknown) => {
           if (!cancelled) setError(e instanceof Error ? e.message : "Couldn't start the 3D view.");
@@ -267,6 +360,23 @@ export default function SimScreen() {
           {statusText(pose, engineReady, error)}
         </Text>
       </View>
+
+      {pose ? (
+        <SimMinimap
+          lat={pose.lat}
+          lon={pose.lon}
+          headingDeg={pose.headingDeg}
+          zoom={minimapZoom(target.kind, pose.altM)}
+          accent={
+            target.kind === "aircraft"
+              ? color.entity.air
+              : target.kind === "vessel"
+                ? color.entity.sea
+                : color.entity.orbit
+          }
+          onPress={openOnMap}
+        />
+      ) : null}
 
       <Pressable testID="sim-exit" style={[styles.exit, styles.exitFloating]} onPress={exit}>
         <Text style={styles.exitText}>Exit</Text>

@@ -92,6 +92,9 @@ npm run test:ci                   # container mode against docker-compose.e2e.ym
   to `public/cesium/` (gitignored), and `src/sim/loadCesium.ts` loads it with a `<script>` tag. Pose math
   lives in pure-TS `src/sim/` (jest-tested). Following works by re-centring the hub subscription on the
   target (`simStore` → `_layout.tsx`), not by any new backend call. Esri hosts are allowed in the CSP.
+  Map aids: `src/components/SimMinimap.tsx` (Leaflet inset, web only) and airport labels drawn as Cesium
+  `LabelCollection`/`PointPrimitiveCollection` from `/api/airports`; the policy (zoom, ranges, refetch)
+  is pure TS in `src/sim/overlay.ts`.
 - **Hidden routes**: in expo-router 58, `href: null` on a `Tabs.Screen` makes it `hidden`, and hidden
   routes redirect to `/`. To keep a route navigable without a tab button, use `HIDDEN_ROUTE`
   (`tabBarItemStyle: { display: "none" }`) in `app/_layout.tsx` instead.

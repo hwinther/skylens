@@ -68,3 +68,22 @@ test('a deep link without a target offers a way back', async ({ page }) => {
   await expect(page.getByText('Nothing to follow')).toBeVisible()
   await expect(page.getByTestId('sim-exit')).toBeVisible()
 })
+
+test('the minimap follows the object and opens the full map', async ({ page }) => {
+  await page.goto('/list')
+  const row = page.locator('[data-testid^="list-ac-"]').first()
+  await expect(row).toBeVisible({ timeout: 30_000 })
+  await row.click()
+  await page.getByTestId('detail-cockpit').click()
+
+  // The inset shows OSM tiles under a heading arrow.
+  const minimap = page.getByTestId('sim-minimap')
+  await expect(minimap).toBeVisible({ timeout: 30_000 })
+  await expect(minimap.locator('.leaflet-container')).toBeVisible()
+  await expect(page.getByTestId('sim-minimap-arrow')).toBeVisible()
+
+  // Tapping it hands the aircraft to the Map, which focuses it.
+  await page.getByTestId('sim-minimap-open').click()
+  await expect(page).toHaveURL(/\/map/)
+  await expect(page.getByTestId('map-focus-follow')).toContainText('Following')
+})
