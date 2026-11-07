@@ -1,5 +1,8 @@
 import { ApiClient, ApiError } from "@/api/client";
+import { ensureFreshAccessToken } from "@/auth/refresh";
 import { resetClientLog } from "@/api/clientLog";
+
+jest.mock("@/auth/refresh", () => ({ ensureFreshAccessToken: jest.fn() }));
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -124,5 +127,20 @@ describe("ApiClient", () => {
     const res = await client.airports(58.2, 8.08, 150);
     expect(url).toBe("http://x/api/airports?lat=58.2&lon=8.08&radiusKm=150");
     expect(res.airports).toEqual([]);
+  });
+
+  it("by default sends the refreshed token, not the stale stored one", async () => {
+    // Regression: the client read the stored token as-is, so after the access-token lifetime REST
+    // calls got 401 while the (refreshing) hub still said connected.
+    jest.mocked(ensureFreshAccessToken).mockResolvedValue("fresh-token");
+    let auth: string | null = null;
+    const fetchImpl = (async (_u: string, init?: RequestInit) => {
+      auth = new Headers(init?.headers).get("Authorization");
+      return jsonResponse({ fetchedAt: "2026-01-01T00:00:00Z", airports: [] });
+    }) as unknown as typeof fetch;
+    const client = new ApiClient({ baseUrl: "http://x", fetchImpl });
+    await client.airports(59.86, 10.53, 150);
+    expect(ensureFreshAccessToken).toHaveBeenCalled();
+    expect(auth).toBe("Bearer fresh-token");
   });
 });

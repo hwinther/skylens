@@ -21,6 +21,7 @@ import { useObserverStore } from "@/state/observerStore";
 import { SIM_RADIUS_KM, useSimStore } from "@/state/simStore";
 import { getApiBaseUrl } from "@/api/config";
 import { useLiveFeed, useObserverLocation } from "@/components";
+import { ApiIssueBanner } from "@/components/ApiIssueBanner";
 
 // On web, the OAuth popup redirects back to /oauth inside this same single-page bundle;
 // this posts the auth response to the opener and dismisses the popup. No-op on native
@@ -141,6 +142,8 @@ export default function RootLayout() {
           {/* The simulator is full-screen, so it also drops the tab bar itself. */}
           <Tabs.Screen name="sim" options={{ ...HIDDEN_ROUTE, tabBarStyle: { display: "none" } }} />
         </Tabs>
+        {/* Failed REST calls (expired session, server error, offline) shown above every tab. */}
+        <ApiIssueBanner />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
