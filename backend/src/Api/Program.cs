@@ -137,7 +137,10 @@ if (corsOrigins.Length > 0)
             policy.WithOrigins(corsOrigins)
                   .AllowAnyHeader()
                   .AllowAnyMethod()
-                  .AllowCredentials()));
+                  .AllowCredentials()
+                  // Cross-origin JS can only read the API marker if it's exposed; without it the
+                  // client took every failure for an edge block (see the X-Skylens-Api middleware).
+                  .WithExposedHeaders("X-Skylens-Api")));
 
 // -- Core state + ingest -----------------------------------------------------------------------
 builder.Services.AddSingleton(TimeProvider.System);

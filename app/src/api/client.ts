@@ -1,12 +1,14 @@
 /**
- * Typed fetch client for the skylens backend. Injects the bearer token from the
- * in-memory token store on every request and throws a typed ApiError on non-2xx.
+ * Typed fetch client for the skylens backend. Injects a bearer token on every request (refreshed
+ * first when it is expired or about to expire, the same single-flight refresh the SignalR hub uses)
+ * and throws a typed ApiError on non-2xx.
  *
  * The base URL comes from expo-constants extra / env so demo (LAN backend) and
  * production (skylens.wsh.no) can differ without code changes.
  */
 
-import { getAccessTokenSync } from "@/auth/tokenStore";
+import { ensureFreshAccessToken } from "@/auth/refresh";
+import { useApiIssueStore } from "@/state/apiIssueStore";
 import { flushClientLog, reportClientFailure } from "./clientLog";
 import type {
   AircraftDetail,
@@ -40,20 +42,24 @@ export class ApiError extends Error {
 export interface ApiClientConfig {
   /** Base URL, e.g. "https://skylens.wsh.no" or "http://10.20.13.100:8080". */
   baseUrl: string;
-  /** Override the token source (defaults to the secure token store). */
-  getToken?: () => string | null;
+  /**
+   * Override the token source. Defaults to ensureFreshAccessToken: reading the stored token as-is
+   * sent an expired one after the access-token lifetime, so REST calls (airports, ports, satellites)
+   * got 401 while the hub, which refreshes, still showed connected.
+   */
+  getToken?: () => string | null | Promise<string | null>;
   /** Injectable fetch for tests. */
   fetchImpl?: typeof fetch;
 }
 
 export class ApiClient {
   private readonly baseUrl: string;
-  private readonly getToken: () => string | null;
+  private readonly getToken: () => string | null | Promise<string | null>;
   private readonly fetchImpl: typeof fetch;
 
   constructor(config: ApiClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/+$/, "");
-    this.getToken = config.getToken ?? getAccessTokenSync;
+    this.getToken = config.getToken ?? ensureFreshAccessToken;
     // Bind to the global: browser fetch throws "Illegal invocation" if called with a `this` other
     // than the Window, which happens when we store and call it as this.fetchImpl(...). (RN's fetch
     // doesn't care, so this only bit on web.)
@@ -61,7 +67,7 @@ export class ApiClient {
   }
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
-    const token = this.getToken();
+    const token = await this.getToken();
     const headers = new Headers(init?.headers);
     headers.set("Accept", "application/json");
     if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -74,6 +80,7 @@ export class ApiClient {
     } catch (err) {
       // No response at all (network drop / TLS reset — a dropped edge block looks like this too).
       reportClientFailure({ method, endpoint: path, status: null, edgeMarkerPresent: false, detail: String(err) });
+      useApiIssueStore.getState().report(path, null, false);
       throw err;
     }
 
@@ -99,11 +106,14 @@ export class ApiClient {
           detail: typeof body === "string" ? body.slice(0, 200) : undefined,
         });
       }
+      // Surface the same incident-worthy failures to the user (ApiIssueBanner); routine 4xx stay quiet.
+      useApiIssueStore.getState().report(path, res.status, reachedBackend);
       throw new ApiError(res.status, `${method} ${path} → ${res.status}`, body, !reachedBackend);
     }
 
     // A success reached the backend → a good moment to flush any buffered failures (piggyback).
     void flushClientLog(this.baseUrl, this.fetchImpl);
+    useApiIssueStore.getState().succeeded(path);
 
     if (res.status === 204) return undefined as T;
     return (await res.json()) as T;

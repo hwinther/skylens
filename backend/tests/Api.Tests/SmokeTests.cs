@@ -654,6 +654,21 @@ public sealed class SmokeTests
         Assert.Equal(HttpStatusCode.NoContent, resp.StatusCode);
     }
 
+    [Fact]
+    public async Task Cors_exposes_the_api_marker_header_to_cross_origin_scripts()
+    {
+        // Without Access-Control-Expose-Headers the web client (cross-origin in dev / source-mode E2E)
+        // can't read X-Skylens-Api, so it took every failure — a plain 401 included — for an edge block.
+        using var client = _authFactory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/version");
+        request.Headers.Add("Origin", "http://localhost:8081");
+
+        using var resp = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.True(resp.Headers.TryGetValues("Access-Control-Expose-Headers", out var exposed));
+        Assert.Contains("X-Skylens-Api", string.Join(",", exposed));
+    }
+
     public sealed class SkylensFactory : WebApplicationFactory<Program>
     {
         protected override IHost CreateHost(IHostBuilder builder)
