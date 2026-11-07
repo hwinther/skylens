@@ -92,6 +92,11 @@ COPY --from=aircraftdb /out/aircraft.csv.gz /app/data/aircraft.csv.gz
 COPY --from=airportsdb /out/airports.csv.gz /app/data/airports.csv.gz
 COPY --from=airportsdb /out/runways.csv.gz /app/data/runways.csv.gz
 COPY --from=airportsdb /out/airport-frequencies.csv.gz /app/data/airport-frequencies.csv.gz
+# appsettings.Development.json points the airports at test fixtures that aren't in the image, which left
+# the airports layer empty in the Development-mode preview/e2e containers. Env vars win over it.
+ENV Airports__AirportsPath=/app/data/airports.csv.gz
+ENV Airports__RunwaysPath=/app/data/runways.csv.gz
+ENV Airports__FrequenciesPath=/app/data/airport-frequencies.csv.gz
 # Public ADS-B capture replayed by Mqtt__Replay + Mqtt__ReplayFile in preview/e2e envs (never in prod;
 # replay is gated on Development). ADS-B is broadcast data, so committing/baking the capture is fine.
 COPY backend/tests/Api.Tests/fixtures/aircraft.json /app/fixtures/aircraft.json
