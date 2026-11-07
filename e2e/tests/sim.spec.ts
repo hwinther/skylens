@@ -88,7 +88,13 @@ test('the minimap follows the object and opens the full map', async ({ page }) =
   await expect(page.getByTestId('map-focus-follow')).toContainText('Following')
 })
 
+/**
+ * Opens the cockpit view of the first aircraft with the Esri imagery/terrain blocked: these tests are
+ * about the look-around HUD, and in CI's software WebGL the tile decoding starved the main thread so
+ * much that mouse input timed out. The globe still renders (plain), the camera still follows.
+ */
 async function openAircraftCockpit(page: Page) {
+  await page.route(/arcgis(online)?\.com/, (route) => route.abort())
   await page.goto('/list')
   const row = page.locator('[data-testid^="list-ac-"]').first()
   await expect(row).toBeVisible({ timeout: 30_000 })
@@ -105,13 +111,15 @@ test('looking around shows where straight ahead is, and Recenter snaps back', as
   await expect(forward).toHaveAttribute('data-onscreen', 'true', { timeout: 30_000 })
   await expect(page.getByTestId('sim-recenter')).toHaveCount(0)
 
-  // Drag far to the left = look right, past the edge of the view.
-  const box = (await page.getByTestId('sim-view').boundingBox())!
-  const y = box.y + box.height / 2
-  await page.mouse.move(box.x + box.width * 0.8, y)
-  await page.mouse.down()
-  for (let i = 1; i <= 10; i++) await page.mouse.move(box.x + box.width * 0.8 - i * 80, y)
-  await page.mouse.up()
+  // Drag 800 px to the left = look right, past the edge of the view. Dispatched straight to the view:
+  // the same pointer handlers, without waiting for input acks from a busy WebGL page.
+  await page.getByTestId('sim-view').evaluate((el) => {
+    const send = (type: string, x: number) =>
+      el.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: 300, pointerId: 1, bubbles: true }))
+    send('pointerdown', 1000)
+    for (let x = 920; x >= 200; x -= 80) send('pointermove', x)
+    send('pointerup', 200)
+  })
 
   await expect(page.getByTestId('sim-look-offset')).toHaveText(/\d+° right/)
   // 800 px × 0.15°/px = 120° right: straight ahead is behind-left, so the marker is an edge arrow.
@@ -128,7 +136,10 @@ test.describe('on a phone', () => {
     hasTouch: true,
     viewport: { width: 412, height: 860 },
     // Chromium gates DeviceOrientation behind these (the in-app request resolves 'denied' without them).
-    permissions: ['accelerometer', 'gyroscope', 'magnetometer'],
+    // `permissions` replaces the config's list, so geolocation is repeated: in container mode the app
+    // has no baked home position and shows no traffic without it.
+    permissions: ['geolocation', 'accelerometer', 'gyroscope', 'magnetometer'],
+    geolocation: { latitude: 59.9, longitude: 11.1 },
   })
 
   test('Pan/tilt aims the cockpit view with the device and Recenter resets it', async ({ page }) => {
