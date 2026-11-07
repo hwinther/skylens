@@ -97,6 +97,11 @@ COPY --from=airportsdb /out/airport-frequencies.csv.gz /app/data/airport-frequen
 ENV Airports__AirportsPath=/app/data/airports.csv.gz
 ENV Airports__RunwaysPath=/app/data/runways.csv.gz
 ENV Airports__FrequenciesPath=/app/data/airport-frequencies.csv.gz
+# Ports (OpenStreetMap for Norway, ODbL + World Port Index elsewhere), committed by
+# data/ports/extract-osm-ports.mjs. The env var wins
+# over appsettings.Development.json, so preview/e2e containers (Development) load it too.
+COPY data/ports/ports.csv.gz /app/data/ports.csv.gz
+ENV Ports__PortsPath=/app/data/ports.csv.gz
 # Public ADS-B capture replayed by Mqtt__Replay + Mqtt__ReplayFile in preview/e2e envs (never in prod;
 # replay is gated on Development). ADS-B is broadcast data, so committing/baking the capture is fine.
 COPY backend/tests/Api.Tests/fixtures/aircraft.json /app/fixtures/aircraft.json

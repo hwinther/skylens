@@ -352,6 +352,20 @@ public static class ApiEndpoints
                    })
            .WithName("Airports");
 
+        // GET /api/ports?lat=&lon=&radiusKm= — harbours, marinas, ferry terminals and port areas from the
+        // bundled extract (OpenStreetMap for Norway + World Port Index elsewhere), nearest-first, capped at 500. radiusKm is clamped to
+        // [1, 500] (default 150). Offline like /api/airports, so it stays on the group's "global" limit.
+        // The response carries the ODbL attribution the client must display with the data.
+        api.MapGet("/ports",
+                   Ok<PortsResponse> (PortDbService ports, TimeProvider time,
+                                      double lat, double lon, double? radiusKm) =>
+                   {
+                       var r = Math.Clamp(radiusKm ?? 150, 1, 500);
+                       var near = ports.Nearby(lat, lon, r, 500);
+                       return TypedResults.Ok(new PortsResponse(time.GetUtcNow(), near, PortDbService.Attribution));
+                   })
+           .WithName("Ports");
+
         return app;
     }
 

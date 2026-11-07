@@ -532,6 +532,40 @@ public sealed class SmokeTests
     }
 
     [Fact]
+    public async Task Api_ports_requires_authentication()
+    {
+        using var client = _factory.CreateClient();
+
+        using var resp = await client.GetAsync("/api/ports?lat=59.9&lon=10.7", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task Api_ports_returns_nearby_ports_with_the_osm_attribution_when_authenticated()
+    {
+        using var client = _authFactory.CreateClient();
+
+        // Development reads the committed OpenStreetMap extract (data/ports/ports.csv.gz). Await the
+        // background load so the assertion isn't racing the parse.
+        var db = _authFactory.Services.GetRequiredService<Skylens.Api.Enrichment.PortDbService>();
+        if (db.LoadTask is { } load)
+            await load;
+
+        using var resp = await client.GetAsync(
+            "/api/ports?lat=59.906&lon=10.74&radiusKm=5", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        var root = doc.RootElement;
+        Assert.Equal(Skylens.Api.Enrichment.PortDbService.Attribution, root.GetProperty("attribution").GetString());
+        var ports = root.GetProperty("ports");
+        Assert.True(ports.GetArrayLength() > 0, "central Oslo should have harbours / ferry quays");
+        foreach (var p in ports.EnumerateArray())
+            Assert.Contains(p.GetProperty("kind").GetString(), new[] { "port", "harbour", "marina", "ferry" });
+    }
+
+    [Fact]
     public async Task Healthz_includes_the_airport_fields()
     {
         // The airports vertical extends healthz ADDITIVELY, like the AIS and satellite fields. On

@@ -81,6 +81,24 @@ export type AirportsResponse = Omit<
   "airports"
 > & { airports: AirportDto[] };
 
+/**
+ * Ports layer (bundled OpenStreetMap extract for Norway): one harbour / marina / ferry quay / port area.
+ * `id`/`kind`/`lat`/`lon` are tightened like the airport DTO (always set; the generator marks them optional).
+ */
+export type PortKind = "port" | "harbour" | "marina" | "ferry";
+export type PortDto = Omit<Schemas["Skylens.Api.Enrichment.PortDto"], "id" | "kind" | "lat" | "lon"> & {
+  id: string;
+  kind: PortKind;
+  lat: number;
+  lon: number;
+};
+
+/** GET /api/ports — nearby ports (nearest-first) + the ODbL attribution to show with them. */
+export type PortsResponse = Omit<Schemas["Skylens.Api.Enrichment.PortsResponse"], "ports" | "attribution"> & {
+  ports: PortDto[];
+  attribution: string;
+};
+
 /** GET /api/aircraft/{hex}/route — AeroAPI route by callsign. */
 export type RouteResponse = Schemas["Skylens.Api.Enrichment.FlightRoute"];
 

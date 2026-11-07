@@ -260,6 +260,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["Ports"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -429,6 +445,21 @@ export interface components {
             MEAN_MOTION_DOT?: number;
             /** Format: double */
             MEAN_MOTION_DDOT?: number;
+        };
+        "Skylens.Api.Enrichment.PortDto": {
+            id?: string | null;
+            kind?: string | null;
+            name?: string | null;
+            /** Format: double */
+            lat?: number;
+            /** Format: double */
+            lon?: number;
+        };
+        "Skylens.Api.Enrichment.PortsResponse": {
+            /** Format: date-time */
+            fetchedAt?: string;
+            ports?: components["schemas"]["Skylens.Api.Enrichment.PortDto"][] | null;
+            attribution?: string | null;
         };
         "Skylens.Api.Enrichment.RunwayDto": {
             leIdent?: string | null;
@@ -942,6 +973,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Skylens.Api.Enrichment.AirportsResponse"];
+                };
+            };
+        };
+    };
+    Ports: {
+        parameters: {
+            query: {
+                lat: number;
+                lon: number;
+                radiusKm?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Skylens.Api.Enrichment.PortsResponse"];
                 };
             };
         };

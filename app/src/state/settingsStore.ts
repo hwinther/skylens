@@ -39,6 +39,8 @@ interface SettingsState {
   showAirports: boolean;
   /** Include the smaller fields (small airports / heliports / seaplane bases); large + medium always show. */
   showSmallAirfields: boolean;
+  /** Show harbours, marinas, ferry quays and ports as reference points on the map. */
+  showPorts: boolean;
   /** Draw the orbital (satellite) pass in the AR overlay. */
   showSatellites: boolean;
   /** Include the crewed "stations" + "amateur" satellite groups. */
@@ -78,6 +80,7 @@ interface SettingsState {
   setShowCourseVectors: (on: boolean) => void;
   setShowAirports: (on: boolean) => void;
   setShowSmallAirfields: (on: boolean) => void;
+  setShowPorts: (on: boolean) => void;
   setShowSatellites: (on: boolean) => void;
   setSatAmateurStations: (on: boolean) => void;
   setSatWeather: (on: boolean) => void;
@@ -178,6 +181,8 @@ export const useSettingsStore = create<SettingsState>()(
       // a second toggle (large + medium airports always show while showAirports is on).
       showAirports: true,
       showSmallAirfields: true,
+      // Ports are baked reference data like airports, so on by default.
+      showPorts: true,
       showSatellites: true,
       satAmateurStations: true,
       satWeather: true,
@@ -207,6 +212,7 @@ export const useSettingsStore = create<SettingsState>()(
       setShowCourseVectors: (showCourseVectors) => set({ showCourseVectors }),
       setShowAirports: (showAirports) => set({ showAirports }),
       setShowSmallAirfields: (showSmallAirfields) => set({ showSmallAirfields }),
+      setShowPorts: (showPorts) => set({ showPorts }),
       setShowSatellites: (showSatellites) => set({ showSatellites }),
       setSatAmateurStations: (satAmateurStations) => set({ satAmateurStations }),
       setSatWeather: (satWeather) => set({ satWeather }),
