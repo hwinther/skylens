@@ -7,7 +7,8 @@
 
 import { color } from "@/theme";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { awaySourceCredit, creditText } from "./awaySource";
 import { Sheet } from "./Sheet";
 import { ShowOnMapButton } from "./ShowOnMapButton";
 import { SimulatorButton } from "./SimulatorButton";
@@ -27,10 +28,12 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
   const [loading, setLoading] = useState(false);
   const [routeLoading, setRouteLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Away-mode aircraft (adsb.lol / ADSBx) aren't in the backend's own-feed store, so the detail
+  // Away-mode aircraft (adsb.lol / airplanes.live / adsb.fi / ADSBx) aren't in the backend's own-feed store, so the detail
   // response carries metadata only; fall back to the live snapshot entry for the state fields.
   const live = useAircraftStore((s) => (hex ? s.byHex[hex] : undefined));
   const state = detail?.state ?? live ?? null;
+  // Away-mode traffic carries its aggregator in `src`; credit it (adsb.fi's terms require a link).
+  const credit = awaySourceCredit(state?.src);
 
   useEffect(() => {
     setDetail(null);
@@ -94,7 +97,7 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
               label="Ground speed"
               value={state?.gs != null ? `${Math.round(state.gs)} kt` : null}
             />
-            <Row label="Source" value={state?.src ?? detail.metadata?.source} />
+            <Row label="Source" value={credit?.name ?? state?.src ?? detail.metadata?.source} />
 
             {!route && (
               <Pressable style={styles.routeBtn} onPress={loadRoute} disabled={routeLoading}>
@@ -138,8 +141,10 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
           />
         )}
 
-        {state?.src === "adsblol" && (
-          <Text style={styles.attribution}>Away-mode traffic: adsb.lol (ODbL)</Text>
+        {credit && (
+          <Pressable testID="detail-source-credit" onPress={() => void Linking.openURL(credit.url)}>
+            <Text style={styles.attribution}>{creditText(credit)}</Text>
+          </Pressable>
         )}
     </Sheet>
   );
@@ -171,5 +176,5 @@ const styles = StyleSheet.create({
   route: { marginTop: 12 },
   routeText: { color: color.text, fontSize: 16, fontWeight: "600" },
   routeSub: { color: color.textDim, fontSize: 12, marginTop: 2 },
-  attribution: { color: color.textMuted, fontSize: 11, marginTop: 12 },
+  attribution: { color: color.textMuted, fontSize: 11, marginTop: 12, textDecorationLine: "underline" },
 });

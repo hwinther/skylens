@@ -13,7 +13,9 @@ events, airports, and fishing layers.
 The backend consumes live ADS-B and AIS MQTT feeds, keeps state in memory, streams slim snapshots
 over a SignalR hub (~1 Hz), and enriches on demand from OpenSky / FlightAware AeroAPI behind caches
 and per-provider budgets. Viewers outside the home feed's range get away-mode traffic from adsb.lol
-(free), with ADS-B Exchange as an optional paid fallback (vessels: BarentsWatch). Auth is Authelia
+(free), then adsb.fi (free; airplanes.live is wired but off until they grant access), with ADS-B
+Exchange as an optional paid last resort (vessels: BarentsWatch for Norway, then the aisstream.io
+WebSocket stream elsewhere when `AisStream:ApiKey` is set). Auth is Authelia
 OIDC + PKCE; the backend validates the RFC 9068 JWT with audience `skylens-api`.
 
 ## Layout
@@ -72,7 +74,12 @@ npm run test:ci                   # container mode against docker-compose.e2e.ym
   (hosted services; also prune stale entries) → `Broadcast/SnapshotBroadcaster` / `VesselBroadcaster`
   push per-viewer filtered DTOs to `Hubs/AircraftHub` (`/hubs/aircraft`). `ViewerRegistry` tracks
   each subscriber's centre/radius; viewers outside the own-feed range are served from
-  `AwayModeChain` (adsb.lol → ADSBx). `/healthz` degrades if no MQTT message arrives for 30 s.
+  `AwayModeChain` (adsb.lol → airplanes.live → adsb.fi → ADSBx; all `ReadsbPointSource`s sharing the
+  0.5° cell cache). New providers must also be disabled in `docker-compose.e2e.yml`,
+  `e2e/playwright.config.ts` and `deploy/components/preview` so replays never mix in live traffic. Vessels go
+  through `VesselAwayChain` (BarentsWatch → `AisStreamClient`); unlike the aircraft chain an empty answer
+  also falls through, since BarentsWatch answers empty outside Norway. `AisStreamClient` is a hosted
+  service holding one socket, subscribed only to the 1° cells viewers asked about recently. `/healthz` degrades if no MQTT message arrives for 30 s.
 - **Enrichment** (`Enrichment/`): offline `AircraftDbService` / `AirportDbService` (CSV.gz baked into
   the image), with `MetadataService` falling back to OpenSky; every remote client goes through
   `EnrichmentCache` (single-flight) and `UpstreamBudget`.

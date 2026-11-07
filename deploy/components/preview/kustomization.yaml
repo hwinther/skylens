@@ -51,6 +51,14 @@ patches:
               value: "/app/fixtures/transmitters.json"
             - name: AdsbLol__Enabled
               value: "false"
+            # The free fallbacks behind adsb.lol would answer the moment it is off; keep previews on replay.
+            - name: AirplanesLive__Enabled
+              value: "false"
+            - name: AdsbFi__Enabled
+              value: "false"
+            # Global AIS stream: previews may share the prod Secret, so keep them on the replayed vessels.
+            - name: AisStream__Enabled
+              value: "false"
             # Centroid of the replay fixture's aircraft, rounded to one decimal (~11 km). Never put
             # precise home coordinates in this public repo.
             - name: FEED__LAT

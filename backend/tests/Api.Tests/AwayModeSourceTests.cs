@@ -11,7 +11,8 @@ using Xunit;
 namespace Skylens.Api.Tests;
 
 /// <summary>
-///     Exercises the aircraft away-mode sources (<see cref="AdsbLolClient" />, <see cref="AdsbxClient" />
+///     Exercises the aircraft away-mode sources (<see cref="AdsbLolClient" />, <see cref="AirplanesLiveClient" />,
+///     <see cref="AdsbFiClient" />, <see cref="AdsbxClient" />
 ///     via <see cref="ReadsbPointSource" />) and the <see cref="AwayModeChain" /> against a stubbed
 ///     <see cref="HttpMessageHandler" /> and a <see cref="FakeTimeProvider" />: cell-centre queries,
 ///     shared per-cell caching, failure caching, fail-closed budgets and provider fallback order.
@@ -50,6 +51,20 @@ public sealed class AwayModeSourceTests
             UpstreamBudget.Monthly(100, time),
             time,
             NullLogger<AdsbxClient>.Instance);
+
+    private static AirplanesLiveClient AirplanesLive(StubHandler handler, TimeProvider time, bool enabled = true) =>
+        new(new HttpClient(handler),
+            Microsoft.Extensions.Options.Options.Create(new AirplanesLiveOptions { Enabled = enabled, BaseUrl = "https://api.airplaneslive.test" }),
+            UpstreamBudget.Daily(100, time),
+            time,
+            NullLogger<AirplanesLiveClient>.Instance);
+
+    private static AdsbFiClient AdsbFi(StubHandler handler, TimeProvider time, bool enabled = true) =>
+        new(new HttpClient(handler),
+            Microsoft.Extensions.Options.Options.Create(new AdsbFiOptions { Enabled = enabled, BaseUrl = "https://opendata.adsbfi.test" }),
+            UpstreamBudget.Daily(100, time),
+            time,
+            NullLogger<AdsbFiClient>.Instance);
 
     // -- adsb.lol: request shape + mapping ------------------------------------------------------------
 
@@ -262,6 +277,78 @@ public sealed class AwayModeSourceTests
         Assert.Empty(handler.Requests);
     }
 
+    // -- Free fallbacks: airplanes.live, adsb.fi ------------------------------------------------------
+
+    [Fact]
+    public async Task AirplanesLive_and_AdsbFi_query_their_point_endpoints_and_tag_the_source()
+    {
+        var time = new FakeTimeProvider(T0);
+        var handler = new StubHandler { AdsbxBody = Body };
+
+        var live = await AirplanesLive(handler, time).GetAsync(ViewerLat, ViewerLon, 60, TestContext.Current.CancellationToken);
+        var fi = await AdsbFi(handler, time).GetAsync(ViewerLat, ViewerLon, 60, TestContext.Current.CancellationToken);
+
+        Assert.Equal("airplaneslive", Assert.Single(live.Aircraft).Src);
+        Assert.Equal("adsbfi", Assert.Single(fi.Aircraft).Src);
+        Assert.Contains(handler.Requests, u => u.StartsWith("https://api.airplaneslive.test/v2/point/60.25/5.25/", StringComparison.Ordinal));
+        Assert.Contains(handler.Requests, u => u.StartsWith("https://opendata.adsbfi.test/api/v2/lat/60.25/lon/5.25/dist/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AdsbFi_list_under_aircraft_instead_of_ac_is_read()
+    {
+        // adsb.fi's v2 open-data endpoint names the list "aircraft" (checked against the live API).
+        var time = new FakeTimeProvider(T0);
+        var handler = new StubHandler { AdsbxBody = Body.Replace("{\"ac\":[", "{\"aircraft\":[", StringComparison.Ordinal) };
+
+        var result = await AdsbFi(handler, time).GetAsync(ViewerLat, ViewerLon, 60, TestContext.Current.CancellationToken);
+
+        Assert.Null(result.StatusReason);
+        Assert.Equal("4ac9e1", Assert.Single(result.Aircraft).Hex);
+    }
+
+    [Fact]
+    public async Task Chain_tries_the_free_providers_in_order_before_paid_adsbx()
+    {
+        var time = new FakeTimeProvider(T0);
+        var handler = new StubHandler
+        {
+            LolStatus = HttpStatusCode.BadGateway,
+            AdsbxBody = Body,
+            FailingHosts = ["airplaneslive.test"],
+        };
+        var chain = new AwayModeChain(
+            [Lol(handler, time), AirplanesLive(handler, time), AdsbFi(handler, time), Adsbx(handler, time)]);
+
+        var result = await chain.GetAsync(ViewerLat, ViewerLon, 60, TestContext.Current.CancellationToken);
+
+        // adsb.lol and airplanes.live failed → adsb.fi answered, and the paid ADSBx was never asked.
+        Assert.Null(result.StatusReason);
+        Assert.Equal("adsbfi", Assert.Single(result.Aircraft).Src);
+        Assert.Equal(
+            ["adsblol.test", "airplaneslive.test", "adsbfi.test"],
+            handler.Requests.Select(u => new Uri(u).Host.Split('.', 2)[1]).ToArray());
+    }
+
+    [Fact]
+    public async Task Rate_limited_providers_space_requests_across_cells()
+    {
+        var time = new FakeTimeProvider(T0);
+        var handler = new StubHandler();
+        var fi = AdsbFi(handler, time);
+
+        await fi.GetAsync(ViewerLat, ViewerLon, 30, TestContext.Current.CancellationToken);
+        // A viewer in another cell: a second request inside the 1 req/s limit has to wait.
+        var second = fi.GetAsync(ViewerLat + 2, ViewerLon, 30, TestContext.Current.CancellationToken);
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+        Assert.False(second.IsCompleted);
+        Assert.Single(handler.Requests);
+
+        time.Advance(TimeSpan.FromMilliseconds(1100));
+        await second;
+        Assert.Equal(2, handler.Requests.Count);
+    }
+
     // -- Cell geometry --------------------------------------------------------------------------------
 
     [Theory]
@@ -290,6 +377,9 @@ public sealed class AwayModeSourceTests
         public string AdsbxBody { get; init; } = """{"ac":[]}""";
         public Task? Gate { get; init; }
 
+        /// <summary>Requests to these hosts (substring match) get a 502.</summary>
+        public string[] FailingHosts { get; init; } = [];
+
         public IReadOnlyList<string> Requests
         {
             get
@@ -308,7 +398,9 @@ public sealed class AwayModeSourceTests
                 await Gate;
 
             var lol = uri.Contains("adsblol.test", StringComparison.Ordinal);
-            var status = lol ? LolStatus : HttpStatusCode.OK;
+            var status = lol ? LolStatus
+                : FailingHosts.Any(h => uri.Contains(h, StringComparison.Ordinal)) ? HttpStatusCode.BadGateway
+                : HttpStatusCode.OK;
             return new HttpResponseMessage(status)
             {
                 Content = new StringContent(lol ? LolBody : AdsbxBody, Encoding.UTF8, "application/json"),

@@ -65,6 +65,11 @@ export default definePlaywrightConfig({
         Feed__Lon: HOME_LON,
         Feed__RadiusKm: '500',
         Cors__Origins: WEB_URL,
+        // No live away-mode traffic mixed into the replay (same as docker-compose.e2e.yml).
+        AdsbLol__Enabled: 'false',
+        AirplanesLive__Enabled: 'false',
+        AdsbFi__Enabled: 'false',
+        AisStream__Enabled: 'false',
       },
     },
     {

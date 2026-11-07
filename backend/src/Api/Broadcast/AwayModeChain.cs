@@ -4,7 +4,7 @@ namespace Skylens.Api.Broadcast;
 
 /// <summary>
 ///     The away-mode source the broadcaster and <c>/api/area</c> use: tries each configured provider in
-///     order (adsb.lol first, then ADSBx when a key is set) and returns the first that answers without a
+///     order (the free adsb.lol, airplanes.live and adsb.fi first, then ADSBx when a key is set) and returns the first that answers without a
 ///     status reason. When none can, the first configured provider's reason is surfaced (that's the
 ///     one the operator actually relies on); with nothing configured at all, "away-mode-unconfigured".
 /// </summary>

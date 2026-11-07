@@ -39,6 +39,10 @@ services:
       # No live away-mode traffic: adsb.lol is on by default and away mode also kicks in whenever the
       # own feed has zero matches, which would mix real aircraft into the replay assertions.
       AdsbLol__Enabled: "false"
+      # Same for the free fallbacks behind it (they'd answer the moment adsb.lol is off).
+      AirplanesLive__Enabled: "false"
+      AdsbFi__Enabled: "false"
+      AisStream__Enabled: "false"
       # MqttIngestService returns early when Mqtt:Host is empty even in replay mode; any non-empty
       # placeholder keeps the ingest loop alive (no broker named "replay" is ever contacted).
       Mqtt__Host: replay

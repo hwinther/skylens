@@ -95,9 +95,11 @@ export function VesselDetailSheet({ mmsi, vessel, onClose }: VesselDetailSheetPr
     registerOwner != null ||
     registerType != null ||
     registerLength != null;
-  // Attribution credits the AIS source, BarentsWatch enrichment, and the ship register when any is present.
+  // Attribution credits the AIS source (aisstream.io for global away-mode traffic), BarentsWatch
+  // enrichment, and the ship register when any is present.
+  const viaAisStream = (vessel?.src ?? detail?.state?.src) === "aisstream";
   const attribution = [
-    fromBarentsWatch ? "AIS · Enriched via BarentsWatch (NLOD)" : "AIS",
+    viaAisStream ? "AIS via aisstream.io" : fromBarentsWatch ? "AIS · Enriched via BarentsWatch (NLOD)" : "AIS",
     hasRegister ? "Ship register: Norwegian Maritime Authority (NOR/NIS)" : null,
   ]
     .filter(Boolean)

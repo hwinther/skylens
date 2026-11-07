@@ -30,6 +30,9 @@ builder.Services.AddOptions<FeedOptions>().Bind(configuration.GetSection(FeedOpt
 builder.Services.AddOptions<OpenSkyOptions>().Bind(configuration.GetSection(OpenSkyOptions.SectionName));
 builder.Services.AddOptions<AdsbxOptions>().Bind(configuration.GetSection(AdsbxOptions.SectionName));
 builder.Services.AddOptions<AdsbLolOptions>().Bind(configuration.GetSection(AdsbLolOptions.SectionName));
+builder.Services.AddOptions<AirplanesLiveOptions>().Bind(configuration.GetSection(AirplanesLiveOptions.SectionName));
+builder.Services.AddOptions<AdsbFiOptions>().Bind(configuration.GetSection(AdsbFiOptions.SectionName));
+builder.Services.AddOptions<AisStreamOptions>().Bind(configuration.GetSection(AisStreamOptions.SectionName));
 builder.Services.AddOptions<AeroApiOptions>().Bind(configuration.GetSection(AeroApiOptions.SectionName));
 builder.Services.AddOptions<AircraftDbOptions>().Bind(configuration.GetSection(AircraftDbOptions.SectionName));
 builder.Services.AddOptions<AirportsOptions>().Bind(configuration.GetSection(AirportsOptions.SectionName));
@@ -193,6 +196,14 @@ builder.Services.AddKeyedSingleton("adsblol", static (sp, _) =>
     UpstreamBudget.Daily(
         sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AdsbLolOptions>>().Value.DailyBudget,
         sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddKeyedSingleton("airplaneslive", static (sp, _) =>
+    UpstreamBudget.Daily(
+        sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AirplanesLiveOptions>>().Value.DailyBudget,
+        sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddKeyedSingleton("adsbfi", static (sp, _) =>
+    UpstreamBudget.Daily(
+        sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AdsbFiOptions>>().Value.DailyBudget,
+        sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddKeyedSingleton("aeroapi", static (sp, _) =>
     UpstreamBudget.Daily(
         sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AeroApiOptions>>().Value.DailyBudget,
@@ -228,6 +239,8 @@ static void LongLived(IHttpClientBuilder client) =>
 LongLived(builder.Services.AddHttpClient<OpenSkyMetadataClient>());
 LongLived(builder.Services.AddHttpClient<AdsbxClient>());
 LongLived(builder.Services.AddHttpClient<AdsbLolClient>(static client => client.Timeout = TimeSpan.FromSeconds(10)));
+LongLived(builder.Services.AddHttpClient<AirplanesLiveClient>(static client => client.Timeout = TimeSpan.FromSeconds(10)));
+LongLived(builder.Services.AddHttpClient<AdsbFiClient>(static client => client.Timeout = TimeSpan.FromSeconds(10)));
 LongLived(builder.Services.AddHttpClient<AeroApiClient>());
 LongLived(builder.Services.AddHttpClient<BarentsWatchClient>());
 builder.Services.AddSingleton<MetadataService>();
@@ -255,16 +268,25 @@ builder.Services.AddSingleton<SatNogsClient>();
 builder.Services.AddHttpClient("fiskinfo", client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddSingleton<FiskInfoClient>();
 
-// The away-mode source the broadcaster and /api/area consume: adsb.lol (free) first, ADSBx (paid, only
-// with a RapidAPI key) as fallback. HttpClient-typed clients are registered transient, so the chain is
+// The away-mode source the broadcaster and /api/area consume: the free, keyless providers first (adsb.lol,
+// then airplanes.live, then adsb.fi), ADSBx (paid, only with a RapidAPI key) as the last resort. HttpClient-typed clients are registered transient, so the chain is
 // the singleton that holds one instance of each, which is what keeps their per-cell caches shared.
 builder.Services.AddSingleton<IAwayModeSource>(static sp => new AwayModeChain(
 [
     sp.GetRequiredService<AdsbLolClient>(),
+    sp.GetRequiredService<AirplanesLiveClient>(),
+    sp.GetRequiredService<AdsbFiClient>(),
     sp.GetRequiredService<AdsbxClient>(),
 ]));
-// Vessel away-mode is the BarentsWatch client (same transient-typed-client resolve pattern as ADSBx).
-builder.Services.AddSingleton<IVesselAwayModeSource>(static sp => sp.GetRequiredService<BarentsWatchClient>());
+// Vessel away-mode: BarentsWatch (Norway) first, then the aisstream.io stream for everywhere else. The
+// aisstream client is a hosted singleton (one WebSocket + store), idle until a viewer needs it.
+builder.Services.AddSingleton<AisStreamClient>();
+builder.Services.AddHostedService(static sp => sp.GetRequiredService<AisStreamClient>());
+builder.Services.AddSingleton<IVesselAwayModeSource>(static sp => new VesselAwayChain(
+[
+    sp.GetRequiredService<BarentsWatchClient>(),
+    sp.GetRequiredService<AisStreamClient>(),
+]));
 
 // -- Observability -----------------------------------------------------------------------------
 const string serviceName = "Skylens.Api";

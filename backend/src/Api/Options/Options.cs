@@ -126,6 +126,47 @@ public sealed class AdsbLolOptions
     public int DailyBudget { get; set; } = 40000;
 }
 
+/// <summary>
+///     airplanes.live point-radius (free for non-commercial use, 1 req/s). OFF by default: the API answers
+///     403 "Please contact us" until access is granted (checked 2026-11), so enable it only once they have
+///     approved the project. Then it is the first free fallback behind adsb.lol. DailyBudget fails closed.
+/// </summary>
+public sealed class AirplanesLiveOptions
+{
+    public const string SectionName = "AirplanesLive";
+
+    public bool Enabled { get; set; }
+    public string BaseUrl { get; set; } = "https://api.airplanes.live";
+    public int DailyBudget { get; set; } = 10000;
+}
+
+/// <summary>
+///     adsb.fi open data point-radius (free, keyless, personal non-commercial use, 1 req/s, must be cited
+///     with a link). Second free fallback. DailyBudget fails closed.
+/// </summary>
+public sealed class AdsbFiOptions
+{
+    public const string SectionName = "AdsbFi";
+
+    public bool Enabled { get; set; } = true;
+    public string BaseUrl { get; set; } = "https://opendata.adsb.fi";
+    public int DailyBudget { get; set; } = 10000;
+}
+
+/// <summary>
+///     aisstream.io global AIS stream (free, needs an API key from aisstream.io; beta upstream). Vessel
+///     away-mode outside BarentsWatch's Norwegian coverage. Off without a key. The key is a secret: it
+///     belongs in the skylens-secrets Kubernetes Secret (AisStream__ApiKey), never in git.
+/// </summary>
+public sealed class AisStreamOptions
+{
+    public const string SectionName = "AisStream";
+
+    public bool Enabled { get; set; } = true;
+    public string? ApiKey { get; set; }
+    public string Url { get; set; } = "wss://stream.aisstream.io/v0/stream";
+}
+
 /// <summary>FlightAware AeroAPI route lookups by callsign. DailyBudget fails closed.</summary>
 public sealed class AeroApiOptions
 {
