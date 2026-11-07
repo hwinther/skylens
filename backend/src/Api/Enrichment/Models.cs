@@ -16,6 +16,12 @@ public sealed record AircraftMetadata
 
     public string? Operator { get; init; }
 
+    /// <summary>
+    ///     Military aircraft per the tar1090-db <c>dbFlags</c> military bit (the flag tar1090 highlights,
+    ///     e.g. AWACS, tankers, transports). False when unknown (OpenSky fallback has no such flag).
+    /// </summary>
+    public bool Military { get; init; }
+
     /// <summary>Where this metadata came from: "db" (offline) or "opensky".</summary>
     public string Source { get; init; } = "db";
 }

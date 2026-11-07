@@ -363,6 +363,7 @@ export interface components {
             typeCode?: string | null;
             typeName?: string | null;
             operator?: string | null;
+            military?: boolean;
             source?: string | null;
         };
         "Skylens.Api.Enrichment.AirportDto": {
@@ -549,6 +550,7 @@ export interface components {
             /** Format: double */
             seenPos?: number | null;
             cat?: string | null;
+            mil?: boolean | null;
             src?: string | null;
         };
         "Skylens.Api.State.VesselDto": {

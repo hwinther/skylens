@@ -2,6 +2,7 @@ using Xunit;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Time.Testing;
 using Skylens.Api.Enrichment;
+using Skylens.Api.State;
 
 namespace Skylens.Api.Tests;
 
@@ -122,5 +123,49 @@ public sealed class AircraftDbServiceTests
         Assert.Equal("B738", map["4ca7b5"].TypeCode);
         Assert.Equal("BOEING 737-800", map["4ca7b5"].TypeName);
         Assert.Equal("db", map["4ca7b5"].Source);
+    }
+
+    [Fact]
+    public void ParseCsv_reads_the_military_bit_of_dbFlags()
+    {
+        // tar1090-db writes dbFlags as 0/1 characters: military, interesting, PIA, LADD.
+        using var reader = new StringReader(
+            """
+            4b7f4a;LX-N90442;E3TF;10;BOEING E-3A SENTRY;;;
+            3c6654;D-AIRY;A321;00;AIRBUS A-321;;;
+            abc123;N1;GLF5;0010;GULFSTREAM 5;;;
+            def456;N2;C172;;CESSNA 172;;;
+            """);
+
+        var map = AircraftDbService.ParseCsv(reader);
+
+        Assert.True(map["4b7f4a"].Military);
+        Assert.False(map["3c6654"].Military);
+        Assert.False(map["abc123"].Military); // PIA, not military
+        Assert.False(map["def456"].Military); // blank flags
+    }
+
+    [Fact]
+    public void Dto_omits_mil_unless_military_and_the_broadcast_filter_sets_it()
+    {
+        var states = new[]
+        {
+            new AircraftState { Hex = "4b7f4a", Lat = 59.9, Lon = 10.7 },
+            new AircraftState { Hex = "3c6654", Lat = 59.9, Lon = 10.8 },
+        };
+        var dtos = Skylens.Api.Broadcast.SnapshotBroadcaster.FilterOwnFeed(
+            states, 59.9, 10.75, 50, hex => hex == "4b7f4a");
+
+        Assert.True(dtos.Single(d => d.Hex == "4b7f4a").Mil);
+        Assert.Null(dtos.Single(d => d.Hex == "3c6654").Mil);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(dtos, new System.Text.Json.JsonSerializerOptions
+        {
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+        });
+        // Exactly one "mil" in the payload: civil aircraft don't pay a byte for the new field.
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(json, "\"mil\":"));
+        Assert.Contains("\"mil\":true", json);
+        // Away-mode DTOs serialize the same way (the attribute is on the record, not the mapper).
     }
 }

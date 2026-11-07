@@ -147,6 +147,8 @@ public abstract class ReadsbPointSource : IAwayModeSource
                 Seen = a.Seen,
                 SeenPos = a.SeenPos,
                 Cat = a.Category,
+                // readsb dbFlags bitmask: 1 = military (2 interesting, 4 PIA, 8 LADD).
+                Mil = (a.DbFlags & 1) == 1 ? true : null,
                 Src = SourceTag,
             });
         }
@@ -211,5 +213,6 @@ public abstract class ReadsbPointSource : IAwayModeSource
         [property: JsonPropertyName("baro_rate")] int? BaroRate,
         [property: JsonPropertyName("category")] string? Category,
         [property: JsonPropertyName("seen")] double? Seen,
-        [property: JsonPropertyName("seen_pos")] double? SeenPos);
+        [property: JsonPropertyName("seen_pos")] double? SeenPos,
+        [property: JsonPropertyName("dbFlags")] int? DbFlags);
 }

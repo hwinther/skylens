@@ -844,6 +844,9 @@
             "type": "string",
             "nullable": true
           },
+          "military": {
+            "type": "boolean"
+          },
           "source": {
             "type": "string",
             "nullable": true
@@ -1406,6 +1409,10 @@
           },
           "cat": {
             "type": "string",
+            "nullable": true
+          },
+          "mil": {
+            "type": "boolean",
             "nullable": true
           },
           "src": {

@@ -21,7 +21,7 @@ import {
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { AircraftDto, AirportDto, FishingZone, LostGear, PortDto, VesselDto } from "@/api/types";
 import { PORT_COLOR, PORT_GLYPH, portGlyphSize, portSubtitle, portTitle } from "./portStyle";
-import { iconForCategory } from "@/components/aircraftIcon";
+import { aircraftAccent, iconForCategory } from "@/components/aircraftIcon";
 import { iconForVessel } from "@/components/vesselIcon";
 import { lineLatLngs, pointLatLng, polygonRings, type GeoGeometry, type LatLngTuple } from "./geojson";
 import { FOCUS_ZOOM, type FocusTarget } from "./focus";
@@ -94,13 +94,13 @@ export interface LeafletMapProps {
 const iconFont = (MaterialCommunityIcons as unknown as { getFontFamily(): string }).getFontFamily();
 const glyphMap = (MaterialCommunityIcons as unknown as { getRawGlyphMap(): Record<string, number> }).getRawGlyphMap();
 
-/** Marker showing the aircraft's type icon (plane / helicopter / balloon / …). */
-function aircraftIcon(cat: string | null | undefined): L.DivIcon {
-  const code = glyphMap[iconForCategory(cat)];
+/** Marker showing the aircraft's type icon (plane / helicopter / balloon / …), orange when military. */
+function aircraftIcon(a: AircraftDto): L.DivIcon {
+  const code = glyphMap[iconForCategory(a.cat)];
   const glyph = code != null ? String.fromCodePoint(code) : "";
   return L.divIcon({
     className: "",
-    html: `<span style="font-family:'${iconFont}';font-size:20px;line-height:20px;color:#78C8FF;text-shadow:0 0 3px #000">${glyph}</span>`,
+    html: `<span${a.mil ? ` data-testid="map-mil-${a.hex}"` : ""} style="font-family:'${iconFont}';font-size:20px;line-height:20px;color:${aircraftAccent(a)};text-shadow:0 0 3px #000">${glyph}</span>`,
     iconSize: [20, 20],
     iconAnchor: [10, 10],
   });
@@ -464,7 +464,7 @@ export function LeafletMap({
         <Marker
           key={a.hex}
           position={[a.lat as number, a.lon as number]}
-          icon={aircraftIcon(a.cat)}
+          icon={aircraftIcon(a)}
           eventHandlers={{ click: () => onSelect(a.hex) }}
         />
       ))}

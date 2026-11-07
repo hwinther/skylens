@@ -29,6 +29,10 @@ public sealed class AircraftDbService : IHostedService
     public bool Loaded { get; private set; }
     public int Count => _db.Count;
 
+    /// <summary>True when the registry flags this airframe as military (offline lookup, no upstream call).</summary>
+    public bool IsMilitary(string hex) =>
+        _db.TryGetValue(hex.ToLowerInvariant(), out var m) && m.Military;
+
     public bool TryGet(string hex, out AircraftMetadata? metadata)
     {
         var ok = _db.TryGetValue(hex.ToLowerInvariant(), out var m);
@@ -106,6 +110,8 @@ public sealed class AircraftDbService : IHostedService
                 Registration = Field(parts, 1),
                 TypeCode = Field(parts, 2),
                 TypeName = Field(parts, 4),
+                // dbFlags is a string of 0/1 bits as tar1090 writes them: military, interesting, PIA, LADD.
+                Military = parts.Length > 3 && parts[3].Length > 0 && parts[3][0] == '1',
                 Source = "db",
             };
         }

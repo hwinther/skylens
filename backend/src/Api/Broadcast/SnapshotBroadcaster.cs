@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
+using Skylens.Api.Enrichment;
 using Skylens.Api.Hubs;
 using Skylens.Api.Options;
 using Skylens.Api.State;
@@ -21,6 +22,7 @@ public sealed class SnapshotBroadcaster : BackgroundService
     private readonly ViewerRegistry _registry;
     private readonly AircraftStateStore _store;
     private readonly IAwayModeSource _awayMode;
+    private readonly AircraftDbService _aircraftDb;
     private readonly FeedOptions _feed;
     private readonly TimeProvider _time;
     private readonly ILogger<SnapshotBroadcaster> _logger;
@@ -30,6 +32,7 @@ public sealed class SnapshotBroadcaster : BackgroundService
         ViewerRegistry registry,
         AircraftStateStore store,
         IAwayModeSource awayMode,
+        AircraftDbService aircraftDb,
         IOptions<FeedOptions> feed,
         TimeProvider time,
         ILogger<SnapshotBroadcaster> logger)
@@ -38,13 +41,18 @@ public sealed class SnapshotBroadcaster : BackgroundService
         _registry = registry;
         _store = store;
         _awayMode = awayMode;
+        _aircraftDb = aircraftDb;
         _feed = feed.Value;
         _time = time;
         _logger = logger;
     }
 
-    /// <summary>Filter store aircraft to positioned ones inside the viewer radius (own-feed / "adsb").</summary>
-    public static List<AircraftDto> FilterOwnFeed(IReadOnlyList<AircraftState> all, double lat, double lon, double radiusKm)
+    /// <summary>
+    ///     Filter store aircraft to positioned ones inside the viewer radius (own-feed / "adsb").
+    ///     <paramref name="isMilitary" /> (the offline registry lookup) sets the DTO's <c>mil</c> flag.
+    /// </summary>
+    public static List<AircraftDto> FilterOwnFeed(
+        IReadOnlyList<AircraftState> all, double lat, double lon, double radiusKm, Func<string, bool>? isMilitary = null)
     {
         var result = new List<AircraftDto>();
         foreach (var a in all)
@@ -52,7 +60,7 @@ public sealed class SnapshotBroadcaster : BackgroundService
             if (!a.HasPosition)
                 continue;
             if (Geo.DistanceKm(lat, lon, a.Lat!.Value, a.Lon!.Value) <= radiusKm)
-                result.Add(AircraftDto.FromState(a, "adsb"));
+                result.Add(AircraftDto.FromState(a, "adsb", isMilitary?.Invoke(a.Hex) ?? false));
         }
 
         return result;
@@ -90,7 +98,7 @@ public sealed class SnapshotBroadcaster : BackgroundService
         {
             try
             {
-                var own = FilterOwnFeed(all, v.Lat, v.Lon, v.RadiusKm);
+                var own = FilterOwnFeed(all, v.Lat, v.Lon, v.RadiusKm, _aircraftDb.IsMilitary);
                 if (ShouldUseAwayMode(v.Lat, v.Lon, own.Count))
                 {
                     var away = await _awayMode.GetAsync(v.Lat, v.Lon, v.RadiusKm, ct);

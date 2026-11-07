@@ -28,7 +28,7 @@ public sealed class AwayModeSourceTests
         """
         {"ac":[
           {"hex":"4AC9E1","flight":"SAS4123 ","lat":60.42,"lon":5.25,"alt_baro":12000,"gs":320.5,"track":95.0,"baro_rate":-640,"category":"A3","seen":0.4,"seen_pos":2.5},
-          {"hex":"478123","flight":"NOZ612","lat":61.7,"lon":5.9,"alt_baro":"ground","gs":0,"track":0,"category":"A3","seen":1.2},
+          {"hex":"478123","flight":"NOZ612","lat":61.7,"lon":5.9,"alt_baro":"ground","gs":0,"track":0,"category":"A3","seen":1.2,"dbFlags":3},
           {"hex":"abc000","flight":"NOPOS"}
         ],"msg":"No error","now":1793016000000,"total":3,"ctime":1793016000000,"ptime":3}
         """;
@@ -80,6 +80,7 @@ public sealed class AwayModeSourceTests
         Assert.Equal(-640, a.Vr);
         Assert.Equal(0.4, a.Seen);
         Assert.Equal(2.5, a.SeenPos); // position age, distinct from the last-message age
+        Assert.Null(a.Mil); // no dbFlags → not military, and omitted from the JSON
         Assert.Equal("adsblol", a.Src);
     }
 
@@ -97,6 +98,7 @@ public sealed class AwayModeSourceTests
         Assert.Equal("478123", a.Hex);
         Assert.Null(a.Alt);
         Assert.Null(a.Fl);
+        Assert.True(a.Mil); // dbFlags 3 = military (1) + interesting (2)
     }
 
     [Fact]

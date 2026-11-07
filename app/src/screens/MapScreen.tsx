@@ -27,6 +27,7 @@ import {
   useSatelliteGroundTrack,
 } from "@/components";
 import { iconForVessel } from "@/components/vesselIcon";
+import { aircraftAccent } from "@/components/aircraftIcon";
 import {
   lineLatLngs,
   pointLatLng,
@@ -95,7 +96,7 @@ function AircraftMarker({
       rotation={a.trk ?? 0}
       tracksViewChanges={tracksViewChanges}
     >
-      <MaterialCommunityIcons name="airplane" size={24} color={color.entity.air} />
+      <MaterialCommunityIcons name="airplane" size={24} color={aircraftAccent(a)} />
     </Marker>
   );
 }
