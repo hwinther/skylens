@@ -1,3 +1,4 @@
+# Synced from wshno/devops settings-sync/files/workflows/label.yml: change it there.
 # Triages pull requests and applies labels based on the paths modified.
 # Config: .github/labeler.yml — https://github.com/actions/labeler
 name: Labeler

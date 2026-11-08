@@ -1,3 +1,4 @@
+# Synced from wshno/devops settings-sync/files/poutine-config.yml (as .poutine.yml): change it there.
 # poutine (.github/workflows/poutine.yml) configuration.
 skip:
   # hwinther/reusable-workflows is our own action and workflow repo, not a third party: its owner
