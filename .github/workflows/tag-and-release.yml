@@ -1,25 +1,32 @@
-name: "Create tag and release"
+name: "Create release"
+
+# Creates the v* tag (auto = next version from GitVersion) and, optionally, the GitHub Release.
+# The tag is pushed with the wshno-devops-bot GitHub App's token, so the push itself starts
+# container.yml ("Publish container to GHCR") and the signed manifests artifact.
+# (A tag pushed with GITHUB_TOKEN wouldn't trigger them, which is why this used to dispatch them.)
+#
+# Grype gate in the way (vulnerabilities we can't fix yet)? Let the build fail, then run
+# container.yml by hand at the tag ("Use workflow from" -> the tag) with "Fail the build" off.
+#
+# Needs: repository variable DEVOPS_BOT_CLIENT_ID, secret DEVOPS_BOT_PRIVATE_KEY, and the App
+# installed on this repo with Contents: write.
 
 on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: "Tag name (e.g. v1.2.3), or 'auto' for the next GitVersion"
+        description: "Version tag (e.g. v1.2.3), or 'auto' for the next version"
         required: false
         default: "auto"
       release_notes:
-        description: "Release notes for this tag"
+        description: "Release notes"
         required: false
       create_release:
-        description: "Create a GitHub Release for this tag"
-        type: boolean
-        default: true
-      container_grype_fail_build:
-        description: "Fail the container workflow if Grype finds vulnerabilities (turn off for a release override)"
+        description: "Also create a GitHub Release"
         type: boolean
         default: true
       build_android:
-        description: "Also build the Android app (dispatch android-build.yml at this tag)"
+        description: "Also build the Android app (android-build.yml at this version)"
         type: boolean
         default: true
       android_upload_to_play:
@@ -27,91 +34,37 @@ on:
         type: boolean
         default: false
 
+permissions: {}
+
 jobs:
   tag:
-    # Required so we can dispatch the container workflow after tagging (a tag push made with
-    # GITHUB_TOKEN does not fire on.push.tags).
     permissions:
       contents: write
-      actions: write
-    uses: hwinther/reusable-workflows/.github/workflows/tag-and-release.yml@9d45837eaa945cfe341559f90ad2805a5580187d # v2.23.1
+    uses: hwinther/reusable-workflows/.github/workflows/tag-and-release.yml@6b6810e17143f38ac9dc0f84d504e7ff08b1d2bf # v2.26.0
     with:
       tag_name: ${{ inputs.tag_name }}
       release_notes: ${{ inputs.release_notes }}
       create_release: ${{ inputs.create_release }}
+      app_client_id: ${{ vars.DEVOPS_BOT_CLIENT_ID }}
+    secrets:
+      app_private_key: ${{ secrets.DEVOPS_BOT_PRIVATE_KEY }}
 
-  trigger-container-build:
-    needs: tag
-    if: success()
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Determine ref for the container build
-        id: ref
-        run: |
-          git fetch --tags --force
-          TAG="${{ inputs.tag_name }}"
-          if [ "$TAG" = "auto" ] || [ -z "$TAG" ]; then
-            REF=$(git tag -l 'v*' --sort=-v:refname | head -n1)
-          else
-            REF="$TAG"
-          fi
-          if [ -z "$REF" ]; then
-            echo "::error::Could not resolve a tag ref for the container build."
-            exit 1
-          fi
-          echo "Using ref: $REF"
-          echo "ref=$REF" >> "$GITHUB_OUTPUT"
-
-      - name: Dispatch container workflow
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh workflow run container.yml
-          --ref "${{ steps.ref.outputs.ref }}"
-          -f grype_fail_build=${{ inputs.container_grype_fail_build }}
-
-  trigger-android-build:
+  # The Android app is optional per release and has its own options, so it is still dispatched
+  # (android-build.yml's own tag trigger is app-v*, kept separate from the backend's v* tags).
+  android-build:
     needs: tag
     if: ${{ success() && inputs.build_android }}
     runs-on: ubuntu-latest
     permissions:
       actions: write
-      contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Determine version for the Android build
-        id: ver
-        run: |
-          git fetch --tags --force
-          TAG="${{ inputs.tag_name }}"
-          if [ "$TAG" = "auto" ] || [ -z "$TAG" ]; then
-            TAG=$(git tag -l 'v*' --sort=-v:refname | head -n1)
-          fi
-          if [ -z "$TAG" ]; then
-            echo "::error::Could not resolve a tag for the Android build."
-            exit 1
-          fi
-          echo "Using tag: $TAG (version ${TAG#v})"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Dispatch android-build workflow
+      - name: Dispatch android-build.yml at the release tag
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh workflow run android-build.yml
-          --ref "${{ steps.ver.outputs.tag }}"
-          -f version="${{ steps.ver.outputs.version }}"
-          -f upload_to_play=${{ inputs.android_upload_to_play }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ needs.tag.outputs.tag_name }}
+          UPLOAD_TO_PLAY: ${{ inputs.android_upload_to_play }}
+        run: |
+          set -euo pipefail
+          [ -n "$TAG" ] || { echo "::error::The tag job reported no tag name."; exit 1; }
+          gh workflow run android-build.yml -R "$REPO" --ref "$TAG" -f version="${TAG#v}" -f upload_to_play="$UPLOAD_TO_PLAY"

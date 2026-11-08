@@ -31,7 +31,7 @@ jobs:
           persist-credentials: false
 
       - name: Render, validate and report
-        uses: hwinther/reusable-workflows/.github/actions/manifests@9d45837eaa945cfe341559f90ad2805a5580187d # v2.23.1
+        uses: hwinther/reusable-workflows/.github/actions/manifests@6b6810e17143f38ac9dc0f84d504e7ff08b1d2bf # v2.26.0
         with:
           mode: diff
           renders: |
