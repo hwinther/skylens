@@ -1,3 +1,4 @@
+# Synced from wshno/devops settings-sync/files/workflows/label.yml: change it there.
 # Triages pull requests and applies labels based on the paths modified.
 # Config: .github/labeler.yml — https://github.com/actions/labeler
 name: Labeler
@@ -16,4 +17,4 @@ jobs:
     steps:
       - uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7.0.0
         with:
-          repo-token: "${{ secrets.GITHUB_TOKEN }}"
+          repo-token: '${{ secrets.GITHUB_TOKEN }}'

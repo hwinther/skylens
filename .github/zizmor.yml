@@ -1,3 +1,4 @@
+# Synced from wshno/devops settings-sync/files/zizmor-config.yml (as .github/zizmor.yml): change it there.
 # Accepted, justified zizmor findings. https://docs.zizmor.sh/configuration/
 rules:
   # prune-ghcr.yml uses `secrets: inherit` to pass the optional GHCR_PRUNE_TOKEN through to the
