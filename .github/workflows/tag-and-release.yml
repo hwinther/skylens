@@ -2,7 +2,7 @@ name: "Create release"
 
 # Creates the v* tag (auto = next version from GitVersion) and, optionally, the GitHub Release.
 # The tag is pushed with the wshno-devops-bot GitHub App's token, so the push itself starts
-# container.yml ("Publish container to GHCR") and the signed manifests artifact.
+# container.yml ("Publish release") and the signed manifests artifact.
 # (A tag pushed with GITHUB_TOKEN wouldn't trigger them, which is why this used to dispatch them.)
 #
 # Grype gate in the way (vulnerabilities we can't fix yet)? Let the build fail, then run
