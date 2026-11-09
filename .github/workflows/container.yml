@@ -34,6 +34,9 @@ jobs:
     with:
       container_registry: ghcr.io
       container_image_name_postfix: api
+      # The GitHub Release already exists when tag-and-release dispatches this workflow, and attaching
+      # the SBOMs to it needs contents: write (v0.23.0 failed on that). They stay workflow artifacts.
+      release_asset_upload_enabled: false
       build_context: .
       dockerfile: Dockerfile
       # v2 string enum: 'never' only when a manual run unchecks the box; otherwise 'auto' (fail on release builds).
@@ -61,7 +64,7 @@ jobs:
       # the cluster's OCIRepository pins. A single file at the root: the Flux Kustomization applies
       # everything under its path.
       - name: Render, validate, push and sign
-        uses: hwinther/reusable-workflows/.github/actions/manifests@6b6810e17143f38ac9dc0f84d504e7ff08b1d2bf # v2.26.0
+        uses: hwinther/reusable-workflows/.github/actions/manifests@1fa5882e8aa1048af78492baf016f5a7b310be11 # v2.29.0
         with:
           mode: push
           artifact: ghcr.io/hwinther/skylens/manifests
