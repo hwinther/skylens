@@ -1,4 +1,4 @@
-name: "Publish container to GHCR"
+name: Publish release
 
 # Single API image (ASP.NET Core gateway + baked aircraft.csv.gz enrichment DB). Built from the
 # repo-root Dockerfile. Pure .NET so multi-arch is fine, but the reusable workflow builds for the

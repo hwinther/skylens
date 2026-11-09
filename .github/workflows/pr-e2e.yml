@@ -1,4 +1,4 @@
-name: "PR build, scan, and E2E"
+name: E2E
 
 # Every PR that changes the image: build -> {Grype scan, Playwright e2e} in parallel. With the
 # `deploy-feature` label the image that passed e2e is also promoted and an ephemeral preview env is
