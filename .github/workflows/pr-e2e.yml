@@ -222,7 +222,7 @@ jobs:
 
       - name: Render, validate, push and sign
         id: push
-        uses: hwinther/reusable-workflows/.github/actions/manifests@6b6810e17143f38ac9dc0f84d504e7ff08b1d2bf # v2.26.0
+        uses: hwinther/reusable-workflows/.github/actions/manifests@1fa5882e8aa1048af78492baf016f5a7b310be11 # v2.29.0
         with:
           mode: push
           artifact: ghcr.io/hwinther/skylens/manifests

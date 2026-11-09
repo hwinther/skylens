@@ -10,7 +10,7 @@ kind: Kustomization
 resources:
 - deployment.yaml
 - service.yaml
-- ingress.yaml
+- httproute.yaml
 images:
 - name: ghcr.io/hwinther/skylens/api
   newTag: 0.0.0-dev

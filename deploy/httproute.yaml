@@ -1,0 +1,33 @@
+# Public route: the API validates the OIDC JWT in-app, so there is no forward-auth filter (it would
+# also block the SignalR ?access_token= handshake). Every path (/api, /hubs, /swagger and the landing
+# page at /) goes to the API. Attaches to the cluster's platform Gateway (listener `web`); the target
+# namespace must be allowed to attach routes and be granted the hostname. The gethomepage.dev
+# annotations are inert on clusters without homepage.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: skylens
+  annotations:
+    gethomepage.dev/enabled: "true"
+    gethomepage.dev/href: "https://${APP_HOST}/"
+    gethomepage.dev/group: Apps
+    gethomepage.dev/name: Skylens
+    gethomepage.dev/siteMonitor: "https://${APP_HOST}/healthz"
+    gethomepage.dev/icon: mdi-airplane
+    gethomepage.dev/description: ADS-B plane-spotter gateway — Android AR app backend (API under /api/, SignalR under /hubs/)
+    gethomepage.dev/pod-selector: app=skylens-api
+spec:
+  parentRefs:
+  - name: "${GATEWAY_NAME:=traefik}"
+    namespace: "${GATEWAY_NAMESPACE:=traefik}"
+    sectionName: "${GATEWAY_LISTENER:=web}"
+  hostnames:
+  - "${APP_HOST}"
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: skylens-api
+      port: 8080

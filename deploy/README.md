@@ -18,6 +18,8 @@ The cluster repo (hwinther/proxmox) consumes the artifact through a Flux `OCIRep
 `Kustomization`. It provides everything that isn't in here:
 
 - the namespace (via `targetNamespace`) and network policies;
+- a Gateway API Gateway the HTTPRoute can attach to (`GATEWAY_*` below), whose listener allows routes
+  from the target namespace, and a grant for the `APP_HOST` hostname;
 - the Secret;
 - the variable values below (via `postBuild.substitute`).
 
@@ -31,13 +33,16 @@ quotes, so a number or boolean would come out as the wrong YAML type.
 
 | Variable | Default | Used for |
 |---|---|---|
-| `APP_HOST` | (required) | Ingress host and homepage links, e.g. `skylens.wsh.no` |
+| `APP_HOST` | (required) | HTTPRoute hostname and homepage links, e.g. `skylens.wsh.no` |
 | `OIDC_AUTHORITY` | (required) | `Oidc__Authority`, the JWT issuer, e.g. `https://auth.wsh.no` |
 | `OIDC_AUDIENCE` | `skylens-api` | `Oidc__Audience` |
 | `MQTT_HOST` | (required) | Broker carrying `adsb/aircraft` and `ais/data` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | (required) | OTLP gRPC collector endpoint |
 | `CSP_MODE` | `report-only` | `report-only` sends the CSP as Content-Security-Policy-Report-Only (violations are logged, and exported with the other logs); `enforce` blocks |
 | `APP_ENVIRONMENT` | `production` | `deployment.environment` resource attribute |
+| `GATEWAY_NAME` | `traefik` | Gateway the HTTPRoute attaches to |
+| `GATEWAY_NAMESPACE` | `traefik` | Namespace of that Gateway |
+| `GATEWAY_LISTENER` | `web` | Gateway listener (`sectionName`) |
 
 ### Secret
 
@@ -54,7 +59,7 @@ must still be non-empty (the ingest service skips the replay transport when it's
 
 ### Resource names
 
-`Deployment/skylens-api`, `Service/skylens-api`, `Ingress/skylens`. Flux prunes anything that
+`Deployment/skylens-api`, `Service/skylens-api`, `HTTPRoute/skylens`. Flux prunes anything that
 disappears from the artifact, so rename deliberately.
 
 ## Render locally
