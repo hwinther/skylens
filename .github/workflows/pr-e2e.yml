@@ -258,10 +258,11 @@ jobs:
       pull-requests: write
     steps:
       - name: Post or update the preview-URL sticky comment
-        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        uses: hwinther/reusable-workflows/.github/actions/sticky-pr-comment@5ba6e5a72dec8dcd121cc864279889bb2fa6ed73 # v2.31.0
         with:
-          header: skylens-preview-env
-          message: |
+          github_token: ${{ github.token }}
+          comment_identifier: skylens-preview-env
+          comment_content: |
             ### Preview environment
 
             Deployed via Flux (reconciles within ~1 min) after the image passed Playwright e2e,
