@@ -1,27 +1,32 @@
-name: "Automatically update dotnet lockfiles in dependabot PRs"
+# Synced from wshno/devops settings-sync/files/workflows/dependabot-update-dotnet-lockfiles.yml: change it there.
+name: Dependabot lockfiles
 
-# When Dependabot bumps a NuGet package, the committed packages.lock.json must be regenerated or the
-# locked-mode restore fails. This reusable workflow does that on the Dependabot PR branch.
-# Requires repo secret WORKFLOW_TOKEN (PAT that can push to the PR branch and re-trigger CI).
+# Dependabot only rewrites the bumped project's packages.lock.json, so projects referencing it fail the
+# locked-mode restore (NU1004). On a Dependabot PR labelled update-dotnet-lockfiles (the synced
+# Dependabot config sets it on every NuGet PR), this restores every tracked .sln/.slnx and pushes the
+# refreshed lockfiles back to the PR branch as the wshno-devops-bot App, so the PR's checks run again.
+#
+# Needs: repository variable DEVOPS_BOT_CLIENT_ID, and APP_PRIVATE_KEY in the devops-bot environment
+# (main only; pull_request_target runs on the base branch, so the policy admits it).
 
 on:
-  # pull_request_target is required so the reusable workflow can push the regenerated lockfile back
-  # to the Dependabot PR branch (Dependabot PRs run with a read-only token). It delegates entirely to
-  # a pinned, trusted reusable workflow and never checks out or runs PR-authored code, so the usual
-  # pull_request_target exploit surface does not apply here.
+  # pull_request_target so the push back to the Dependabot branch has a token at all (Dependabot's own
+  # pull_request runs are read-only). The reusable job only runs for Dependabot-authored PRs with the
+  # label; only people with write access can push to those branches.
   pull_request_target: # zizmor: ignore[dangerous-triggers]
     types:
       - labeled
       - synchronize
 
+permissions: {}
+
 jobs:
   update-lockfiles:
-    uses: hwinther/reusable-workflows/.github/workflows/dependabot-update-dotnet-lockfiles.yml@6b6810e17143f38ac9dc0f84d504e7ff08b1d2bf # v2.26.0
     permissions:
       contents: read
+    uses: hwinther/reusable-workflows/.github/workflows/dependabot-update-dotnet-lockfiles.yml@187aa9dd45b3020ac0a22a8ab4530a3cec60b31b # v2.30.0
     with:
-      solution_path: backend
-      solution_name: Skylens.slnx
-      dotnet_version: 10.0.x
+      app_client_id: ${{ vars.DEVOPS_BOT_CLIENT_ID }}
+      environment: devops-bot
     secrets:
-      WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+      app_private_key: ${{ secrets.APP_PRIVATE_KEY }}
