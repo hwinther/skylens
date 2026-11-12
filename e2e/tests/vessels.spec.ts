@@ -63,9 +63,11 @@ test('tapping a vessel row opens the detail sheet', async ({ page }) => {
 
 test('radar plots AIS vessels streamed from the backend', async ({ page }) => {
   await page.goto('/map')
+  // The Map tab opens on the real map; switch to the Radar.
+  await page.getByTestId('map-view-radar').click()
 
-  // Radar is the default map view. Ships plot as their own blips; the radar auto-scales its range to
-  // the farthest target, so vessels never clip the outer ring regardless of the observer offset.
+  // Ships plot as their own blips; the radar auto-scales its range to the farthest target, so vessels
+  // never clip the outer ring regardless of the observer offset.
   const shipBlip = page.getByTestId('map-web').locator('[data-testid^="map-ship-"]').first()
   await expect(shipBlip).toBeVisible({ timeout: 30_000 })
 })

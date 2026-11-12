@@ -674,3 +674,5 @@ const styles = StyleSheet.create({
   error: { color: color.status.error, fontSize: 13, fontWeight: "600" },
   buttonText: { color: color.text, fontSize: 16, fontWeight: "600" },
 });
+
+export { RouteErrorBoundary as ErrorBoundary } from "@/components/RouteErrorBoundary";

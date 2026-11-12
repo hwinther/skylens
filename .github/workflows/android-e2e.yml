@@ -1,0 +1,126 @@
+name: "Android E2E (Maestro)"
+
+# Smoke-tests the Android app on an emulator: prebuild the Expo (CNG) project, build a release APK
+# (the Expo template signs release with its debug keystore, so the JS bundle is embedded and no Metro
+# is needed), boot an API 34 emulator and run the Maestro flows in app/.maestro. The app runs in demo
+# mode (no EXPO_PUBLIC_FORCE_LIVE), so it needs no backend and no sign-in.
+#
+# Triggers: nightly, manual dispatch, and PRs labelled `mobile-e2e` (not every PR: a run takes a
+# while). Adding the label starts a run; later pushes to the labelled PR re-run it.
+#
+# Optional repository secret:
+#   GOOGLE_MAPS_API_KEY  — Maps SDK key, so the Map tab opens on the map. Fork PRs get no secrets: the
+#                          build still succeeds (app.config.js only warns) and the app opens the Map
+#                          tab on the Radar, which the flow accepts.
+#
+# Third-party actions are pinned to full commit SHAs (repo policy / zizmor blanket-pin); the trailing
+# comment tracks the version. No dependency cache is restored (same reasoning as android-build.yml).
+# The Maestro CLI is a pinned release zip checked against its published SHA-256, not the curl|bash
+# installer.
+
+on:
+  schedule:
+    - cron: "17 3 * * *" # nightly, 03:17 UTC
+  workflow_dispatch:
+  pull_request:
+    types: [opened, reopened, labeled, synchronize]
+
+permissions:
+  contents: read
+
+env:
+  MAESTRO_VERSION: "2.12.1"
+  MAESTRO_SHA256: "54dbb0716425626604973cbb374c585ca30272375d9ce15177a1152765ddd9d7"
+
+jobs:
+  smoke:
+    name: Maestro smoke (emulator)
+    # PRs only with the mobile-e2e label.
+    if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'mobile-e2e') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    # Job-level, so a run skipped by the `if` above (e.g. some other label added) doesn't cancel a
+    # running smoke test.
+    concurrency:
+      group: "${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}"
+      cancel-in-progress: true
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26.x"
+
+      - name: Setup JDK
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install dependencies
+        run: npm ci # app/.npmrc pins legacy-peer-deps=true
+
+      - name: Prebuild native Android project
+        env:
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+        run: npx expo prebuild -p android --no-install
+
+      - name: Build release APK (x86_64 only)
+        working-directory: app/android
+        env:
+          # The embedded Expo config (extra.hasMapsKey) is generated during the Gradle build, so the
+          # key is needed here too, not just at prebuild.
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease --no-daemon -PreactNativeArchitectures=x86_64
+
+      - name: Install Maestro CLI
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/maestro.zip" \
+            "https://github.com/mobile-dev-inc/maestro/releases/download/cli-${MAESTRO_VERSION}/maestro.zip"
+          echo "${MAESTRO_SHA256}  $RUNNER_TEMP/maestro.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/maestro/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/maestro/bin/maestro" --version
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run Maestro flows on emulator
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        env:
+          APK_PATH: android/app/build/outputs/apk/release/app-release.apk
+          MAESTRO_OUT: ${{ runner.temp }}/maestro-out
+          MAESTRO_CLI_NO_ANALYTICS: "1"
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          working-directory: app
+          # Each line runs as its own `sh -c`; the last one keeps logcat even when the flow fails.
+          script: |
+            mkdir -p "$MAESTRO_OUT"
+            adb install -r "$APK_PATH"
+            adb logcat -c
+            maestro test --format junit --output "$MAESTRO_OUT/report.xml" --test-output-dir "$MAESTRO_OUT/artifacts" --debug-output "$MAESTRO_OUT/debug" .maestro; rc=$?; adb logcat -d > "$MAESTRO_OUT/logcat.txt"; exit $rc
+
+      - name: Upload Maestro output
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: maestro-output
+          path: ${{ runner.temp }}/maestro-out
+          if-no-files-found: warn

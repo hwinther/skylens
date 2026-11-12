@@ -5,3 +5,4 @@
  */
 
 export { default } from "@/screens/SimScreen";
+export { RouteErrorBoundary as ErrorBoundary } from "@/components/RouteErrorBoundary";

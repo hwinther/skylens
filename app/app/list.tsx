@@ -575,3 +575,5 @@ const styles = StyleSheet.create({
   eventDate: { color: color.textDim, fontSize: 12, fontWeight: "600" },
   eventCountdown: { color: color.textMuted, fontSize: 11, marginTop: 2 },
 });
+
+export { RouteErrorBoundary as ErrorBoundary } from "@/components/RouteErrorBoundary";

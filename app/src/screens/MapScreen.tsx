@@ -1,6 +1,7 @@
 /**
- * Native Map view: two spatial renderings, switchable — Radar (you-centric, offline) and the real
- * react-native-maps MapView. Reads the same 1 Hz store; tapping a marker/blip opens the detail sheet.
+ * Native Map view: two spatial renderings, switchable — the real react-native-maps MapView (the
+ * default when it can draw, see useMapViewMode) and Radar (you-centric, offline). Reads the same
+ * 1 Hz store; tapping a marker/blip opens the detail sheet.
  * Web has no react-native-maps — see MapScreen.web.tsx (Leaflet). The flat list lives in the List tab.
  */
 
@@ -58,7 +59,9 @@ import {
   airportSubtitle,
   airportTitle,
 } from "@/components/webmap/airportStyle";
-import { MapViewToggle, type MapView as MapViewMode } from "@/components/webmap/MapViewToggle";
+import { MapViewToggle } from "@/components/webmap/MapViewToggle";
+import type { MapView as MapViewMode } from "@/components/webmap/mapView";
+import { useMapViewMode } from "@/components/webmap/useMapViewMode";
 import { FOCUS_SPAN_DEG, resolveFocus } from "@/components/webmap/focus";
 import { MapFocusChip } from "@/components/webmap/MapFocusChip";
 import { ApiClient } from "@/api/client";
@@ -73,7 +76,8 @@ import { useSheetRightInset } from "@/components/Sheet";
  * react-native-maps re-rasterises a custom marker view on every render, which would thrash at
  * 1 Hz x N aircraft — so we only let it track view changes briefly after mount (long enough to
  * capture the icon bitmap), then freeze it. Position (coordinate) and heading (rotation) still
- * update natively while frozen, so the marker keeps moving/turning without re-rasterising.
+ * update natively while frozen, so the marker keeps moving/turning without re-rasterising. Same
+ * testID as the radar blip (only one of the two views is mounted at a time).
  */
 function AircraftMarker({
   aircraft: a,
@@ -89,6 +93,7 @@ function AircraftMarker({
   }, []);
   return (
     <Marker
+      testID={`map-ac-${a.hex}`}
       coordinate={{ latitude: a.lat as number, longitude: a.lon as number }}
       title={a.flight?.trim() || a.hex.toUpperCase()}
       description={a.fl != null ? `FL${a.fl}` : undefined}
@@ -125,6 +130,7 @@ function VesselMarker({
   const isShip = v.kind === "ship";
   return (
     <Marker
+      testID={`map-ship-${v.mmsi}`}
       coordinate={{ latitude: v.lat as number, longitude: v.lon as number }}
       title={v.name?.trim() || v.mmsi}
       description={v.sog != null ? `${Math.round(v.sog)} kn` : undefined}
@@ -317,9 +323,9 @@ export default function MapScreen() {
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
   // Ground track for the satellite (if any) selected from a detail sheet. Reads the ephemeral store.
   const track = useSatelliteGroundTrack(client);
-  // Arriving from "Show ground track" (a track is set) opens the real Map, not the you-centric radar —
-  // a globe-spanning track is meaningless there. Captured once at mount.
-  const [view, setView] = useState<MapViewMode>(track.trackedNoradId != null ? "map" : "radar");
+  // Map by default (Radar when this build can't draw it); snaps to the Map for a track or a "Show on
+  // map" request. See useMapViewMode.
+  const { view, setView } = useMapViewMode(track.trackedNoradId);
   // One selection slot for the detail cards: they are non-modal, so tapping another marker (of any
   // kind) swaps the open card instead of stacking a second one.
   const detail = useDetailSelection();
@@ -358,21 +364,6 @@ export default function MapScreen() {
     client,
     enabled: showFishingZones || showLostGear,
   });
-
-  // Snap to the map view whenever a track is (re)selected — a track only renders there, and expo-router
-  // keeps this tab mounted across a re-navigation from the sheet, so the mount-time default alone can't
-  // catch a selection made while the tab already sits on radar. Guard runs via a named function to stay
-  // clear of the set-state-in-effect rule (same discipline as useSatellites' tick()).
-  useEffect(() => {
-    const snapToMap = () => setView("map");
-    if (track.trackedNoradId != null) snapToMap();
-  }, [track.trackedNoradId]);
-
-  // Same snap for a new "Show on map" request (radar can't centre on a target).
-  useEffect(() => {
-    const snapToMap = () => setView("map");
-    if (focus != null) snapToMap();
-  }, [focus, focusSeq]);
 
   // Fit the map to the track bounds once per new tracked satellite (so it zooms out to the whole orbit).
   // Keyed on the tracked id, not every render; points arrive a moment after selection (async fetch).

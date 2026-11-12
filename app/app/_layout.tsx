@@ -152,6 +152,7 @@ export default function RootLayout() {
             name="index"
             options={{
               title: "AR",
+              tabBarButtonTestID: "tab-ar",
               tabBarIcon: ({ color, size, focused }) => (
                 <Ionicons name={focused ? "scan" : "scan-outline"} size={size} color={iconColor(color)} />
               ),
@@ -161,6 +162,7 @@ export default function RootLayout() {
             name="map"
             options={{
               title: "Map",
+              tabBarButtonTestID: "tab-map",
               tabBarIcon: ({ color, size, focused }) => (
                 <Ionicons name={focused ? "map" : "map-outline"} size={size} color={iconColor(color)} />
               ),
@@ -170,6 +172,7 @@ export default function RootLayout() {
             name="list"
             options={{
               title: "List",
+              tabBarButtonTestID: "tab-list",
               tabBarIcon: ({ color, size, focused }) => (
                 <Ionicons name={focused ? "list" : "list-outline"} size={size} color={iconColor(color)} />
               ),
@@ -179,6 +182,7 @@ export default function RootLayout() {
             name="settings"
             options={{
               title: "Settings",
+              tabBarButtonTestID: "tab-settings",
               tabBarIcon: ({ color, size, focused }) => (
                 <Ionicons name={focused ? "settings" : "settings-outline"} size={size} color={iconColor(color)} />
               ),

@@ -73,7 +73,9 @@ export function StatusStrip({
 function Badge({ label, tone }: { label: string; tone: "ok" | "warn" }) {
   return (
     <View style={[styles.badge, tone === "warn" ? styles.badgeWarn : styles.badgeOk]}>
-      <Text style={styles.badgeText}>{label}</Text>
+      <Text testID="status-source" style={styles.badgeText}>
+        {label}
+      </Text>
     </View>
   );
 }
