@@ -1,10 +1,11 @@
-/** Segmented switch between the two spatial Map renderings — Radar (offline, you-centric) and the
- *  real geographic Map — plus the live aircraft count. */
+/** Segmented switch between the two spatial Map renderings — the real geographic Map (the default)
+ *  and Radar (offline, you-centric) — plus the live aircraft count. */
 
 import { color } from "@/theme";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import type { MapView } from "./mapView";
 
-export type MapView = "radar" | "map";
+export type { MapView } from "./mapView";
 
 export interface MapViewToggleProps {
   view: MapView;
@@ -16,11 +17,12 @@ export function MapViewToggle({ view, onChange, count }: MapViewToggleProps) {
   return (
     <View style={styles.bar}>
       <View style={styles.segment}>
-        {(["radar", "map"] as const).map((v) => (
+        {(["map", "radar"] as const).map((v) => (
           <Pressable
             key={v}
             testID={`map-view-${v}`}
             onPress={() => onChange(v)}
+            accessibilityState={{ selected: view === v }}
             style={[styles.seg, view === v && styles.segActive]}
           >
             <Text style={[styles.segText, view === v && styles.segTextActive]}>

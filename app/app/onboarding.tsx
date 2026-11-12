@@ -44,7 +44,7 @@ export default function OnboardingScreen() {
 
   return (
     <SafeAreaView style={styles.root}>
-      <Pressable style={styles.skip} onPress={() => finish(false)} hitSlop={8}>
+      <Pressable testID="onboarding-skip" style={styles.skip} onPress={() => finish(false)} hitSlop={8}>
         <Text style={styles.skipText}>Skip</Text>
       </Pressable>
 
@@ -186,3 +186,5 @@ const styles = StyleSheet.create({
   dotOn: { width: 18, backgroundColor: color.entity.air },
   dotOff: { width: 4, backgroundColor: color.surface2 },
 });
+
+export { RouteErrorBoundary as ErrorBoundary } from "@/components/RouteErrorBoundary";

@@ -7,3 +7,4 @@
  */
 
 export { default } from "@/screens/MapScreen";
+export { RouteErrorBoundary as ErrorBoundary } from "@/components/RouteErrorBoundary";

@@ -1,11 +1,11 @@
 /**
- * Web Map view: two spatial renderings of the same traffic, switchable — Radar (offline, you-centric)
- * and a real OpenStreetMap (Leaflet). react-native-maps has no web build, so Metro resolves this
- * MapScreen.web.tsx on web; native gets MapScreen.tsx (imported via the thin app/map.tsx route). The flat list lives in its own List tab now.
+ * Web Map view: two spatial renderings of the same traffic, switchable — a real OpenStreetMap
+ * (Leaflet, the default) and Radar (offline, you-centric). react-native-maps has no web build, so
+ * Metro resolves this MapScreen.web.tsx on web; native gets MapScreen.tsx (imported via the thin app/map.tsx route). The flat list lives in its own List tab now.
  */
 
 import { alpha, color } from "@/theme";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAircraftList } from "@/state/aircraftStore";
@@ -22,7 +22,8 @@ import {
   useFishingLayers,
   useSatelliteGroundTrack,
 } from "@/components";
-import { MapViewToggle, type MapView } from "@/components/webmap/MapViewToggle";
+import { MapViewToggle } from "@/components/webmap/MapViewToggle";
+import { useMapViewMode } from "@/components/webmap/useMapViewMode";
 import { LeafletMap } from "@/components/webmap/LeafletMap";
 import { airportFilter } from "@/components/webmap/airportStyle";
 import { resolveFocus } from "@/components/webmap/focus";
@@ -50,9 +51,8 @@ export default function MapScreen() {
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
   // Ground track for the satellite (if any) selected from a detail sheet. Reads the ephemeral store.
   const track = useSatelliteGroundTrack(client);
-  // Arriving from "Show ground track" (a track is set) opens the real Map, not the you-centric radar —
-  // a globe-spanning track is meaningless on the radar. Captured once at mount.
-  const [view, setView] = useState<MapView>(track.trackedNoradId != null ? "map" : "radar");
+  // Map by default; snaps to the Map for a track or a "Show on map" request (see useMapViewMode).
+  const { view, setView } = useMapViewMode(track.trackedNoradId);
   // One selection slot for the detail cards: they are non-modal, so tapping another marker (of any
   // kind) swaps the open card instead of stacking a second one.
   const detail = useDetailSelection();
@@ -66,25 +66,14 @@ export default function MapScreen() {
   } = detail.set;
   // While a side-panel card is open, right-edge controls move left by its width.
   const cardRightInset = useSheetRightInset(detail.open);
-  // Snap to the map view whenever a track is (re)selected — a track only renders there, and expo-router
-  // keeps this tab mounted across a re-navigation from the sheet, so the mount-time default alone can't
-  // catch a selection made while the tab already sits on radar. Guard runs via a named function to stay
-  // clear of the set-state-in-effect rule (same discipline as useSatellites' tick()).
-  useEffect(() => {
-    const snapToMap = () => setView("map");
-    if (track.trackedNoradId != null) snapToMap();
-  }, [track.trackedNoradId]);
-  // "Show on map" from a detail sheet: same snap, then LeafletMap centres on and follows the target.
+  // "Show on map" from a detail sheet: useMapViewMode snaps to the Map, then LeafletMap centres on and
+  // follows the target.
   const focus = useMapFocusStore((s) => s.focus);
   const focusSeq = useMapFocusStore((s) => s.seq);
   const following = useMapFocusStore((s) => s.following);
   const setFocus = useMapFocusStore((s) => s.setFocus);
   const setFollowing = useMapFocusStore((s) => s.setFollowing);
   const clearFocus = useMapFocusStore((s) => s.clear);
-  useEffect(() => {
-    const snapToMap = () => setView("map");
-    if (focus != null) snapToMap();
-  }, [focus, focusSeq]);
   const stopFollowing = useCallback(() => setFollowing(false), [setFollowing]);
   const target = useMemo(() => resolveFocus(focus, aircraft, vessels), [focus, aircraft, vessels]);
   // Fishing overlays fetch only when at least one toggle is on; fail-soft to empty when unconfigured.

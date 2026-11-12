@@ -52,8 +52,9 @@ cd app
 npm install
 npm run typecheck                 # tsc --noEmit
 npm run lint                      # eslint, --max-warnings 0 (lint:ci = JSON output)
-npm test                          # jest (preset jest-expo/node)
+npm test                          # jest: both projects (logic + native)
 npx jest src/ar/projection        # one file;  add -t "name" for one test
+npx jest --selectProjects native  # only the component tests (also: npx jest __tests__/native/Sheet)
 npm run openapi:generate          # regenerate src/api/generated/schema.ts from backend openapi.json
 npx expo start                    # dev build needed for OAuth; Expo Go is fine for sensors/demo
 npx expo start --web              # react-native-web build
@@ -99,6 +100,21 @@ npm run test:ci                   # container mode against docker-compose.e2e.ym
 - **Local/dev escape hatches**: `Auth:Disabled=true` (Development only) swaps in `DevAuthHandler`
   with a fixed principal. App env: `EXPO_PUBLIC_API_BASE_URL`, `EXPO_PUBLIC_FORCE_LIVE=1` (skip demo
   mode), `EXPO_PUBLIC_HOME_LAT/LON`. `npm run reverse:android` maps the device's port 5000 to the host.
+- **Jest projects** (`app/jest.config.js`): `logic` runs `__tests__/*.test.ts` on `jest-expo/node`
+  (pure TS, no RN runtime); `native` runs `__tests__/native/**/*.test.tsx` on `jest-expo/android` with
+  `@testing-library/react-native` (v14: `render`/`fireEvent`/`act` are async, so `await` them). Shared
+  native mocks (react-native-maps as plain Views, camera, sensors, location, fonts, router) live in
+  `__tests__/native/setup.ts`; seed data through the real zustand stores (`__tests__/native/fixtures.ts`).
+  API callers stay gated (signed out behind auth) and `fetch` rejects, so no test touches the network.
+  Reporters and coverage are top-level, so `coverage/junit-report.xml` + `cobertura-coverage.xml` cover both.
+- **Route error boundaries**: every route file in `app/app/` ends with
+  `export { RouteErrorBoundary as ErrorBoundary } from "@/components/RouteErrorBoundary";`, so a crash
+  in one screen shows a retry fallback there (tab bar intact) and is reported once via `clientLog`
+  (`POST /api/client-log`, scrubbed message + path only). Add it to any new route.
+- **Map tab** opens on the geographic map; Radar is the second toggle (`useMapViewMode` in
+  `src/components/webmap/`, shared by both Map screens). On Android the map needs a Google Maps key:
+  `app.config.js` sets `extra.hasMapsKey` (boolean only), and without it the tab opens on Radar
+  (`isMapAvailable`). E2E that wants blips must click `map-view-radar` first.
 - **Demo mode** (`src/mock/`) replays `recorded-aircraft.json` with a drag-to-look pose, so the AR
   overlay works on an emulator or desktop with no feed.
 - **Simulator / cockpit view** (`/sim`, web only for now): `src/screens/SimScreen.web.tsx` renders a
@@ -124,6 +140,13 @@ npm run test:ci                   # container mode against docker-compose.e2e.ym
   (`e2e/tests/fixtures.ts`) marks onboarding done by default; opt out with `test.use({ onboarded: false })`.
 - E2E relies on stable `testID`s (`status-aircraft-count`, `map-aircraft-count`, `map-ac-<hex>`,
   `sim-*`); keep them when touching those components.
+- **Maestro smoke (Android)**: `app/.maestro/smoke.yaml` drives the release APK in demo mode on an
+  emulator (onboarding Skip → AR → List + detail card → Map or Radar → Settings; how to run it locally
+  in `app/.maestro/README.md`). `.github/workflows/android-e2e.yml` builds an x86_64 `assembleRelease`
+  (template debug signing, JS embedded) and runs it on an API 34 `google_apis` emulator nightly, on
+  dispatch, and on PRs labelled `mobile-e2e`. It selects by testID (Android resource-id), incl. the tab
+  buttons `tab-ar|map|list|settings` (`tabBarButtonTestID`), `onboarding-skip`, `status-source`
+  (DEMO/LIVE badge), `list-ac-<hex>`, `detail-card*`, `map-view-*`, `radar`, `settings-demo-mode`.
 
 ## Conventions & hard rules
 

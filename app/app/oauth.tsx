@@ -43,3 +43,5 @@ const styles = StyleSheet.create({
   },
   text: { color: color.textDim, fontSize: 15 },
 });
+
+export { RouteErrorBoundary as ErrorBoundary } from "@/components/RouteErrorBoundary";

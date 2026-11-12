@@ -1,0 +1,103 @@
+# Smoke flow for the release APK in demo mode (no backend, no sign-in): onboarding -> AR -> List +
+# detail card -> Map (Map or Radar) -> Settings. Run with `maestro test .maestro` from app/ (see
+# README.md); CI runs it in .github/workflows/android-e2e.yml. Selectors are RN testIDs, which Maestro
+# matches as Android resource-ids; `id` and `text` are regexes.
+appId: no.wsh.skylens
+name: Smoke (demo mode)
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+
+# Fresh state routes to onboarding; Skip finishes it in demo mode. Generous waits: cold start of a
+# release build on a CI emulator (software GPU) can be slow.
+- extendedWaitUntil:
+    visible:
+      id: "onboarding-skip"
+    timeout: 120000
+- tapOn:
+    id: "onboarding-skip"
+
+# AR screen: DEMO badge, and the "<n> ac" counter above zero once the recorded feed is replaying.
+- extendedWaitUntil:
+    visible:
+      id: "status-source"
+      text: "DEMO"
+    timeout: 60000
+- extendedWaitUntil:
+    visible:
+      id: "status-aircraft-count"
+      text: "[1-9][0-9]* ac"
+    timeout: 60000
+- takeScreenshot: ar
+
+# List: open the first aircraft row's detail card, expand it, close it with the back button.
+- tapOn:
+    id: "tab-list"
+- extendedWaitUntil:
+    visible:
+      id: "list-ac-.*"
+    timeout: 30000
+- tapOn:
+    id: "list-ac-.*"
+    index: 0
+- extendedWaitUntil:
+    visible:
+      id: "detail-card"
+    timeout: 15000
+- tapOn:
+    id: "detail-card-toggle"
+- extendedWaitUntil:
+    visible:
+      id: "detail-card-body"
+    timeout: 15000
+- takeScreenshot: list-detail
+- pressKey: back
+- extendedWaitUntil:
+    notVisible:
+      id: "detail-card"
+    timeout: 15000
+
+# Map: opens on the Map with a Maps key, on the Radar without one (fork PRs, local builds without the
+# key). Without a key the Google map can't draw, so only switch to it when it was the opening view.
+- tapOn:
+    id: "tab-map"
+- extendedWaitUntil:
+    visible:
+      id: "map-view-radar"
+    timeout: 30000
+- runFlow:
+    when:
+      notVisible:
+        id: "radar"
+    commands:
+      - tapOn:
+          id: "map-view-radar"
+      - extendedWaitUntil:
+          visible:
+            id: "radar"
+          timeout: 15000
+      - tapOn:
+          id: "map-view-map"
+      - extendedWaitUntil:
+          notVisible:
+            id: "radar"
+          timeout: 15000
+- runFlow:
+    when:
+      visible:
+        id: "radar"
+    commands:
+      - assertVisible:
+          id: "radar-range-label"
+- takeScreenshot: map
+
+# Settings opens.
+- tapOn:
+    id: "tab-settings"
+- extendedWaitUntil:
+    visible:
+      id: "settings-demo-mode"
+    timeout: 15000
+- takeScreenshot: settings

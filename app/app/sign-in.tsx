@@ -105,3 +105,5 @@ const styles = StyleSheet.create({
   secondaryText: { color: color.textDim, fontSize: 15, fontWeight: "600", textDecorationLine: "underline" },
   note: { color: color.textMuted, fontSize: 12, textAlign: "center", marginTop: 24, maxWidth: 300 },
 });
+
+export { RouteErrorBoundary as ErrorBoundary } from "@/components/RouteErrorBoundary";

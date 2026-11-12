@@ -502,3 +502,5 @@ const styles = StyleSheet.create({
   legendCard: { width: "100%", maxWidth: 380, gap: 10 },
   legendHint: { color: color.textDim, fontSize: 12, textAlign: "center" },
 });
+
+export { RouteErrorBoundary as ErrorBoundary } from "@/components/RouteErrorBoundary";

@@ -9,7 +9,10 @@
 //   - CI builds:    a GitHub Actions secret exported into the prebuild step's env
 //
 // Without the key, prebuild omits it and the Android Map tab (react-native-maps, Google provider)
-// renders blank/crashes. Web is unaffected (map.web.tsx uses Leaflet/OSM).
+// renders blank/crashes. Web is unaffected (map.web.tsx uses Leaflet/OSM). `extra.hasMapsKey` records
+// whether the key was there (only the boolean, never the key): `android.config` is stripped from the
+// public config, so the app can't see it at runtime, and the Map tab opens on Radar instead of a blank
+// map when it is false (src/components/webmap/mapAvailable.ts).
 module.exports = ({ config }) => {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
   const versionCode = process.env.ANDROID_VERSION_CODE;
@@ -31,5 +34,7 @@ module.exports = ({ config }) => {
   // so versionName tracks it too. Absent locally / on EAS (remote-managed), both are skipped.
   if (versionCode) android.versionCode = Number(versionCode);
 
-  return { ...config, ...(versionName ? { version: versionName } : {}), android };
+  const extra = { ...config.extra, hasMapsKey: Boolean(apiKey) };
+
+  return { ...config, ...(versionName ? { version: versionName } : {}), android, extra };
 };

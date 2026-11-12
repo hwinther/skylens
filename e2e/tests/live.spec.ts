@@ -93,10 +93,12 @@ test('map view: radar plots aircraft and the real map mounts', async ({ page }) 
     })
     .toBeGreaterThan(0)
 
-  // Default Radar view plots a blip per aircraft.
+  // The real (Leaflet) map is the default view; the Radar is the second toggle and plots a blip per
+  // aircraft.
+  await page.getByTestId('map-view-radar').click()
   await expect(page.getByTestId('map-web').locator('[data-testid^="map-ac-"]').first()).toBeVisible()
 
-  // Toggle to the real (Leaflet) map and confirm it mounts with type-icon markers.
+  // Back to the map and confirm it mounts with type-icon markers.
   await page.getByTestId('map-view-map').click()
   await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 15_000 })
 

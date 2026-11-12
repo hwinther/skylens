@@ -175,7 +175,7 @@ export function AircraftRadar({
   const rangeLabel = auto ? `Auto (${Math.round(maxRange)} km)` : `${maxRange} km`;
 
   return (
-    <View ref={rootRef} style={styles.root} onLayout={onLayout}>
+    <View testID="radar" ref={rootRef} style={styles.root} onLayout={onLayout}>
       {size > 0 && (
         <View style={{ width: size, height: size }}>
           {RINGS.map((f) => {
