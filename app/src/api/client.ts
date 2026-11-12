@@ -3,11 +3,16 @@
  * first when it is expired or about to expire, the same single-flight refresh the SignalR hub uses)
  * and throws a typed ApiError on non-2xx.
  *
+ * A 401 from the backend while holding a real session means the token was rejected even though it
+ * looked valid (revoked, clock skew): the client forces one refresh and retries once. If the IdP
+ * rejects that refresh the session ends, so the app shows signed out instead of silently empty layers.
+ *
  * The base URL comes from expo-constants extra / env so demo (LAN backend) and
  * production (skylens.wsh.no) can differ without code changes.
  */
 
-import { ensureFreshAccessToken } from "@/auth/refresh";
+import { ensureFreshAccessToken, forceRefreshAccessToken } from "@/auth/refresh";
+import { getTokensSync } from "@/auth/tokenStore";
 import { useApiIssueStore } from "@/state/apiIssueStore";
 import { flushClientLog, reportClientFailure } from "./clientLog";
 import type {
@@ -56,17 +61,20 @@ export class ApiClient {
   private readonly baseUrl: string;
   private readonly getToken: () => string | null | Promise<string | null>;
   private readonly fetchImpl: typeof fetch;
+  /** True when using the default token source, the only one the 401 refresh-and-retry applies to. */
+  private readonly usesSessionTokens: boolean;
 
   constructor(config: ApiClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/+$/, "");
     this.getToken = config.getToken ?? ensureFreshAccessToken;
+    this.usesSessionTokens = config.getToken == null;
     // Bind to the global: browser fetch throws "Illegal invocation" if called with a `this` other
     // than the Window, which happens when we store and call it as this.fetchImpl(...). (RN's fetch
     // doesn't care, so this only bit on web.)
     this.fetchImpl = config.fetchImpl ?? fetch.bind(globalThis);
   }
 
-  private async request<T>(path: string, init?: RequestInit): Promise<T> {
+  private async request<T>(path: string, init?: RequestInit, retried = false): Promise<T> {
     const token = await this.getToken();
     const headers = new Headers(init?.headers);
     headers.set("Accept", "application/json");
@@ -87,6 +95,10 @@ export class ApiClient {
     // The X-Skylens-Api marker proves the response came from Kestrel; its absence on a failure means
     // an edge gateway (CrowdSec) killed the request before it reached us.
     const reachedBackend = res.headers.get("X-Skylens-Api") != null;
+
+    if (res.status === 401 && reachedBackend && !retried && (await this.recoverFromRejectedToken(token))) {
+      return this.request<T>(path, init, true);
+    }
 
     if (!res.ok) {
       let body: unknown;
@@ -117,6 +129,24 @@ export class ApiClient {
 
     if (res.status === 204) return undefined as T;
     return (await res.json()) as T;
+  }
+
+  /**
+   * The backend rejected `token`. True when a different session token is now available to retry
+   * with: another request already refreshed, or a forced refresh worked. When the IdP rejects the
+   * refresh the session ends (the sign-in prompt appears) and this returns false. Only applies to a real
+   * (non-mock) token from the default token source.
+   */
+  private async recoverFromRejectedToken(token: string | null): Promise<boolean> {
+    if (!this.usesSessionTokens || !token) return false;
+    const current = getTokensSync();
+    if (!current || current.mock) return false;
+    if (current.accessToken !== token) return true;
+    const fresh = await forceRefreshAccessToken();
+    // No new token: either the IdP rejected the refresh (refresh.ts already ended the session), or it
+    // could not be reached. In the second case keep the session, since the refresh token may still be
+    // good; the 401 surfaces in the banner and the next request tries again.
+    return fresh != null && fresh !== token;
   }
 
   me(): Promise<MeResponse> {

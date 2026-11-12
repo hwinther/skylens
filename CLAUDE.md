@@ -88,6 +88,14 @@ npm run test:ci                   # container mode against docker-compose.e2e.ym
   updated `openapi.json`, and run `npm run openapi:generate` in `app/`.
 - The same API process serves the exported web app from `wwwroot` (SPA fallback to `index.html`)
   with security headers + CSP (`Security/`); CSP reports post back to the API.
+- **Sign-in gating (app)**: the root layout probes an anonymous `GET /api/me` at startup
+  (`src/auth/access.ts`; 200 under DevAuth → `authRequired=false`, 401 → `true`, retried every 5 s
+  while unknown). `useApiAllowed()` / `isApiAllowed()` (`state/authStore`) is the gate every API caller
+  checks: no hub connection and no REST calls while sign-in is required and there is no session (demo
+  still works on-device). Live mode then shows `SignInPrompt` instead. The web session persists in
+  localStorage (`state/persistStorage`, key `skylens.tokens.v1`; SecureStore on native), shared across
+  tabs: `refresh.ts` re-reads storage before refreshing and before giving up, and the root layout
+  follows the `storage` event. `ApiClient` refreshes once and retries on a 401 with a real session.
 - **Local/dev escape hatches**: `Auth:Disabled=true` (Development only) swaps in `DevAuthHandler`
   with a fixed principal. App env: `EXPO_PUBLIC_API_BASE_URL`, `EXPO_PUBLIC_FORCE_LIVE=1` (skip demo
   mode), `EXPO_PUBLIC_HOME_LAT/LON`. `npm run reverse:android` maps the device's port 5000 to the host.

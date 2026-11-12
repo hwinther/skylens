@@ -22,7 +22,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AppState, Platform } from "react-native";
 import type { ApiClient } from "@/api/client";
 import type { SatelliteDto } from "@/api/types";
-import { useAuthStore } from "@/state/authStore";
+import { useApiAllowed, useAuthStore } from "@/state/authStore";
 import {
   buildSatrecs,
   propagateAll,
@@ -104,7 +104,7 @@ export function useSatellites(options: UseSatellitesOptions): UseSatellitesResul
   const {
     client,
     observer,
-    enabled,
+    enabled: wanted,
     groups,
     elevationMaskDeg,
     setIntervalImpl,
@@ -121,6 +121,9 @@ export function useSatellites(options: UseSatellitesOptions): UseSatellitesResul
   // AR screen in a flat 5-minute backoff, while the list screen — mounted after sign-in — fetched
   // fine with its own hook instance ("satellites in list but not in AR").
   const isAuthenticated = useAuthStore((s) => s.status === "authenticated");
+  // No API calls without access (signed out behind real auth): satellites stay off until sign-in.
+  const apiAllowed = useApiAllowed();
+  const enabled = wanted && apiAllowed;
 
   // --- SLOW: fetch the OMM snapshot; refetch on 6 h timer / app re-activation / sign-in; back off
   // on failure (escalating, see retryDelayMs). All state updates live in the async .then/.catch

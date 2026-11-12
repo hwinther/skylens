@@ -1,7 +1,11 @@
 using Xunit;
 using System.Net;
+using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -124,6 +128,47 @@ public sealed class SmokeTests
 
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         Assert.StartsWith("text/html", resp.Content.Headers.ContentType?.ToString());
+    }
+
+    [Fact]
+    public async Task Every_api_endpoint_except_client_log_requires_auth()
+    {
+        // The app decides whether to show its sign-in card by probing an anonymous GET /api/me, and
+        // makes no API calls while signed out. That only holds if the whole /api surface is guarded:
+        // walk every mapped /api route and assert an anonymous call is a 401. POST /api/client-log is
+        // the one deliberate exception (failure reports must get through even when auth is broken).
+        using var client = _factory.CreateClient();
+        var sources = _factory.Services.GetServices<EndpointDataSource>();
+
+        var routes = sources
+            .SelectMany(s => s.Endpoints)
+            .OfType<RouteEndpoint>()
+            .Where(e => e.RoutePattern.RawText is { } raw && raw.StartsWith("/api/", StringComparison.Ordinal))
+            .SelectMany(e => (e.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods ?? ["GET"])
+                .Select(method => (Method: method, Route: e.RoutePattern.RawText!)))
+            .Distinct()
+            .ToList();
+
+        Assert.Contains(routes, r => r.Route == "/api/client-log");
+        Assert.Contains(routes, r => r.Route == "/api/me");
+        Assert.True(routes.Count >= 15, $"expected the full /api surface, found {routes.Count} routes");
+
+        var failures = new List<string>();
+        foreach (var (method, route) in routes.Where(r => r.Route != "/api/client-log"))
+        {
+            // Route values only need to match the template; auth runs before binding.
+            var path = Regex.Replace(route, @"\{(\w+)(:[^}]*)?\}",
+                m => m.Groups[2].Value.Contains("int", StringComparison.Ordinal) ? "25544" : "abc123");
+            using var request = new HttpRequestMessage(new HttpMethod(method), path);
+            if (method is "POST" or "PUT" or "PATCH")
+                request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+
+            using var resp = await client.SendAsync(request, TestContext.Current.CancellationToken);
+            if (resp.StatusCode != HttpStatusCode.Unauthorized)
+                failures.Add($"{method} {path} -> {(int)resp.StatusCode}");
+        }
+
+        Assert.True(failures.Count == 0, "anonymous /api calls not rejected:\n" + string.Join("\n", failures));
     }
 
     [Fact]

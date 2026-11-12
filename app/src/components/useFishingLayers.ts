@@ -11,6 +11,7 @@
 import { useEffect, useState } from "react";
 import type { ApiClient } from "@/api/client";
 import type { FishingZone, LostGear } from "@/api/types";
+import { useApiAllowed } from "@/state/authStore";
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 
@@ -32,7 +33,10 @@ export interface FishingLayers {
 const NO_ZONES: FishingZone[] = [];
 const NO_GEAR: LostGear[] = [];
 
-export function useFishingLayers({ client, enabled }: UseFishingLayersOptions): FishingLayers {
+export function useFishingLayers({ client, enabled: wanted }: UseFishingLayersOptions): FishingLayers {
+  // No API calls without access (signed out behind real auth): idle and empty.
+  const apiAllowed = useApiAllowed();
+  const enabled = wanted && apiAllowed;
   const [zones, setZones] = useState<FishingZone[]>(NO_ZONES);
   const [gear, setGear] = useState<LostGear[]>(NO_GEAR);
   // Set only inside the async callback below (never synchronously in the effect body) so this stays clear
@@ -65,5 +69,9 @@ export function useFishingLayers({ client, enabled }: UseFishingLayersOptions): 
     };
   }, [enabled, client]);
 
-  return { zones, gear, status: enabled ? fetchStatus : "idle" };
+  return {
+    zones: enabled ? zones : NO_ZONES,
+    gear: enabled ? gear : NO_GEAR,
+    status: enabled ? fetchStatus : "idle",
+  };
 }

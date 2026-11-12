@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import type { ApiClient } from "@/api/client";
 import type { PortDto } from "@/api/types";
 import type { Observer } from "./webmap/relative";
+import { useApiAllowed } from "@/state/authStore";
 
 /** Same reach as the airports layer: covers any map view around the observer. */
 export const PORTS_RADIUS_KM = 150;
@@ -28,7 +29,10 @@ export interface PortsData {
 
 const NONE: PortsData = { ports: [], attribution: null };
 
-export function usePorts({ client, observer, enabled }: UsePortsOptions): PortsData {
+export function usePorts({ client, observer, enabled: wanted }: UsePortsOptions): PortsData {
+  // No API calls without access (signed out behind real auth): the layer just stays empty.
+  const apiAllowed = useApiAllowed();
+  const enabled = wanted && apiAllowed;
   const [data, setData] = useState<PortsData>(NONE);
 
   const lat = observer ? Math.round(observer.lat * 100) / 100 : null;

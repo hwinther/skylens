@@ -43,13 +43,19 @@ export function endpointOf(path: string): string {
   return q < 0 ? path : path.slice(0, q);
 }
 
-/** One-line, user-facing text for an issue. */
-export function describeApiIssue(issue: ApiIssue): string {
+/**
+ * One-line, user-facing text for an issue. `signedOut` (the backend wants a sign-in and there is no
+ * session) turns a 401 into an invitation to sign in rather than "session expired" to someone who
+ * never signed in.
+ */
+export function describeApiIssue(issue: ApiIssue, opts: { signedOut?: boolean } = {}): string {
   const what = issue.endpoint.replace(/^\/api\//, "");
   const times = issue.count > 1 ? ` ×${issue.count}` : "";
   switch (issue.kind) {
     case "auth":
-      return `Session expired — couldn't load ${what} (401)${times}. Sign in again.`;
+      return opts.signedOut
+        ? `Sign in to load ${what} (401)${times}.`
+        : `Session expired — couldn't load ${what} (401)${times}. Sign in again.`;
     case "forbidden":
       return `Access denied loading ${what} (403)${times}.`;
     case "blocked":

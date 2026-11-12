@@ -1,16 +1,12 @@
 /**
- * User settings: AR calibration + demo toggle. Persisted to expo-secure-store via
- * zustand's persist middleware so calibration survives restarts.
- *
- * The persist storage adapter wraps SecureStore in the StateStorage interface
- * zustand expects. SecureStore is only available on native; under jest/web the
- * adapter degrades to an in-memory map so tests and web bundling don't crash.
+ * User settings: AR calibration + demo toggle. Persisted via zustand's persist middleware
+ * (SecureStore on native, localStorage on web; see ./persistStorage) so calibration survives
+ * restarts. Under jest the adapter degrades to an in-memory map so tests don't crash.
  */
 
 import { create } from "zustand";
 import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
-import * as SecureStore from "expo-secure-store";
-import { Platform } from "react-native";
+import { platformStorage } from "./persistStorage";
 import { DEFAULT_HFOV_DEG } from "@/ar/projection";
 import { DEFAULT_ELEVATION_MASK_DEG } from "@/ar/satellites";
 
@@ -100,70 +96,8 @@ interface SettingsState {
 const forceLive =
   process.env.EXPO_PUBLIC_FORCE_LIVE === "1" || process.env.EXPO_PUBLIC_FORCE_LIVE === "true";
 
-const memoryFallback = new Map<string, string>();
-
-// Native persists to SecureStore. Web has no SecureStore, so persist to the browser's
-// localStorage instead — otherwise the in-memory fallback below was wiped on every page
-// load and nothing (settings, the onboarding flag) survived a reload. Both degrade to the
-// in-memory map when neither backend is reachable (server-render / private mode / jest).
-type WebKV = {
-  getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
-  removeItem(key: string): void;
-};
-// The cast keeps this compiling without the DOM lib in tsconfig; the per-method try/catch
-// falls back to memory whenever localStorage is genuinely absent (e.g. on native).
-const web = globalThis as unknown as { localStorage: WebKV };
-
-const nativeStorage: StateStorage = {
-  getItem: async (name) => {
-    try {
-      return (await SecureStore.getItemAsync(name)) ?? null;
-    } catch {
-      return memoryFallback.get(name) ?? null;
-    }
-  },
-  setItem: async (name, value) => {
-    try {
-      await SecureStore.setItemAsync(name, value);
-    } catch {
-      memoryFallback.set(name, value);
-    }
-  },
-  removeItem: async (name) => {
-    try {
-      await SecureStore.deleteItemAsync(name);
-    } catch {
-      memoryFallback.delete(name);
-    }
-  },
-};
-
-const webStorage: StateStorage = {
-  getItem: (name) => {
-    try {
-      return web.localStorage.getItem(name);
-    } catch {
-      return memoryFallback.get(name) ?? null;
-    }
-  },
-  setItem: (name, value) => {
-    try {
-      web.localStorage.setItem(name, value);
-    } catch {
-      memoryFallback.set(name, value);
-    }
-  },
-  removeItem: (name) => {
-    try {
-      web.localStorage.removeItem(name);
-    } catch {
-      memoryFallback.delete(name);
-    }
-  },
-};
-
-const settingsStorage: StateStorage = Platform.OS === "web" ? webStorage : nativeStorage;
+// SecureStore on native, localStorage on web, memory when neither is reachable (see persistStorage).
+const settingsStorage: StateStorage = platformStorage();
 
 export const useSettingsStore = create<SettingsState>()(
   persist(

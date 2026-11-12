@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { SatRec } from "satellite.js";
 import type { ApiClient } from "@/api/client";
+import { useApiAllowed } from "@/state/authStore";
 import { buildSatrec, groundTrack, subSatellitePoint, type GroundTrackPoint } from "@/ar";
 import { useSatelliteTrackStore } from "@/state/satelliteTrackStore";
 
@@ -53,6 +54,8 @@ const EMPTY_COMPUTED: Computed = { segments: EMPTY_SEGMENTS, subPoint: null };
 export function useSatelliteGroundTrack(client: ApiClient): GroundTrackData {
   const trackedNoradId = useSatelliteTrackStore((s) => s.trackedNoradId);
   const setTracked = useSatelliteTrackStore((s) => s.setTracked);
+  // No API calls without access (signed out behind real auth): no track.
+  const apiAllowed = useApiAllowed();
 
   // The satrec + name for the LAST satellite whose detail we fetched. We keep the id alongside so a
   // stale in-flight/previous result never renders for a newly-selected satellite (see `satrec` below).
@@ -63,7 +66,7 @@ export function useSatelliteGroundTrack(client: ApiClient): GroundTrackData {
   // (all updates land in the async .then) so nothing is reset mid-render; a mismatched-id result is
   // filtered out below instead of being cleared here. Fails soft: a rejected fetch leaves no track.
   useEffect(() => {
-    if (trackedNoradId == null) return;
+    if (trackedNoradId == null || !apiAllowed) return;
     let cancelled = false;
     client
       .satelliteDetail(trackedNoradId)
@@ -81,12 +84,12 @@ export function useSatelliteGroundTrack(client: ApiClient): GroundTrackData {
     return () => {
       cancelled = true;
     };
-  }, [trackedNoradId, client]);
+  }, [trackedNoradId, client, apiAllowed]);
 
   // Only trust the fetched result when it matches the current selection — while switching satellites (or
   // after clearing) the previous satrec must not linger on the map.
   const active =
-    trackedNoradId != null && fetched?.id === trackedNoradId ? fetched : null;
+    apiAllowed && trackedNoradId != null && fetched?.id === trackedNoradId ? fetched : null;
   const satrec = active?.satrec ?? null;
 
   // Recompute the path + sub-point immediately, then on a slow interval so the track ages with the

@@ -1,27 +1,29 @@
 /**
  * Root layout: wraps the router in the gesture-handler root and safe-area provider,
- * hydrates persisted tokens + settings once, and defines the tab navigation
- * (AR / Map / Settings). The sign-in screen is a modal route outside the tabs.
+ * hydrates persisted tokens + settings once, probes whether the backend requires a sign-in, and
+ * defines the tab navigation (AR / Map / List / Settings). The sign-in screen is a hidden route.
  */
 
 import { color } from "@/theme";
 import { useEffect, useMemo } from "react";
-import type { ColorValue } from "react-native";
+import { Platform, type ColorValue } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { router, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
+import { probeAuthRequired } from "@/auth/access";
 import { ensureFreshAccessToken } from "@/auth/refresh";
-import { hydrateTokens } from "@/auth/tokenStore";
-import { useAuthStore } from "@/state/authStore";
+import { hydrateTokens, TOKENS_KEY } from "@/auth/tokenStore";
+import { useApiAllowed, useAuthStore } from "@/state/authStore";
 import { useSettingsStore } from "@/state/settingsStore";
 import { useObserverStore } from "@/state/observerStore";
 import { SIM_RADIUS_KM, useSimStore } from "@/state/simStore";
 import { getApiBaseUrl } from "@/api/config";
 import { useLiveFeed, useObserverLocation } from "@/components";
 import { ApiIssueBanner } from "@/components/ApiIssueBanner";
+import { SignInPrompt } from "@/components/SignInPrompt";
 
 // On web, the OAuth popup redirects back to /oauth inside this same single-page bundle;
 // this posts the auth response to the opener and dismisses the popup. No-op on native
@@ -39,8 +41,15 @@ const iconColor = (c: ColorValue) => (typeof c === "number" || c == null ? undef
  */
 const HIDDEN_ROUTE = { tabBarItemStyle: { display: "none" } } as const;
 
+/** How often to re-ask whether the backend requires a sign-in while it has given no answer. */
+const AUTH_PROBE_RETRY_MS = 5_000;
+
 export default function RootLayout() {
   const setStatus = useAuthStore((s) => s.setStatus);
+  const setAuthRequired = useAuthStore((s) => s.setAuthRequired);
+  // False while the backend wants a sign-in and there is none (or that's still unknown): then the app
+  // makes no API calls at all, and live mode shows the sign-in card instead of a hub that 401s.
+  const apiAllowed = useApiAllowed();
   const demoMode = useSettingsStore((s) => s.demoMode);
   const radiusKm = useSettingsStore((s) => s.radiusKm);
   const onboarded = useSettingsStore((s) => s.onboarded);
@@ -66,13 +75,52 @@ export default function RootLayout() {
   // App-wide live SignalR feed: populate the shared aircraft store here (not in the AR screen)
   // so every tab — AR and Map — sees the same 1 Hz data regardless of which mounts first. Demo
   // mode leaves this disabled; the AR screen drives the mock feed instead.
-  useLiveFeed({ enabled: !demoMode, baseUrl, observer: feedCentre, radiusKm: feedRadiusKm });
+  useLiveFeed({
+    enabled: !demoMode && apiAllowed,
+    baseUrl,
+    observer: feedCentre,
+    radiusKm: feedRadiusKm,
+  });
 
   useEffect(() => {
     (async () => {
       const tokens = await hydrateTokens();
       setStatus(tokens ? "authenticated" : "unauthenticated");
     })();
+  }, [setStatus]);
+
+  // Does the backend require a sign-in? DevAuth (local dev, e2e, previews) answers an anonymous
+  // /api/me with 200, real auth with 401. No answer (offline, 5xx) → ask again shortly.
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const probe = async () => {
+      const required = await probeAuthRequired(baseUrl);
+      if (cancelled) return;
+      setAuthRequired(required);
+      if (required == null) timer = setTimeout(() => void probe(), AUTH_PROBE_RETRY_MS);
+    };
+    void probe();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [baseUrl, setAuthRequired]);
+
+  // Web: every tab shares the session in localStorage. Follow a sign-in, sign-out or refresh made in
+  // another tab (the `storage` event only fires for changes made elsewhere).
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+    const onStorage = (e: { key: string | null }) => {
+      if (e.key !== TOKENS_KEY && e.key !== null) return;
+      void hydrateTokens().then((tokens) => {
+        // Leave an in-progress sign-in in this tab alone; it settles the status itself.
+        if (useAuthStore.getState().status === "authenticating") return;
+        setStatus(tokens ? "authenticated" : "unauthenticated");
+      });
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, [setStatus]);
 
   // Keep the access token fresh app-wide, not only while Settings/Sign-in (useAuth) is mounted.
@@ -144,6 +192,8 @@ export default function RootLayout() {
         </Tabs>
         {/* Failed REST calls (expired session, server error, offline) shown above every tab. */}
         <ApiIssueBanner />
+        {/* Live mode with real auth and no session: sign in, or continue in demo. */}
+        <SignInPrompt />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

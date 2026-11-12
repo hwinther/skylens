@@ -7,6 +7,10 @@
  *
  * The 60 Hz pose stays in refs (see usePoseRefs); only the slow-moving observer position
  * drives the subscription here.
+ *
+ * The root layout enables it only in live mode AND while the API may be called (useApiAllowed): with
+ * real auth and no session it stays off and the sign-in card shows instead of a hub that 401s forever.
+ * Turning it off (sign-out, switching to demo) clears the aircraft and vessels it delivered.
  */
 
 import { useCallback, useEffect, useRef } from "react";
@@ -30,7 +34,7 @@ export interface LiveObserver {
 }
 
 export interface UseLiveFeedOptions {
-  /** Connect only when true (live mode). Demo mode leaves this false. */
+  /** Connect only when true (live mode with API access). Demo mode leaves this false. */
   enabled: boolean;
   /** Backend base URL. */
   baseUrl: string;
@@ -45,15 +49,15 @@ export function useLiveFeed({ enabled, baseUrl, observer, radiusKm }: UseLiveFee
   const setFeedStatus = useAircraftStore((s) => s.setFeedStatus);
   const setConnection = useAircraftStore((s) => s.setConnection);
   const setSource = useAircraftStore((s) => s.setSource);
+  const clearAircraft = useAircraftStore((s) => s.clear);
   // Vessels ride this same connection (the "vessels" message) but live in their own store.
   const setVessels = useVesselStore((s) => s.setSnapshot);
   const clearVessels = useVesselStore((s) => s.clear);
-  // In production the hub requires a bearer (RequireAuthorization), so an anonymous connect 401s
-  // at the WS handshake. A failed start is retried below with backoff, but sign-in/out still tears
-  // the connection down so the new token is used straight away instead of at the next retry. Keyed on
-  // the boolean (not the raw status) so unknown→unauthenticated and the transient "authenticating"
-  // state don't flap the connection; environments where sign-in never happens (preview DevAuth,
-  // container e2e) see a constant false and behave exactly as before.
+  // In production the hub requires a bearer (RequireAuthorization); the caller keeps this hook
+  // disabled until there is a session. Sign-in/out still tears the connection down so the new token
+  // is used straight away. Keyed on the boolean (not the raw status) so unknown→unauthenticated and
+  // the transient "authenticating" state don't flap the connection; environments where sign-in never
+  // happens (DevAuth: local dev, e2e, previews) see a constant false.
   const authenticated = useAuthStore((s) => s.status === "authenticated");
 
   const connRef = useRef<HubConnection | null>(null);
@@ -154,6 +158,9 @@ export function useLiveFeed({ enabled, baseUrl, observer, radiusKm }: UseLiveFee
       offVessels();
       offStatus();
       clearVessels();
+      // Don't leave the last live snapshot on screen after sign-out or a switch to demo (the demo
+      // feed repopulates the same store when it starts).
+      clearAircraft();
       connRef.current = null;
       setConnection("disconnected");
       void conn.stop();
@@ -166,6 +173,7 @@ export function useLiveFeed({ enabled, baseUrl, observer, radiusKm }: UseLiveFee
     setFeedStatus,
     setVessels,
     clearVessels,
+    clearAircraft,
     setConnection,
     setSource,
     subscribeNow,

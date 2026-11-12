@@ -1,16 +1,23 @@
 /**
- * Token store: a small in-memory holder for the current access/refresh tokens,
- * persisted to expo-secure-store so a session survives app restarts.
+ * Token store: a small in-memory holder for the current access/refresh tokens, persisted so a
+ * session survives restarts and reloads: expo-secure-store on native, localStorage on web (see
+ * src/state/persistStorage). Under jest (no native module, no localStorage) it degrades to an
+ * in-memory map.
  *
  * The in-memory copy is what the fetch client and SignalR accessTokenFactory read
- * synchronously on every request/connect, so they never hit disk on the hot path.
- * `hydrate()` loads the persisted tokens once at startup; `setTokens`/`clear`
- * keep memory and disk in sync.
+ * synchronously on every request/connect, so they never hit storage on the hot path.
+ * `hydrate()` loads the persisted tokens at startup (and again when another browser tab changed
+ * them); `setTokens`/`clear` keep memory and storage in sync.
+ *
+ * On web several tabs share the one persisted token set, so refresh.ts re-reads it with
+ * `readPersistedTokens()` before spending (or giving up on) a refresh token another tab may have
+ * already rotated.
  */
 
-import * as SecureStore from "expo-secure-store";
+import { platformStorage } from "@/state/persistStorage";
 
-const KEY = "skylens.tokens.v1";
+/** Storage key of the persisted token set (also watched by the web `storage` event listener). */
+export const TOKENS_KEY = "skylens.tokens.v1";
 
 export interface StoredTokens {
   accessToken: string;
@@ -24,56 +31,41 @@ export interface StoredTokens {
 
 let current: StoredTokens | null = null;
 
-// SecureStore is native-only; on web the module is an empty stub whose methods throw,
-// and jest runs under a plain node env with no native module. Mirror the settingsStore
-// pattern: degrade to an in-memory map so sign-in/out works on web (a session simply
-// doesn't survive a full page reload there, which is acceptable) and tests don't crash.
-const memoryFallback = new Map<string, string>();
+const storage = platformStorage();
 
-async function readRaw(): Promise<string | null> {
+function parse(raw: string | null | undefined): StoredTokens | null {
+  if (!raw) return null;
   try {
-    return (await SecureStore.getItemAsync(KEY)) ?? null;
+    const parsed = JSON.parse(raw) as StoredTokens | null;
+    return parsed && typeof parsed.accessToken === "string" ? parsed : null;
   } catch {
-    return memoryFallback.get(KEY) ?? null;
-  }
-}
-
-async function writeRaw(value: string): Promise<void> {
-  try {
-    await SecureStore.setItemAsync(KEY, value);
-  } catch {
-    memoryFallback.set(KEY, value);
-  }
-}
-
-async function deleteRaw(): Promise<void> {
-  try {
-    await SecureStore.deleteItemAsync(KEY);
-  } catch {
-    memoryFallback.delete(KEY);
-  }
-}
-
-/** Load persisted tokens into memory. Call once at app start. */
-export async function hydrateTokens(): Promise<StoredTokens | null> {
-  try {
-    const raw = await readRaw();
-    if (!raw) {
-      current = null;
-      return null;
-    }
-    current = JSON.parse(raw) as StoredTokens;
-    return current;
-  } catch {
-    current = null;
     return null;
   }
+}
+
+/** Read the persisted token set without touching the in-memory copy. */
+export async function readPersistedTokens(): Promise<StoredTokens | null> {
+  try {
+    return parse(await storage.getItem(TOKENS_KEY));
+  } catch {
+    return null;
+  }
+}
+
+/** Load persisted tokens into memory. Call at app start (and when another tab changed them). */
+export async function hydrateTokens(): Promise<StoredTokens | null> {
+  current = await readPersistedTokens();
+  return current;
 }
 
 /** Persist and cache a new token set. */
 export async function setTokens(tokens: StoredTokens): Promise<void> {
   current = tokens;
-  await writeRaw(JSON.stringify(tokens));
+  try {
+    await storage.setItem(TOKENS_KEY, JSON.stringify(tokens));
+  } catch {
+    // The adapters already fall back to memory; nothing more to do.
+  }
 }
 
 /** Read the current in-memory access token synchronously (for signalr/fetch). */
@@ -86,14 +78,18 @@ export function getTokensSync(): StoredTokens | null {
   return current;
 }
 
-/** Clear tokens from memory and disk (sign-out). */
+/** Clear tokens from memory and storage (sign-out). */
 export async function clearTokens(): Promise<void> {
   current = null;
-  await deleteRaw();
+  try {
+    await storage.removeItem(TOKENS_KEY);
+  } catch {
+    // See setTokens.
+  }
 }
 
-/** True when the access token is missing or within `skewMs` of expiry. */
-export function isExpired(skewMs = 60_000, now = Date.now()): boolean {
-  if (!current) return true;
-  return now >= current.expiresAt - skewMs;
+/** True when `tokens` (default: the in-memory set) is missing or within `skewMs` of expiry. */
+export function isExpired(skewMs = 60_000, now = Date.now(), tokens: StoredTokens | null = current): boolean {
+  if (!tokens) return true;
+  return now >= tokens.expiresAt - skewMs;
 }

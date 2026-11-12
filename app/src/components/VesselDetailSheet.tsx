@@ -19,6 +19,7 @@ import { ShowOnMapButton } from "./ShowOnMapButton";
 import { SimulatorButton } from "./SimulatorButton";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
+import { useApiAllowed } from "@/state/authStore";
 import type { VesselDetail, VesselDto } from "@/api/types";
 import { aidTypeLabel, formatDimensions, navStatusText } from "./vesselFormat";
 
@@ -35,6 +36,8 @@ export interface VesselDetailSheetProps {
 
 export function VesselDetailSheet({ mmsi, vessel, onClose }: VesselDetailSheetProps) {
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
+  // Without API access (signed out behind real auth) only the live DTO's rows show.
+  const apiAllowed = useApiAllowed();
   const [detail, setDetail] = useState<VesselDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +45,7 @@ export function VesselDetailSheet({ mmsi, vessel, onClose }: VesselDetailSheetPr
   useEffect(() => {
     setDetail(null);
     setError(null);
-    if (mmsi == null) return;
+    if (mmsi == null || !apiAllowed) return;
     let cancelled = false;
     setLoading(true);
     client
@@ -59,7 +62,7 @@ export function VesselDetailSheet({ mmsi, vessel, onClose }: VesselDetailSheetPr
     return () => {
       cancelled = true;
     };
-  }, [mmsi, client]);
+  }, [mmsi, client, apiAllowed]);
 
   const metadata = detail?.metadata ?? null;
   // Identity: prefer the live DTO, fall back to the fetched state, then the bare MMSI.

@@ -1,7 +1,8 @@
 /**
  * Sign-in screen. In real mode it kicks off the expo-auth-session PKCE flow against
- * auth.wsh.no; in mock mode it mints a fake token so the app is usable in Expo Go
- * before the custom-scheme dev build exists. On success it routes back to the AR view.
+ * auth.wsh.no; in mock mode (dev only) it mints a fake token so the app is usable in Expo Go
+ * before the custom-scheme dev build exists. On success it goes back to where the user came from
+ * (or the AR view). "Continue in demo" switches to demo mode, which needs no account.
  */
 
 import { color } from "@/theme";
@@ -10,14 +11,22 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { router } from "expo-router";
 import { useAuth } from "@/auth/useAuth";
 import { useAuthStore } from "@/state/authStore";
+import { useSettingsStore } from "@/state/settingsStore";
+
+function leave() {
+  if (router.canGoBack()) router.back();
+  else router.replace("/");
+}
 
 export default function SignInScreen() {
-  const { signIn } = useAuth();
+  const { signIn, ready, loading } = useAuth();
   const status = useAuthStore((s) => s.status);
   const mockMode = useAuthStore((s) => s.mockMode);
+  const lastError = useAuthStore((s) => s.lastError);
+  const setDemoMode = useSettingsStore((s) => s.setDemoMode);
 
   useEffect(() => {
-    if (status === "authenticated") router.replace("/");
+    if (status === "authenticated") leave();
   }, [status]);
 
   return (
@@ -28,14 +37,41 @@ export default function SignInScreen() {
       {status === "authenticating" ? (
         <ActivityIndicator color={color.entity.air} />
       ) : (
-        <Pressable style={styles.button} onPress={() => void signIn()}>
+        <Pressable
+          testID="signin-screen-signin"
+          accessibilityRole="button"
+          // Disabled only while the IdP discovery is still loading; once it failed, a press reports
+          // the problem and retries it.
+          disabled={!ready && loading}
+          style={[styles.button, !ready && loading && styles.disabled]}
+          // No await before signIn(): the web popup must open inside this press.
+          onPress={() => void signIn()}
+        >
           <Text style={styles.buttonText}>
-            {mockMode ? "Continue (mock)" : "Sign in with wsh.no"}
+            {!ready && loading ? "Loading…" : mockMode ? "Continue (mock)" : "Sign in with wsh.no"}
           </Text>
         </Pressable>
       )}
 
-      {mockMode && (
+      {lastError ? (
+        <Text testID="signin-screen-error" style={styles.error}>
+          {lastError}
+        </Text>
+      ) : null}
+
+      <Pressable
+        testID="signin-screen-demo"
+        accessibilityRole="button"
+        style={styles.secondary}
+        onPress={() => {
+          setDemoMode(true);
+          leave();
+        }}
+      >
+        <Text style={styles.secondaryText}>Continue in demo</Text>
+      </Pressable>
+
+      {__DEV__ && mockMode && (
         <Text style={styles.note}>
           Mock mode is on — sign-in is simulated. Turn it off in Settings once the dev
           build is installed.
@@ -55,6 +91,17 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 28,
   },
+  disabled: { opacity: 0.6 },
   buttonText: { color: color.text, fontSize: 17, fontWeight: "600" },
+  error: {
+    color: color.status.error,
+    fontSize: 14,
+    fontWeight: "600",
+    textAlign: "center",
+    marginTop: 16,
+    maxWidth: 360,
+  },
+  secondary: { marginTop: 20, paddingVertical: 10, paddingHorizontal: 20 },
+  secondaryText: { color: color.textDim, fontSize: 15, fontWeight: "600", textDecorationLine: "underline" },
   note: { color: color.textMuted, fontSize: 12, textAlign: "center", marginTop: 24, maxWidth: 300 },
 });
