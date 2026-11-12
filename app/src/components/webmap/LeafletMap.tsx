@@ -87,6 +87,23 @@ export interface LeafletMapProps {
   following?: boolean;
   /** Called when the user drags the map (ends follow mode). */
   onUserPan?: () => void;
+  /** Shift Leaflet's right-hand controls (attribution) left, e.g. past a side-panel detail card. */
+  controlsRightInset?: number;
+}
+
+/**
+ * Moves Leaflet's right-hand control corners (the attribution, which must stay readable while the
+ * OSM-derived ports show) left by `inset` px, so a right-docked detail panel doesn't cover them.
+ */
+function ControlsInset({ inset }: { inset: number }) {
+  const map = useMap();
+  useEffect(() => {
+    const corners = map.getContainer().querySelectorAll<HTMLElement>(".leaflet-control-container .leaflet-right");
+    corners.forEach((el) => {
+      el.style.right = inset ? `${inset}px` : "";
+    });
+  }, [map, inset]);
+  return null;
 }
 
 // Reach the icon-font statics (not in the public types) so Leaflet's raw-HTML markers render the same
@@ -416,6 +433,7 @@ export function LeafletMap({
   focusSeq = 0,
   following = false,
   onUserPan,
+  controlsRightInset = 0,
 }: LeafletMapProps) {
   const positioned = aircraft.filter((a) => a.lat != null && a.lon != null);
   const positionedVessels = vessels.filter((v) => v.lat != null && v.lon != null);
@@ -522,6 +540,7 @@ export function LeafletMap({
       <FitBounds points={points} />
       <FitTrack points={trackPoints} trackKey={trackKey} />
       <FocusController target={focus} seq={focusSeq} following={following} onUserPan={onUserPan} />
+      <ControlsInset inset={controlsRightInset} />
     </MapContainer>
   );
 }

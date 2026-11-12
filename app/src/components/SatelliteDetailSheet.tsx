@@ -1,5 +1,5 @@
 /**
- * Satellite detail bottom sheet. Opens on a tap of a satellite label (AR overlay) or an Overhead-list
+ * Satellite detail card. Opens on a tap of a satellite label (AR overlay) or an Overhead-list
  * row. Mirrors DetailSheet: a cancellable fetch on noradId change (GET /api/satellites/{noradId} for
  * the full SatNOGS transmitter list) plus the same sheet chrome and close behaviour.
  *
@@ -12,8 +12,8 @@
 
 import { alpha, color } from "@/theme";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Sheet } from "./Sheet";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { Sheet, sheetActionStyle, SheetSummary } from "./Sheet";
 import { SimulatorButton } from "./SimulatorButton";
 import { useRouter } from "expo-router";
 import { ApiClient } from "@/api/client";
@@ -46,6 +46,8 @@ export interface SatelliteDetailSheetProps {
   /** Elevation mask (deg) the pass prediction uses; defaults to DEFAULT_ELEVATION_MASK_DEG. */
   elevationMaskDeg?: number;
   onClose: () => void;
+  /** Side-panel layout only: offset from the top of the screen (see Sheet). */
+  panelTop?: number;
 }
 
 /** Local wall-clock time for a pass instant, e.g. "18:42:10" (display only — not unit-tested). */
@@ -74,6 +76,7 @@ export function SatelliteDetailSheet({
   observer,
   elevationMaskDeg,
   onClose,
+  panelTop,
 }: SatelliteDetailSheetProps) {
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
   // Without API access (signed out behind real auth) only the live view's rows show.
@@ -140,7 +143,14 @@ export function SatelliteDetailSheet({
   const orbit = detail ? orbitInfo(detail.satellite.omm) : null;
 
   return (
-    <Sheet visible={noradId != null} onClose={onClose} accent={color.entity.orbit} maxHeightPct={82}>
+    <Sheet
+      visible={noradId != null}
+      panelTop={panelTop}
+      onClose={onClose}
+      accent={color.entity.orbit}
+      maxHeightPct={82}
+      label="Satellite details"
+      header={
         <View style={styles.header}>
           <Text testID="sat-detail-title" style={styles.title} numberOfLines={1}>
             {name}
@@ -152,7 +162,47 @@ export function SatelliteDetailSheet({
           ) : null}
           {noradId != null ? <Text style={styles.norad}>#{noradId}</Text> : null}
         </View>
-
+      }
+      summary={
+        <SheetSummary
+          parts={
+            view
+              ? [
+                  `El ${Math.round(view.elevationDeg)}°`,
+                  `Az ${Math.round(view.azimuthDeg)}° ${compass8(view.azimuthDeg)}`,
+                  `${view.rangeKm.toFixed(0)} km`,
+                ]
+              : ["Below the elevation mask"]
+          }
+        />
+      }
+      actions={
+        noradId != null ? (
+          <>
+            <Pressable
+              testID="sat-show-ground-track"
+              style={[styles.trackButton, sheetActionStyle]}
+              onPress={() => {
+                // Hand the selection to the Map via the ephemeral store, close the sheet, and route to
+                // the Map tab (the sheet is reached from both AR and List — both land on the map).
+                setTracked(noradId);
+                onClose();
+                router.push("/map");
+              }}
+            >
+              <Text style={styles.trackButtonText}>Show ground track</Text>
+            </Pressable>
+            <SimulatorButton
+              testID="sat-cockpit"
+              target={{ kind: "satellite", id: String(noradId) }}
+              accent={color.entity.orbit}
+              onClose={onClose}
+              style={sheetActionStyle}
+            />
+          </>
+        ) : null
+      }
+    >
         {view ? (
           <View style={styles.liveRows}>
             <LiveRow label="Elevation" value={`${Math.round(view.elevationDeg)}°`} />
@@ -213,31 +263,8 @@ export function SatelliteDetailSheet({
           ) : null}
         </View>
 
-        {noradId != null ? (
-          <Pressable
-            testID="sat-show-ground-track"
-            style={styles.trackButton}
-            onPress={() => {
-              // Hand the selection to the Map via the ephemeral store, close the sheet, and route to
-              // the Map tab (the sheet is reached from both AR and List — both land on the map).
-              setTracked(noradId);
-              onClose();
-              router.push("/map");
-            }}
-          >
-            <Text style={styles.trackButtonText}>Show ground track</Text>
-          </Pressable>
-        ) : null}
-        {noradId != null ? (
-          <SimulatorButton
-            testID="sat-cockpit"
-            target={{ kind: "satellite", id: String(noradId) }}
-            accent={color.entity.orbit}
-            onClose={onClose}
-          />
-        ) : null}
-
-        <ScrollView style={styles.txScroll} contentContainerStyle={styles.txContent}>
+        {/* Scrolling is the card's job now (Sheet wraps the body in a ScrollView). */}
+        <View style={styles.txContent}>
           {loading && <ActivityIndicator color={color.entity.orbit} />}
           {error && <Text style={styles.error}>{error}</Text>}
           {detail && transmitters.length === 0 && (
@@ -274,7 +301,7 @@ export function SatelliteDetailSheet({
               </View>
             );
           })}
-        </ScrollView>
+        </View>
 
         <Text style={styles.attribution}>
           Transmitters: SatNOGS DB (CC BY-SA) · Orbits: CelesTrak
@@ -295,7 +322,7 @@ function LiveRow({ label, value, valueTestID }: { label: string; value: string; 
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  header: { flexDirection: "row", alignItems: "center", gap: 8 },
   title: { color: "#EDE3FA", fontSize: 20, fontWeight: "700", flexShrink: 1 },
   chip: {
     backgroundColor: alpha(color.entity.orbit, 0.16),
@@ -348,7 +375,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
   rowLabel: { color: color.textLabel, fontSize: 14 },
   rowValue: { color: color.text, fontSize: 14, fontWeight: "500" },
-  txScroll: { flexGrow: 0 },
   txContent: { paddingTop: 4, gap: 8 },
   tx: {
     borderTopColor: color.surface2,

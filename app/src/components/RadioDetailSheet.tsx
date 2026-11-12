@@ -1,5 +1,5 @@
 /**
- * Radio-source detail bottom sheet. Opens on a tap of a radio label (AR overlay) or a "Radio"-list row.
+ * Radio-source detail card. Opens on a tap of a radio label (AR overlay) or a "Radio"-list row.
  *
  * Mirrors PlanetDetailSheet's chrome and close behaviour and, like it, needs NO network: a fixed source
  * is a pure function of the observer + instant, so the "tonight" transit is computed locally
@@ -15,8 +15,8 @@
 
 import { alpha, color } from "@/theme";
 import { useEffect, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { Sheet } from "./Sheet";
+import { StyleSheet, Text, View } from "react-native";
+import { Sheet, SheetSummary } from "./Sheet";
 import {
   HYDROGEN_LINE_MHZ,
   nextRadioTransit,
@@ -36,6 +36,8 @@ export interface RadioDetailSheetProps {
   /** Observer position for the "tonight" transit prediction; omit (or null) to hide it. */
   observer?: RadioObserver | null;
   onClose: () => void;
+  /** Side-panel layout only: offset from the top of the screen (see Sheet). */
+  panelTop?: number;
 }
 
 /** Local wall-clock time for an event instant, e.g. "21:29" (display only). */
@@ -43,7 +45,14 @@ function eventClock(d: Date): string {
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-export function RadioDetailSheet({ sourceKey, view, source, observer, onClose }: RadioDetailSheetProps) {
+export function RadioDetailSheet({
+  sourceKey,
+  view,
+  source,
+  observer,
+  onClose,
+  panelTop,
+}: RadioDetailSheetProps) {
   // Capture "now" once per open so the predicted transit is fixed while the sheet is up.
   const [openedAt, setOpenedAt] = useState<number>(() => Date.now());
   useEffect(() => {
@@ -61,17 +70,39 @@ export function RadioDetailSheet({ sourceKey, view, source, observer, onClose }:
   const kind = source?.kind ?? view?.kind ?? null;
 
   return (
-    <Sheet visible={sourceKey != null} onClose={onClose} accent={color.entity.radio} maxHeightPct={82}>
-      <View style={styles.header}>
-        <Text testID="radio-detail-title" style={styles.title} numberOfLines={1}>
-          {name}
-        </Text>
-        {kind ? (
-          <View style={styles.chip}>
-            <Text style={styles.chipText}>{kind}</Text>
-          </View>
-        ) : null}
-      </View>
+    <Sheet
+      visible={sourceKey != null}
+      panelTop={panelTop}
+      onClose={onClose}
+      accent={color.entity.radio}
+      maxHeightPct={82}
+      label="Radio source details"
+      header={
+        <View style={styles.header}>
+          <Text testID="radio-detail-title" style={styles.title} numberOfLines={1}>
+            {name}
+          </Text>
+          {kind ? (
+            <View style={styles.chip}>
+              <Text style={styles.chipText}>{kind}</Text>
+            </View>
+          ) : null}
+        </View>
+      }
+      summary={
+        <SheetSummary
+          parts={
+            view
+              ? [
+                  `El ${Math.round(view.elevationDeg)}°`,
+                  `Az ${Math.round(view.azimuthDeg)}° ${compass8(view.azimuthDeg)}`,
+                  transit ? `transit ${eventClock(transit.date)}` : null,
+                ]
+              : ["Below the horizon", transit ? `transit ${eventClock(transit.date)}` : null]
+          }
+        />
+      }
+    >
 
       {view ? (
         <View style={styles.liveRows}>
@@ -110,9 +141,9 @@ export function RadioDetailSheet({ sourceKey, view, source, observer, onClose }:
         )}
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+      <View style={styles.scrollContent}>
         <Text style={styles.attribution}>Positions: astronomy-engine (on-device)</Text>
-      </ScrollView>
+      </View>
     </Sheet>
   );
 }
@@ -136,7 +167,7 @@ function EventRow({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  header: { flexDirection: "row", alignItems: "center", gap: 8 },
   title: { color: color.text, fontSize: 20, fontWeight: "700", flexShrink: 1 },
   chip: {
     backgroundColor: alpha(color.entity.radio, 0.16),
@@ -170,7 +201,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
   rowLabel: { color: color.textLabel, fontSize: 14 },
   rowValue: { color: color.text, fontSize: 14, fontWeight: "500" },
-  scroll: { flexGrow: 0 },
   scrollContent: { paddingTop: 4 },
   attribution: { color: color.textMuted, fontSize: 11, marginTop: 12 },
 });

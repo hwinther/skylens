@@ -46,6 +46,8 @@ export interface AircraftRadarProps {
   onRangeChange?: (km: number) => void;
   /** Draw a short predicted-track (course/heading) leader ahead of moving aircraft & ships. */
   showCourseVectors?: boolean;
+  /** Extra right offset for the zoom control, e.g. while a side-panel detail card covers the edge. */
+  controlsRightInset?: number;
 }
 
 /**
@@ -111,12 +113,17 @@ export function AircraftRadar({
   rangeKm,
   onRangeChange,
   showCourseVectors = false,
+  controlsRightInset = 0,
 }: AircraftRadarProps) {
   const [size, setSize] = useState(0);
+  const [boxWidth, setBoxWidth] = useState(0);
   const onLayout = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
     setSize(Math.max(0, Math.min(width, height)));
+    setBoxWidth(width);
   };
+  // The scope is a centred square; only the part of the inset that reaches into it moves the control.
+  const zoomShift = Math.max(0, controlsRightInset - (boxWidth - size) / 2);
 
   const rel = aircraft
     .filter((a) => a.lat != null && a.lon != null)
@@ -311,7 +318,12 @@ export function AircraftRadar({
 
           {/* Range-zoom control, top-right. `+` / `−` step the fixed ladder; the chip resets to Auto. */}
           {onRangeChange && (
-            <View style={[styles.zoomControl, { pointerEvents: "box-none" }]}>
+            <View
+              style={[
+                styles.zoomControl,
+                { pointerEvents: "box-none", right: 4 + zoomShift },
+              ]}
+            >
               <Pressable
                 testID="radar-range-label"
                 onPress={() => onRangeChange(0)}

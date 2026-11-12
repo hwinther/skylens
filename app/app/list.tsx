@@ -6,7 +6,7 @@
  */
 
 import { color } from "@/theme";
-import { memo, useMemo, useState, type ComponentProps } from "react";
+import { memo, useCallback, useMemo, type ComponentProps } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -28,6 +28,9 @@ import {
 } from "@/components";
 import { aircraftAccent, iconForCategory } from "@/components/aircraftIcon";
 import { useObserver } from "@/components/useObserver";
+import { useDetailSelection } from "@/components/useDetailSelection";
+import { useSheetRightInset } from "@/components/Sheet";
+import { COLLAPSED_CARD_CLEARANCE } from "@/components/sheetLayout";
 import { feedStatusMessage } from "@/components/feedStatus";
 import { iconForVessel } from "@/components/vesselIcon";
 import { compass8, relativePosition } from "@/components/webmap/relative";
@@ -163,11 +166,34 @@ export default function ListScreen() {
   const showPlanets = useSettingsStore((s) => s.showPlanets);
   const showRadioSky = useSettingsStore((s) => s.showRadioSky);
   const showSkyEvents = useSettingsStore((s) => s.showSkyEvents);
-  const [selectedHex, setSelectedHex] = useState<string | null>(null);
-  const [selectedMmsi, setSelectedMmsi] = useState<string | null>(null);
-  const [selectedNoradId, setSelectedNoradId] = useState<number | null>(null);
-  const [selectedPlanet, setSelectedPlanet] = useState<string | null>(null);
-  const [selectedRadioKey, setSelectedRadioKey] = useState<string | null>(null);
+  // One selection slot for all detail cards: they are non-modal, so tapping another row (of any
+  // kind) swaps the open card instead of stacking a second one.
+  const detail = useDetailSelection();
+  const selectedHex = detail.idOf("aircraft");
+  const selectedMmsi = detail.idOf("vessel");
+  const selectedPlanet = detail.idOf("planet");
+  const selectedRadioKey = detail.idOf("radio");
+  const selectedSat = detail.idOf("satellite");
+  const selectedNoradId = selectedSat != null ? Number(selectedSat) : null;
+  const {
+    aircraft: setSelectedHex,
+    vessel: setSelectedMmsi,
+    planet: setSelectedPlanet,
+    radio: setSelectedRadioKey,
+    satellite: setSelectedSat,
+  } = detail.set;
+  const setSelectedNoradId = useCallback(
+    (id: number | null) => setSelectedSat(id == null ? null : String(id)),
+    [setSelectedSat],
+  );
+  // Keep rows clear of an open card: the side panel's width on the right, or room at the bottom
+  // for the collapsed compact card.
+  const cardRightInset = useSheetRightInset(detail.open);
+  const listInset = !detail.open
+    ? undefined
+    : cardRightInset > 0
+      ? { paddingRight: cardRightInset }
+      : { paddingBottom: COLLAPSED_CARD_CLEARANCE };
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
   // Device GPS (or baked home) shared via observerStore, not the build-time home alone.
   const observer = useObserver();
@@ -259,251 +285,255 @@ export default function ListScreen() {
           </Text>
         ) : null}
       </View>
-      <ScrollView testID="list-scroll">
-        {/* Ships listed but aircraft away mode unavailable: say why there are no aircraft. */}
-        {feedStatus && rows.length > 0 ? (
-          <Text testID="list-feed-status" style={styles.notice}>
-            {feedStatusMessage(feedStatus)}
-          </Text>
-        ) : null}
-        {rows.length === 0 ? (
-          <EmptyState
-            icon="radar"
-            title="No traffic in range"
-            message={
-              feedStatus
-                ? feedStatusMessage(feedStatus)
-                : "No aircraft or ships are being received right now. They'll appear here the moment they're picked up."
-            }
-            actionLabel="Check data sources"
-            onAction={() => router.push("/settings")}
-          />
-        ) : (
-          rows.map((row) =>
-            row.kind === "aircraft" ? (
-              <AircraftRow
-                key={row.key}
-                hex={row.a.hex}
-                mil={row.a.mil ?? false}
-                title={row.a.flight?.trim() || row.a.hex.toUpperCase()}
-                icon={iconForCategory(row.a.cat)}
-                distance={`${row.distanceKm.toFixed(1)} km ${compass8(row.bearingDeg)}`}
-                level={row.a.fl != null ? `FL${String(row.a.fl).padStart(3, "0")}` : "—"}
-                speed={row.a.gs != null ? `${Math.round(row.a.gs)} kt` : "—"}
-                onSelect={setSelectedHex}
-              />
-            ) : (
-              <VesselRow
-                key={row.key}
-                mmsi={row.v.mmsi}
-                title={row.v.name?.trim() || row.v.mmsi}
-                icon={row.icon.name}
-                iconColor={row.icon.color}
-                tag={row.icon.tag ?? null}
-                flag={row.v.flag ?? null}
-                distance={`${row.distanceKm.toFixed(1)} km ${compass8(row.bearingDeg)}`}
-                speed={row.v.sog != null ? `${Math.round(row.v.sog)} kn` : "—"}
-                course={row.v.cog != null ? `${Math.round(row.v.cog)}°` : "—"}
-                onSelect={setSelectedMmsi}
-              />
-            ),
-          )
-        )}
+      {/* The card mounts in here, so the side panel starts below the heading row. */}
+      <View style={styles.body}>
+        <ScrollView testID="list-scroll" contentContainerStyle={listInset}>
+          {/* Ships listed but aircraft away mode unavailable: say why there are no aircraft. */}
+          {feedStatus && rows.length > 0 ? (
+            <Text testID="list-feed-status" style={styles.notice}>
+              {feedStatusMessage(feedStatus)}
+            </Text>
+          ) : null}
+          {rows.length === 0 ? (
+            <EmptyState
+              icon="radar"
+              title="No traffic in range"
+              message={
+                feedStatus
+                  ? feedStatusMessage(feedStatus)
+                  : "No aircraft or ships are being received right now. They'll appear here the moment they're picked up."
+              }
+              actionLabel="Check data sources"
+              onAction={() => router.push("/settings")}
+            />
+          ) : (
+            rows.map((row) =>
+              row.kind === "aircraft" ? (
+                <AircraftRow
+                  key={row.key}
+                  hex={row.a.hex}
+                  mil={row.a.mil ?? false}
+                  title={row.a.flight?.trim() || row.a.hex.toUpperCase()}
+                  icon={iconForCategory(row.a.cat)}
+                  distance={`${row.distanceKm.toFixed(1)} km ${compass8(row.bearingDeg)}`}
+                  level={row.a.fl != null ? `FL${String(row.a.fl).padStart(3, "0")}` : "—"}
+                  speed={row.a.gs != null ? `${Math.round(row.a.gs)} kt` : "—"}
+                  onSelect={setSelectedHex}
+                />
+              ) : (
+                <VesselRow
+                  key={row.key}
+                  mmsi={row.v.mmsi}
+                  title={row.v.name?.trim() || row.v.mmsi}
+                  icon={row.icon.name}
+                  iconColor={row.icon.color}
+                  tag={row.icon.tag ?? null}
+                  flag={row.v.flag ?? null}
+                  distance={`${row.distanceKm.toFixed(1)} km ${compass8(row.bearingDeg)}`}
+                  speed={row.v.sog != null ? `${Math.round(row.v.sog)} kn` : "—"}
+                  course={row.v.cog != null ? `${Math.round(row.v.cog)}°` : "—"}
+                  onSelect={setSelectedMmsi}
+                />
+              ),
+            )
+          )}
 
-        {showSatellites && (
-          <>
-            <View style={styles.headingLeft}>
-              <View style={[styles.headingDot, { backgroundColor: color.entity.orbit }]} />
-              <Text testID="list-sat-count" style={styles.heading}>
-                Overhead ({overhead.length})
-              </Text>
-            </View>
-            {overhead.length === 0 ? (
-              <Text style={styles.emptyLine}>No passes overhead right now.</Text>
-            ) : (
-              overhead.map((s) => (
-              <Pressable
-                key={`sat-${s.noradId}`}
-                testID={`list-sat-${s.noradId}`}
-                onPress={() => setSelectedNoradId(s.noradId)}
-                style={styles.row}
-              >
-                <MaterialCommunityIcons name="satellite-variant" size={18} color={color.entity.orbit} />
-                <Text style={styles.callsign} numberOfLines={1}>
-                  {s.name.trim() || String(s.noradId)}
+          {showSatellites && (
+            <>
+              <View style={styles.headingLeft}>
+                <View style={[styles.headingDot, { backgroundColor: color.entity.orbit }]} />
+                <Text testID="list-sat-count" style={styles.heading}>
+                  Overhead ({overhead.length})
                 </Text>
-                {s.visibleNow ? (
-                  // Sunlit right now over a dark sky — the "look up, you can see it" cue (see visibility.ts).
-                  <MaterialCommunityIcons
-                    testID={`list-sat-eye-${s.noradId}`}
-                    name="eye"
-                    size={16}
-                    color={color.entity.orbit}
-                  />
-                ) : null}
-                <Text style={styles.meta}>
-                  {Math.round(s.elevationDeg)}° {compass8(s.azimuthDeg)}
-                </Text>
-                <Text style={styles.meta}>{s.rangeKm.toFixed(0)} km</Text>
-                {s.freqSummary ? (
-                  <Text style={styles.satFreq} numberOfLines={1}>
-                    {s.freqSummary}
+              </View>
+              {overhead.length === 0 ? (
+                <Text style={styles.emptyLine}>No passes overhead right now.</Text>
+              ) : (
+                overhead.map((s) => (
+                <Pressable
+                  key={`sat-${s.noradId}`}
+                  testID={`list-sat-${s.noradId}`}
+                  onPress={() => setSelectedNoradId(s.noradId)}
+                  style={styles.row}
+                >
+                  <MaterialCommunityIcons name="satellite-variant" size={18} color={color.entity.orbit} />
+                  <Text style={styles.callsign} numberOfLines={1}>
+                    {s.name.trim() || String(s.noradId)}
                   </Text>
-                ) : (
-                  <Text style={styles.meta}>—</Text>
-                )}
-              </Pressable>
-            ))
-            )}
-          </>
-        )}
-
-        {showPlanets && (
-          <>
-            <View style={styles.headingLeft}>
-              <View style={[styles.headingDot, { backgroundColor: color.entity.sky }]} />
-              <Text testID="list-sky-count" style={styles.heading}>
-                Sky ({sky.length})
-              </Text>
-            </View>
-            {sky.length === 0 ? (
-              <Text style={styles.emptyLine}>No planets above the horizon right now.</Text>
-            ) : (
-              sky.map((p) => (
-              <Pressable
-                key={`planet-${p.body}`}
-                testID={`list-planet-${p.body}`}
-                onPress={() => setSelectedPlanet(p.body)}
-                style={styles.row}
-              >
-                <MaterialCommunityIcons name="star-four-points" size={18} color={color.entity.sky} />
-                <Text style={styles.callsign} numberOfLines={1}>
-                  {p.name}
-                </Text>
-                <Text style={styles.meta}>
-                  {Math.round(p.elevationDeg)}° {compass8(p.azimuthDeg)}
-                </Text>
-                <Text style={styles.meta}>
-                  {p.magnitude != null ? `${p.magnitude.toFixed(1)}m` : "—"}
-                </Text>
-                <Text style={styles.satFreq} numberOfLines={1}>
-                  {p.constellation ?? ""}
-                </Text>
-              </Pressable>
-            ))
-            )}
-          </>
-        )}
-
-        {showRadioSky && (
-          <>
-            <View style={styles.headingLeft}>
-              <View style={[styles.headingDot, { backgroundColor: color.entity.radio }]} />
-              <Text testID="list-radio-count" style={styles.heading}>
-                Radio ({radioRows.length})
-              </Text>
-            </View>
-            {radioRows.length === 0 ? (
-              <Text style={styles.emptyLine}>No radio sources above the horizon right now.</Text>
-            ) : (
-              radioRows.map((r) => (
-              <Pressable
-                key={`radio-${r.key}`}
-                testID={`list-radio-${r.key}`}
-                onPress={() => setSelectedRadioKey(r.key)}
-                style={styles.row}
-              >
-                <MaterialCommunityIcons name="radio-tower" size={18} color={color.entity.radio} />
-                <Text style={styles.callsign} numberOfLines={1}>
-                  {r.short}
-                </Text>
-                <Text style={styles.meta}>
-                  {Math.round(r.elevationDeg)}° {compass8(r.azimuthDeg)}
-                </Text>
-              </Pressable>
-            ))
-            )}
-          </>
-        )}
-
-        {showSkyEvents && (
-          <>
-            <View style={styles.headingLeft}>
-              <View style={[styles.headingDot, { backgroundColor: color.entity.sky }]} />
-              <Text testID="list-events-count" style={styles.heading}>
-                Upcoming ({events.length})
-              </Text>
-            </View>
-            {events.length === 0 ? (
-              <Text style={styles.emptyLine}>No upcoming sky events found.</Text>
-            ) : (
-              events.map((e) => {
-                // Display-only rows (no sheet): events are self-describing. Countdown is measured against
-                // computedAt (the hook's hourly clock read) — day-granular, so an hourly reference is exact
-                // and keeps this render pure (no Date.now() in render, per react-hooks/purity).
-                const days = daysUntil(e.date, computedAt);
-                return (
-                  <View key={e.key} testID={`list-event-${safeId(e.key)}`} style={styles.row}>
+                  {s.visibleNow ? (
+                    // Sunlit right now over a dark sky — the "look up, you can see it" cue (see visibility.ts).
                     <MaterialCommunityIcons
-                      name={EVENT_ICON[e.kind]}
-                      size={18}
-                      color={color.entity.sky}
+                      testID={`list-sat-eye-${s.noradId}`}
+                      name="eye"
+                      size={16}
+                      color={color.entity.orbit}
                     />
-                    <View style={styles.eventText}>
-                      <Text style={styles.eventTitle} numberOfLines={1}>
-                        {e.title}
-                      </Text>
-                      <Text style={styles.eventDetail} numberOfLines={1}>
-                        {e.detail}
-                      </Text>
+                  ) : null}
+                  <Text style={styles.meta}>
+                    {Math.round(s.elevationDeg)}° {compass8(s.azimuthDeg)}
+                  </Text>
+                  <Text style={styles.meta}>{s.rangeKm.toFixed(0)} km</Text>
+                  {s.freqSummary ? (
+                    <Text style={styles.satFreq} numberOfLines={1}>
+                      {s.freqSummary}
+                    </Text>
+                  ) : (
+                    <Text style={styles.meta}>—</Text>
+                  )}
+                </Pressable>
+              ))
+              )}
+            </>
+          )}
+
+          {showPlanets && (
+            <>
+              <View style={styles.headingLeft}>
+                <View style={[styles.headingDot, { backgroundColor: color.entity.sky }]} />
+                <Text testID="list-sky-count" style={styles.heading}>
+                  Sky ({sky.length})
+                </Text>
+              </View>
+              {sky.length === 0 ? (
+                <Text style={styles.emptyLine}>No planets above the horizon right now.</Text>
+              ) : (
+                sky.map((p) => (
+                <Pressable
+                  key={`planet-${p.body}`}
+                  testID={`list-planet-${p.body}`}
+                  onPress={() => setSelectedPlanet(p.body)}
+                  style={styles.row}
+                >
+                  <MaterialCommunityIcons name="star-four-points" size={18} color={color.entity.sky} />
+                  <Text style={styles.callsign} numberOfLines={1}>
+                    {p.name}
+                  </Text>
+                  <Text style={styles.meta}>
+                    {Math.round(p.elevationDeg)}° {compass8(p.azimuthDeg)}
+                  </Text>
+                  <Text style={styles.meta}>
+                    {p.magnitude != null ? `${p.magnitude.toFixed(1)}m` : "—"}
+                  </Text>
+                  <Text style={styles.satFreq} numberOfLines={1}>
+                    {p.constellation ?? ""}
+                  </Text>
+                </Pressable>
+              ))
+              )}
+            </>
+          )}
+
+          {showRadioSky && (
+            <>
+              <View style={styles.headingLeft}>
+                <View style={[styles.headingDot, { backgroundColor: color.entity.radio }]} />
+                <Text testID="list-radio-count" style={styles.heading}>
+                  Radio ({radioRows.length})
+                </Text>
+              </View>
+              {radioRows.length === 0 ? (
+                <Text style={styles.emptyLine}>No radio sources above the horizon right now.</Text>
+              ) : (
+                radioRows.map((r) => (
+                <Pressable
+                  key={`radio-${r.key}`}
+                  testID={`list-radio-${r.key}`}
+                  onPress={() => setSelectedRadioKey(r.key)}
+                  style={styles.row}
+                >
+                  <MaterialCommunityIcons name="radio-tower" size={18} color={color.entity.radio} />
+                  <Text style={styles.callsign} numberOfLines={1}>
+                    {r.short}
+                  </Text>
+                  <Text style={styles.meta}>
+                    {Math.round(r.elevationDeg)}° {compass8(r.azimuthDeg)}
+                  </Text>
+                </Pressable>
+              ))
+              )}
+            </>
+          )}
+
+          {showSkyEvents && (
+            <>
+              <View style={styles.headingLeft}>
+                <View style={[styles.headingDot, { backgroundColor: color.entity.sky }]} />
+                <Text testID="list-events-count" style={styles.heading}>
+                  Upcoming ({events.length})
+                </Text>
+              </View>
+              {events.length === 0 ? (
+                <Text style={styles.emptyLine}>No upcoming sky events found.</Text>
+              ) : (
+                events.map((e) => {
+                  // Display-only rows (no sheet): events are self-describing. Countdown is measured against
+                  // computedAt (the hook's hourly clock read) — day-granular, so an hourly reference is exact
+                  // and keeps this render pure (no Date.now() in render, per react-hooks/purity).
+                  const days = daysUntil(e.date, computedAt);
+                  return (
+                    <View key={e.key} testID={`list-event-${safeId(e.key)}`} style={styles.row}>
+                      <MaterialCommunityIcons
+                        name={EVENT_ICON[e.kind]}
+                        size={18}
+                        color={color.entity.sky}
+                      />
+                      <View style={styles.eventText}>
+                        <Text style={styles.eventTitle} numberOfLines={1}>
+                          {e.title}
+                        </Text>
+                        <Text style={styles.eventDetail} numberOfLines={1}>
+                          {e.detail}
+                        </Text>
+                      </View>
+                      <View style={styles.eventMeta}>
+                        <Text style={styles.eventDate}>{shortDate(e.date)}</Text>
+                        <Text style={styles.eventCountdown}>{countdownLabel(days)}</Text>
+                      </View>
                     </View>
-                    <View style={styles.eventMeta}>
-                      <Text style={styles.eventDate}>{shortDate(e.date)}</Text>
-                      <Text style={styles.eventCountdown}>{countdownLabel(days)}</Text>
-                    </View>
-                  </View>
-                );
-              })
-            )}
-          </>
-        )}
-      </ScrollView>
-      <DetailSheet hex={selectedHex} client={client} onClose={() => setSelectedHex(null)} />
-      <VesselDetailSheet
-        mmsi={selectedMmsi}
-        vessel={selectedMmsi != null ? vessels.find((v) => v.mmsi === selectedMmsi) : undefined}
-        onClose={() => setSelectedMmsi(null)}
-      />
-      <SatelliteDetailSheet
-        noradId={selectedNoradId}
-        view={selectedNoradId != null ? byNoradId.get(selectedNoradId) : undefined}
-        observer={observer}
-        elevationMaskDeg={satElevationMaskDeg}
-        onClose={() => setSelectedNoradId(null)}
-      />
-      <PlanetDetailSheet
-        body={selectedPlanet}
-        view={selectedPlanet != null ? byBody.get(selectedPlanet) : undefined}
-        observer={observer}
-        onClose={() => setSelectedPlanet(null)}
-      />
-      <RadioDetailSheet
-        sourceKey={selectedRadioKey}
-        view={selectedRadioKey != null ? byKey.get(selectedRadioKey) : undefined}
-        source={
-          selectedRadioKey != null
-            ? RADIO_SOURCES.find((s) => s.key === selectedRadioKey)
-            : undefined
-        }
-        observer={observer}
-        onClose={() => setSelectedRadioKey(null)}
-      />
+                  );
+                })
+              )}
+            </>
+          )}
+        </ScrollView>
+        <DetailSheet hex={selectedHex} client={client} onClose={() => setSelectedHex(null)} />
+        <VesselDetailSheet
+          mmsi={selectedMmsi}
+          vessel={selectedMmsi != null ? vessels.find((v) => v.mmsi === selectedMmsi) : undefined}
+          onClose={() => setSelectedMmsi(null)}
+        />
+        <SatelliteDetailSheet
+          noradId={selectedNoradId}
+          view={selectedNoradId != null ? byNoradId.get(selectedNoradId) : undefined}
+          observer={observer}
+          elevationMaskDeg={satElevationMaskDeg}
+          onClose={() => setSelectedNoradId(null)}
+        />
+        <PlanetDetailSheet
+          body={selectedPlanet}
+          view={selectedPlanet != null ? byBody.get(selectedPlanet) : undefined}
+          observer={observer}
+          onClose={() => setSelectedPlanet(null)}
+        />
+        <RadioDetailSheet
+          sourceKey={selectedRadioKey}
+          view={selectedRadioKey != null ? byKey.get(selectedRadioKey) : undefined}
+          source={
+            selectedRadioKey != null
+              ? RADIO_SOURCES.find((s) => s.key === selectedRadioKey)
+              : undefined
+          }
+          observer={observer}
+          onClose={() => setSelectedRadioKey(null)}
+        />
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
+  body: { flex: 1 },
   heading: { color: color.text, fontSize: 18, fontWeight: "700", paddingHorizontal: 16, paddingVertical: 12 },
   headingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingRight: 16 },
   headingLeft: { flexDirection: "row", alignItems: "center" },

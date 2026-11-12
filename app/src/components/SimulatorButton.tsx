@@ -6,7 +6,7 @@
  */
 
 import { alpha } from "@/theme";
-import { Platform, Pressable, StyleSheet, Text } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from "react-native";
 import { useRouter } from "expo-router";
 import { useSimStore, type SimTarget } from "@/state/simStore";
 
@@ -16,16 +16,18 @@ export interface SimulatorButtonProps {
   accent: string;
   onClose: () => void;
   testID?: string;
+  /** Layout override, e.g. the detail card's compact action row. */
+  style?: StyleProp<ViewStyle>;
 }
 
-export function SimulatorButton({ target, accent, onClose, testID }: SimulatorButtonProps) {
+export function SimulatorButton({ target, accent, onClose, testID, style }: SimulatorButtonProps) {
   const router = useRouter();
   const start = useSimStore((s) => s.start);
   if (Platform.OS !== "web") return null;
   return (
     <Pressable
       testID={testID}
-      style={[styles.button, { backgroundColor: alpha(accent, 0.16), borderColor: accent }]}
+      style={[styles.button, { backgroundColor: alpha(accent, 0.16), borderColor: accent }, style]}
       onPress={() => {
         start(target);
         onClose();

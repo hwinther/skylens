@@ -5,7 +5,7 @@
  */
 
 import { alpha } from "@/theme";
-import { Pressable, StyleSheet, Text } from "react-native";
+import { Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from "react-native";
 import { useRouter } from "expo-router";
 import { useMapFocusStore, type MapFocus } from "@/state/mapFocusStore";
 
@@ -15,15 +15,17 @@ export interface ShowOnMapButtonProps {
   accent: string;
   onClose: () => void;
   testID?: string;
+  /** Layout override, e.g. the detail card's compact action row. */
+  style?: StyleProp<ViewStyle>;
 }
 
-export function ShowOnMapButton({ focus, accent, onClose, testID }: ShowOnMapButtonProps) {
+export function ShowOnMapButton({ focus, accent, onClose, testID, style }: ShowOnMapButtonProps) {
   const router = useRouter();
   const setFocus = useMapFocusStore((s) => s.setFocus);
   return (
     <Pressable
       testID={testID}
-      style={[styles.button, { backgroundColor: alpha(accent, 0.16), borderColor: accent }]}
+      style={[styles.button, { backgroundColor: alpha(accent, 0.16), borderColor: accent }, style]}
       onPress={() => {
         setFocus(focus);
         onClose();
