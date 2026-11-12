@@ -79,7 +79,7 @@ export const color = {
 
   // Modal / detail-sheet chrome
   scrim: "rgba(0, 0, 0, 0.4)", // modal/sheet backdrop
-  handle: "#33506B", // drag handle (was hardcoded in all four detail sheets)
+  handle: "#33506B", // muted outline (the off state of the List filter chips)
   // Non-modal detail card / side panel on web: color.bg at 88 % under a backdrop blur, so a hint of
   // the scene shows through. Web only: without the blur (native) it is far too see-through over dense
   // content, so native cards use opaque color.bg (see Sheet.tsx).
