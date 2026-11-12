@@ -37,3 +37,28 @@ export function resetStores() {
 export function seedAircraft(list: AircraftDto[]) {
   useAircraftStore.getState().setSnapshot(list);
 }
+
+/** A response from the backend (it carries the X-Skylens-Api marker), with a JSON body. */
+export function backendJson(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json", "X-Skylens-Api": "1" },
+  });
+}
+
+/**
+ * Route fetch by URL path: each entry answers one path (the query string is ignored); anything else
+ * rejects like the default in setup.ts. Returns the paths requested so far.
+ */
+export function routeFetch(routes: Record<string, () => Response | Promise<Response>>) {
+  const requested: string[] = [];
+  jest.mocked(globalThis.fetch).mockImplementation((input) => {
+    const path = new URL(String(input)).pathname;
+    requested.push(path);
+    const answer = routes[path];
+    return answer
+      ? Promise.resolve(answer())
+      : Promise.reject(new Error(`unexpected network call in a component test: ${String(input)}`));
+  });
+  return requested;
+}
