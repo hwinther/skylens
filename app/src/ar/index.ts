@@ -5,6 +5,7 @@ export * from "./webOrientation";
 export * from "./projection";
 export * from "./smoothing";
 export * from "./declutter";
+export * from "./skyDeclutter";
 export * from "./surfaceBand";
 export * from "./satellites";
 export * from "./planets";
@@ -16,3 +17,4 @@ export * from "./skyEvents";
 // re-export only the EME-specific names to avoid a duplicate-export clash through the barrel.
 export { moonEmeInfo, MEAN_MOON_DISTANCE_KM, type MoonEmeInfo } from "./moon";
 export * from "./visibility";
+
