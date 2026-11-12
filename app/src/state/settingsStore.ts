@@ -9,6 +9,14 @@ import { createJSONStorage, persist, type StateStorage } from "zustand/middlewar
 import { platformStorage } from "./persistStorage";
 import { DEFAULT_HFOV_DEG } from "@/ar/projection";
 import { DEFAULT_ELEVATION_MASK_DEG } from "@/ar/satellites";
+import {
+  LIST_KINDS,
+  LIST_SECTIONS,
+  sanitizeIds,
+  toggleId,
+  type ListKind,
+  type ListSection,
+} from "./listFilter";
 
 interface SettingsState {
   /** Manual azimuth trim in degrees, applied on top of declination. */
@@ -59,6 +67,10 @@ interface SettingsState {
   showFishingZones: boolean;
   /** Draw reported lost/ghost fishing-gear points on the geographic map. */
   showLostGear: boolean;
+  /** List tab filter: kinds hidden from the List only (AR and map are unaffected). See ./listFilter. */
+  listHiddenKinds: ListKind[];
+  /** List tab accordion: sections the user collapsed. */
+  listCollapsedSections: ListSection[];
   /** First-run onboarding completed (or skipped). Gates the one-time intro flow. */
   onboarded: boolean;
   /** True once persisted settings have finished rehydrating — the onboarding gate waits for this so a
@@ -88,6 +100,9 @@ interface SettingsState {
   setShowSkyEvents: (on: boolean) => void;
   setShowFishingZones: (on: boolean) => void;
   setShowLostGear: (on: boolean) => void;
+  toggleListKind: (kind: ListKind) => void;
+  setListHiddenKinds: (kinds: ListKind[]) => void;
+  toggleListSection: (section: ListSection) => void;
   setOnboarded: (on: boolean) => void;
 }
 
@@ -101,7 +116,7 @@ const settingsStorage: StateStorage = platformStorage();
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       azimuthTrimDeg: 0,
       polarisCalibrating: false,
       hFovDeg: DEFAULT_HFOV_DEG,
@@ -133,6 +148,9 @@ export const useSettingsStore = create<SettingsState>()(
       // Fishing overlays are opt-in — they only make sense over the fjord/coast map view, so default off.
       showFishingZones: false,
       showLostGear: false,
+      // The List starts unfiltered with every section expanded.
+      listHiddenKinds: [],
+      listCollapsedSections: [],
       onboarded: false,
       _hydrated: false,
       setAzimuthTrim: (azimuthTrimDeg) => set({ azimuthTrimDeg }),
@@ -154,6 +172,11 @@ export const useSettingsStore = create<SettingsState>()(
       setSatElevationMaskDeg: (satElevationMaskDeg) => set({ satElevationMaskDeg }),
       setShowFishingZones: (showFishingZones) => set({ showFishingZones }),
       setShowLostGear: (showLostGear) => set({ showLostGear }),
+      toggleListKind: (kind) =>
+        set({ listHiddenKinds: toggleId(get().listHiddenKinds, kind, LIST_KINDS) }),
+      setListHiddenKinds: (kinds) => set({ listHiddenKinds: sanitizeIds(kinds, LIST_KINDS) }),
+      toggleListSection: (section) =>
+        set({ listCollapsedSections: toggleId(get().listCollapsedSections, section, LIST_SECTIONS) }),
       setOnboarded: (onboarded) => set({ onboarded }),
       setShowPlanets: (showPlanets) => set({ showPlanets }),
       setShowEcliptic: (showEcliptic) => set({ showEcliptic }),
@@ -163,6 +186,17 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: "skylens.settings.v1",
       storage: createJSONStorage(() => settingsStorage),
+      // Default shallow merge, except the List's id arrays: older settings lack them (→ the empty
+      // defaults) and ids a later build no longer knows are dropped, so no version bump is needed.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<SettingsState>;
+        return {
+          ...current,
+          ...p,
+          listHiddenKinds: sanitizeIds(p.listHiddenKinds, LIST_KINDS),
+          listCollapsedSections: sanitizeIds(p.listCollapsedSections, LIST_SECTIONS),
+        };
+      },
       // Flip the hydration flag once persisted settings load, so the onboarding gate can wait for it
       // and never flash the intro at a returning user. Fires even on a fresh install (empty storage).
       //

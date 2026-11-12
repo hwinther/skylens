@@ -18,6 +18,8 @@ export interface EmptyStateProps {
   message?: string;
   actionLabel?: string;
   onAction?: () => void;
+  /** testID of the action button. */
+  actionTestID?: string;
   /** Compact centred caption (radar overlay) vs full padded block (list). */
   compact?: boolean;
 }
@@ -28,6 +30,7 @@ export function EmptyState({
   message,
   actionLabel,
   onAction,
+  actionTestID,
   compact,
 }: EmptyStateProps) {
   return (
@@ -40,7 +43,13 @@ export function EmptyState({
       <Text style={styles.title}>{title}</Text>
       {!compact && message ? <Text style={styles.message}>{message}</Text> : null}
       {actionLabel && onAction ? (
-        <Pressable style={styles.action} onPress={onAction} hitSlop={8}>
+        <Pressable
+          testID={actionTestID}
+          role="button"
+          style={styles.action}
+          onPress={onAction}
+          hitSlop={8}
+        >
           <Text style={styles.actionText}>{actionLabel}</Text>
         </Pressable>
       ) : null}

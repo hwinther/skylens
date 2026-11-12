@@ -1,7 +1,9 @@
 /**
  * List view: a tabular readout of the current traffic — type icon, callsign/name, distance + bearing
  * from you, and two trailing figures (aircraft: flight level + ground speed; ships: SOG + COG) —
- * merged into one nearest-first list. Same 1 Hz / 5 s stores as AR/Map. Tapping an aircraft, ship or
+ * merged into one nearest-first list.
+ * A filter bar above the list hides kinds (Air, Sea, Satellites, ...) from this view only, and every
+ * section collapses from its heading; both choices persist (see state/listFilter). Same 1 Hz / 5 s stores as AR/Map. Tapping an aircraft, ship or
  * AtoN opens its detail sheet; tapping a satellite opens the overhead sheet. Cross-platform (no map deps).
  */
 
@@ -14,6 +16,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useAircraftList, useAircraftStore } from "@/state/aircraftStore";
 import { useVesselList } from "@/state/vesselStore";
 import { useSettingsStore } from "@/state/settingsStore";
+import { listView, trafficBreakdown } from "@/state/listFilter";
 import {
   DetailSheet,
   EmptyState,
@@ -32,6 +35,8 @@ import { useDetailSelection } from "@/components/useDetailSelection";
 import { useSheetRightInset } from "@/components/Sheet";
 import { COLLAPSED_CARD_CLEARANCE } from "@/components/sheetLayout";
 import { feedStatusMessage } from "@/components/feedStatus";
+import { ListFilterBar } from "@/components/ListFilterBar";
+import { ListSectionHeader } from "@/components/ListSectionHeader";
 import { iconForVessel } from "@/components/vesselIcon";
 import { compass8, relativePosition } from "@/components/webmap/relative";
 import { RADIO_SOURCES, satGroupsFromSettings, type SkyEventKind } from "@/ar";
@@ -166,6 +171,12 @@ export default function ListScreen() {
   const showPlanets = useSettingsStore((s) => s.showPlanets);
   const showRadioSky = useSettingsStore((s) => s.showRadioSky);
   const showSkyEvents = useSettingsStore((s) => s.showSkyEvents);
+  // List-only filter + accordion (persisted; see state/listFilter).
+  const listHiddenKinds = useSettingsStore((s) => s.listHiddenKinds);
+  const listCollapsedSections = useSettingsStore((s) => s.listCollapsedSections);
+  const toggleListKind = useSettingsStore((s) => s.toggleListKind);
+  const setListHiddenKinds = useSettingsStore((s) => s.setListHiddenKinds);
+  const toggleListSection = useSettingsStore((s) => s.toggleListSection);
   // One selection slot for all detail cards: they are non-modal, so tapping another row (of any
   // kind) swaps the open card instead of stacking a second one.
   const detail = useDetailSelection();
@@ -266,87 +277,146 @@ export default function ListScreen() {
     return [...acRows, ...shipRows].sort((x, y) => x.distanceKm - y.distanceKm);
   }, [aircraft, vessels, observer, showShips, showAton]);
 
-  // Family split for the Traffic heading breakdown (air = aircraft, sea = vessels).
+  // Family split (air = aircraft, sea = vessels) and every kind's row count, for the filter chips and
+  // the section headings. Counts cover what the layers allow, whatever the List filter hides.
   const acCount = rows.filter((r) => r.kind === "aircraft").length;
   const shipCount = rows.length - acCount;
+  const counts = useMemo(
+    () => ({
+      air: acCount,
+      sea: shipCount,
+      satellites: overhead.length,
+      sky: sky.length,
+      radio: radioRows.length,
+      events: events.length,
+    }),
+    [acCount, shipCount, overhead.length, sky.length, radioRows.length, events.length],
+  );
+  const view = useMemo(
+    () =>
+      listView({
+        layers: { showShips, showAton, showSatellites, showPlanets, showRadioSky, showSkyEvents },
+        hidden: listHiddenKinds,
+        collapsed: listCollapsedSections,
+        counts,
+      }),
+    [
+      showShips,
+      showAton,
+      showSatellites,
+      showPlanets,
+      showRadioSky,
+      showSkyEvents,
+      listHiddenKinds,
+      listCollapsedSections,
+      counts,
+    ],
+  );
+  const { shown, sections } = view;
+  // Traffic rows of the families the filter shows (still nearest-first).
+  const trafficRows = useMemo(
+    () => rows.filter((r) => (r.kind === "aircraft" ? shown.air : shown.sea)),
+    [rows, shown.air, shown.sea],
+  );
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <View style={styles.headingRow}>
-        <View style={styles.headingLeft}>
-          <View style={[styles.headingDot, { backgroundColor: color.entity.air }]} />
-          <Text testID="list-count" style={styles.heading}>
-            Traffic ({rows.length})
-          </Text>
-        </View>
-        {rows.length > 0 ? (
-          <Text style={styles.headingBreakdown}>
-            {acCount} air · {shipCount} sea
-          </Text>
-        ) : null}
-      </View>
-      {/* The card mounts in here, so the side panel starts below the heading row. */}
+      <ListFilterBar chips={view.chips} onToggle={toggleListKind} />
+      {/* The card mounts in here, so the side panel starts below the filter bar. */}
       <View style={styles.body}>
         <ScrollView testID="list-scroll" contentContainerStyle={listInset}>
-          {/* Ships listed but aircraft away mode unavailable: say why there are no aircraft. */}
-          {feedStatus && rows.length > 0 ? (
-            <Text testID="list-feed-status" style={styles.notice}>
-              {feedStatusMessage(feedStatus)}
-            </Text>
-          ) : null}
-          {rows.length === 0 ? (
+          {view.allFiltered ? (
             <EmptyState
-              icon="radar"
-              title="No traffic in range"
-              message={
-                feedStatus
-                  ? feedStatusMessage(feedStatus)
-                  : "No aircraft or ships are being received right now. They'll appear here the moment they're picked up."
-              }
-              actionLabel="Check data sources"
-              onAction={() => router.push("/settings")}
+              icon="filter-remove-outline"
+              title="Everything is filtered out"
+              message="Turn a kind back on in the bar above, or show them all again."
+              actionLabel="Show all"
+              actionTestID="list-show-all"
+              onAction={() => setListHiddenKinds([])}
             />
-          ) : (
-            rows.map((row) =>
-              row.kind === "aircraft" ? (
-                <AircraftRow
-                  key={row.key}
-                  hex={row.a.hex}
-                  mil={row.a.mil ?? false}
-                  title={row.a.flight?.trim() || row.a.hex.toUpperCase()}
-                  icon={iconForCategory(row.a.cat)}
-                  distance={`${row.distanceKm.toFixed(1)} km ${compass8(row.bearingDeg)}`}
-                  level={row.a.fl != null ? `FL${String(row.a.fl).padStart(3, "0")}` : "—"}
-                  speed={row.a.gs != null ? `${Math.round(row.a.gs)} kt` : "—"}
-                  onSelect={setSelectedHex}
+          ) : null}
+
+          {sections.traffic.visible && (
+            <>
+              <ListSectionHeader
+                testID="list-section-traffic"
+                countTestID="list-count"
+                title="Traffic"
+                count={sections.traffic.count}
+                dotColor={color.entity.air}
+                expanded={sections.traffic.expanded}
+                onToggle={() => toggleListSection("traffic")}
+                breakdown={sections.traffic.count > 0 ? trafficBreakdown(shown, counts) : undefined}
+              />
+              {/* Ships listed but aircraft away mode unavailable: say why there are no aircraft. */}
+              {sections.traffic.expanded && feedStatus && shown.air && rows.length > 0 ? (
+                <Text testID="list-feed-status" style={styles.notice}>
+                  {feedStatusMessage(feedStatus)}
+                </Text>
+              ) : null}
+              {!sections.traffic.expanded ? null : rows.length === 0 ? (
+                <EmptyState
+                  icon="radar"
+                  title="No traffic in range"
+                  message={
+                    feedStatus
+                      ? feedStatusMessage(feedStatus)
+                      : "No aircraft or ships are being received right now. They'll appear here the moment they're picked up."
+                  }
+                  actionLabel="Check data sources"
+                  onAction={() => router.push("/settings")}
                 />
+              ) : trafficRows.length === 0 ? (
+                // Only the filtered-out family has traffic right now.
+                <Text style={styles.emptyLine}>
+                  No {shown.air ? "aircraft" : "ships"} in range right now.
+                </Text>
               ) : (
-                <VesselRow
-                  key={row.key}
-                  mmsi={row.v.mmsi}
-                  title={row.v.name?.trim() || row.v.mmsi}
-                  icon={row.icon.name}
-                  iconColor={row.icon.color}
-                  tag={row.icon.tag ?? null}
-                  flag={row.v.flag ?? null}
-                  distance={`${row.distanceKm.toFixed(1)} km ${compass8(row.bearingDeg)}`}
-                  speed={row.v.sog != null ? `${Math.round(row.v.sog)} kn` : "—"}
-                  course={row.v.cog != null ? `${Math.round(row.v.cog)}°` : "—"}
-                  onSelect={setSelectedMmsi}
-                />
-              ),
-            )
+                trafficRows.map((row) =>
+                  row.kind === "aircraft" ? (
+                    <AircraftRow
+                      key={row.key}
+                      hex={row.a.hex}
+                      mil={row.a.mil ?? false}
+                      title={row.a.flight?.trim() || row.a.hex.toUpperCase()}
+                      icon={iconForCategory(row.a.cat)}
+                      distance={`${row.distanceKm.toFixed(1)} km ${compass8(row.bearingDeg)}`}
+                      level={row.a.fl != null ? `FL${String(row.a.fl).padStart(3, "0")}` : "—"}
+                      speed={row.a.gs != null ? `${Math.round(row.a.gs)} kt` : "—"}
+                      onSelect={setSelectedHex}
+                    />
+                  ) : (
+                    <VesselRow
+                      key={row.key}
+                      mmsi={row.v.mmsi}
+                      title={row.v.name?.trim() || row.v.mmsi}
+                      icon={row.icon.name}
+                      iconColor={row.icon.color}
+                      tag={row.icon.tag ?? null}
+                      flag={row.v.flag ?? null}
+                      distance={`${row.distanceKm.toFixed(1)} km ${compass8(row.bearingDeg)}`}
+                      speed={row.v.sog != null ? `${Math.round(row.v.sog)} kn` : "—"}
+                      course={row.v.cog != null ? `${Math.round(row.v.cog)}°` : "—"}
+                      onSelect={setSelectedMmsi}
+                    />
+                  ),
+                )
+              )}
+            </>
           )}
 
-          {showSatellites && (
+          {sections.overhead.visible && (
             <>
-              <View style={styles.headingLeft}>
-                <View style={[styles.headingDot, { backgroundColor: color.entity.orbit }]} />
-                <Text testID="list-sat-count" style={styles.heading}>
-                  Overhead ({overhead.length})
-                </Text>
-              </View>
-              {overhead.length === 0 ? (
+              <ListSectionHeader
+                testID="list-section-overhead"
+                countTestID="list-sat-count"
+                title="Overhead"
+                count={sections.overhead.count}
+                dotColor={color.entity.orbit}
+                expanded={sections.overhead.expanded}
+                onToggle={() => toggleListSection("overhead")}
+              />
+              {!sections.overhead.expanded ? null : overhead.length === 0 ? (
                 <Text style={styles.emptyLine}>No passes overhead right now.</Text>
               ) : (
                 overhead.map((s) => (
@@ -386,15 +456,18 @@ export default function ListScreen() {
             </>
           )}
 
-          {showPlanets && (
+          {sections.sky.visible && (
             <>
-              <View style={styles.headingLeft}>
-                <View style={[styles.headingDot, { backgroundColor: color.entity.sky }]} />
-                <Text testID="list-sky-count" style={styles.heading}>
-                  Sky ({sky.length})
-                </Text>
-              </View>
-              {sky.length === 0 ? (
+              <ListSectionHeader
+                testID="list-section-sky"
+                countTestID="list-sky-count"
+                title="Sky"
+                count={sections.sky.count}
+                dotColor={color.entity.sky}
+                expanded={sections.sky.expanded}
+                onToggle={() => toggleListSection("sky")}
+              />
+              {!sections.sky.expanded ? null : sky.length === 0 ? (
                 <Text style={styles.emptyLine}>No planets above the horizon right now.</Text>
               ) : (
                 sky.map((p) => (
@@ -423,15 +496,18 @@ export default function ListScreen() {
             </>
           )}
 
-          {showRadioSky && (
+          {sections.radio.visible && (
             <>
-              <View style={styles.headingLeft}>
-                <View style={[styles.headingDot, { backgroundColor: color.entity.radio }]} />
-                <Text testID="list-radio-count" style={styles.heading}>
-                  Radio ({radioRows.length})
-                </Text>
-              </View>
-              {radioRows.length === 0 ? (
+              <ListSectionHeader
+                testID="list-section-radio"
+                countTestID="list-radio-count"
+                title="Radio"
+                count={sections.radio.count}
+                dotColor={color.entity.radio}
+                expanded={sections.radio.expanded}
+                onToggle={() => toggleListSection("radio")}
+              />
+              {!sections.radio.expanded ? null : radioRows.length === 0 ? (
                 <Text style={styles.emptyLine}>No radio sources above the horizon right now.</Text>
               ) : (
                 radioRows.map((r) => (
@@ -454,15 +530,18 @@ export default function ListScreen() {
             </>
           )}
 
-          {showSkyEvents && (
+          {sections.events.visible && (
             <>
-              <View style={styles.headingLeft}>
-                <View style={[styles.headingDot, { backgroundColor: color.entity.sky }]} />
-                <Text testID="list-events-count" style={styles.heading}>
-                  Upcoming ({events.length})
-                </Text>
-              </View>
-              {events.length === 0 ? (
+              <ListSectionHeader
+                testID="list-section-events"
+                countTestID="list-events-count"
+                title="Upcoming"
+                count={sections.events.count}
+                dotColor={color.entity.sky}
+                expanded={sections.events.expanded}
+                onToggle={() => toggleListSection("events")}
+              />
+              {!sections.events.expanded ? null : events.length === 0 ? (
                 <Text style={styles.emptyLine}>No upcoming sky events found.</Text>
               ) : (
                 events.map((e) => {
@@ -534,12 +613,6 @@ export default function ListScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
   body: { flex: 1 },
-  heading: { color: color.text, fontSize: 18, fontWeight: "700", paddingHorizontal: 16, paddingVertical: 12 },
-  headingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingRight: 16 },
-  headingLeft: { flexDirection: "row", alignItems: "center" },
-  // Domain-coded dot sits in the 16px gutter; negative right margin trims the heading's own left padding.
-  headingDot: { width: 8, height: 8, borderRadius: 4, marginLeft: 16, marginRight: -8 },
-  headingBreakdown: { color: color.textDim, fontSize: 13, fontWeight: "600" },
   row: {
     flexDirection: "row",
     alignItems: "center",

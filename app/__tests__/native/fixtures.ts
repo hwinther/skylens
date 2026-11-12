@@ -14,7 +14,7 @@ export function aircraft(hex: string, over: Partial<AircraftDto> = {}): Aircraft
   return { hex, lat: 59.95, lon: 10.8, fl: 120, gs: 280, trk: 90, ...over };
 }
 
-/** Clean slate: no traffic, no focus or track, demo mode with only the traffic layers on. */
+/** Clean slate: no traffic, no focus or track, demo mode with only the traffic layers on, List unfiltered. */
 export function resetStores() {
   useAircraftStore.setState({ byHex: {}, lastSnapshotAt: 0, feedStatus: null });
   useVesselStore.setState({ byMmsi: {}, lastSnapshotAt: 0 });
@@ -31,6 +31,8 @@ export function resetStores() {
     showSkyEvents: false,
     showFishingZones: false,
     showLostGear: false,
+    listHiddenKinds: [],
+    listCollapsedSections: [],
   });
 }
 

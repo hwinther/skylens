@@ -601,7 +601,10 @@ export default function SimScreen() {
         {canDeviceLook ? (
           <Pressable
             testID="sim-look-device"
-            accessibilityState={{ selected: deviceLook }}
+            // An on/off toggle: `aria-pressed` (react-native-web drops accessibilityState) so the
+            // state reaches assistive tech and the DOM.
+            role="button"
+            aria-pressed={deviceLook}
             style={[styles.chip, deviceLook && styles.chipOn]}
             onPress={toggleDeviceLook}
           >

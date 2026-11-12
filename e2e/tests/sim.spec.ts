@@ -146,7 +146,11 @@ test.describe('on a phone', () => {
     await openAircraftCockpit(page)
     const toggle = page.getByTestId('sim-look-device')
     await expect(toggle).toBeVisible()
+    // An on/off toggle button: its state must reach the DOM (react-native-web drops accessibilityState).
+    await expect(toggle).toHaveAttribute('role', 'button')
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false')
     await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true')
 
     // Feed DeviceOrientation like a phone held upright, first facing the start pose, then turned
     // ~40° to the right (alpha counts counter-clockwise).
