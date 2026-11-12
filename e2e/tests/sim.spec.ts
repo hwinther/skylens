@@ -121,7 +121,7 @@ test('looking around shows where straight ahead is, and Recenter snaps back', as
     send('pointerup', 200)
   })
 
-  await expect(page.getByTestId('sim-look-offset')).toHaveText(/\d+° right/)
+  await expect(page.getByTestId('sim-look-offset')).toHaveText(/\d° right/)
   // 800 px × 0.15°/px = 120° right: straight ahead is behind-left, so the marker is an edge arrow.
   await expect(forward).toHaveAttribute('data-onscreen', 'false')
 
@@ -161,7 +161,8 @@ test.describe('on a phone', () => {
       }, alpha)
     await orient(0)
     await expect(toggle).toContainText('Pan/tilt on')
-    await page.waitForTimeout(300) // let the render loop capture the reference pose
+    // The render loop captures this pose as "straight ahead" on its next frame; turn only after that.
+    await expect(page.getByTestId('sim-view')).toHaveAttribute('data-look-reference', 'true')
     await orient(320)
 
     await expect(page.getByTestId('sim-look-offset')).toHaveText(/^(3\d|4\d)° right/, { timeout: 10_000 })

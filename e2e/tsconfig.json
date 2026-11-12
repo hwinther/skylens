@@ -9,5 +9,5 @@
     "noEmit": true
   },
   "include": ["tests", "playwright.config.ts", "playwright.ci.config.ts", "eslint.config.js"],
-  "exclude": ["node_modules", "playwright-report", "test-results"]
+  "exclude": ["node_modules", "playwright-report", "test-results", "monocart-report", "monocart-coverage"]
 }

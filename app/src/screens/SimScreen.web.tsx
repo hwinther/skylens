@@ -291,6 +291,7 @@ export default function SimScreen() {
           scene.globe.depthTestAgainstTerrain = true;
           setEngineReady(true);
 
+          let lookReferenced = false;
           const onPreRender = () => {
             const now = Date.now();
             if (satrec) {
@@ -308,6 +309,12 @@ export default function SimScreen() {
               const device = sensorPoseRef.current;
               deviceRefRef.current ??= { azimuth: device.azimuth, elevation: device.elevation };
               lookRef.current = lookFromDevice(device, deviceRefRef.current);
+            }
+            // Expose whether pan/tilt has captured its "straight ahead" pose (e2e waits on it).
+            const referenced = deviceRefRef.current != null;
+            if (referenced !== lookReferenced) {
+              lookReferenced = referenced;
+              el.dataset.lookReference = String(referenced);
             }
             const look = lookRef.current;
             widget?.camera.setView({

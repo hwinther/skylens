@@ -102,6 +102,8 @@ services:
     volumes:
       - ./e2e/playwright-report:/e2e/playwright-report
       - ./e2e/test-results:/e2e/test-results
+      # Browser JS coverage (monocart-reporter in playwright.ci.config.ts): v8 html, cobertura, lcov.
+      - ./e2e/monocart-coverage:/e2e/monocart-coverage
     depends_on:
       app-ready:
         condition: service_healthy

@@ -94,12 +94,18 @@ test('map view: radar plots aircraft and the real map mounts', async ({ page }) 
     .toBeGreaterThan(0)
 
   // The real (Leaflet) map is the default view; the Radar is the second toggle and plots a blip per
-  // aircraft.
+  // aircraft. The toggle is a tab pair, so assistive tech is told which view is selected.
+  const selectedView = page.getByRole('tablist', { name: 'Map view' }).getByRole('tab', { selected: true })
+  await expect(selectedView).toHaveText('Map')
+  await expect(page.getByTestId('map-view-radar')).toHaveAttribute('aria-selected', 'false')
   await page.getByTestId('map-view-radar').click()
+  await expect(selectedView).toHaveText('Radar')
+  await expect(page.getByTestId('map-view-map')).toHaveAttribute('aria-selected', 'false')
   await expect(page.getByTestId('map-web').locator('[data-testid^="map-ac-"]').first()).toBeVisible()
 
   // Back to the map and confirm it mounts with type-icon markers.
   await page.getByTestId('map-view-map').click()
+  await expect(selectedView).toHaveText('Map')
   await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 15_000 })
 
   const glyph = page.locator('.leaflet-marker-icon span').first()

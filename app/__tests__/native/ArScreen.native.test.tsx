@@ -50,12 +50,6 @@ describe("ArScreen", () => {
     resetStores();
     useObserverStore.setState({ position: null });
     useSettingsStore.setState({ hFovDeg: 66, azimuthTrimDeg: 0, polarisCalibrating: false });
-    // The demo sky uses ImageBackground, which RN 0.88 flags as deprecated (once per process).
-    const warn = console.warn;
-    jest.spyOn(console, "warn").mockImplementation((...args: unknown[]) => {
-      if (typeof args[0] === "string" && args[0].startsWith("ImageBackground is deprecated")) return;
-      warn(...args);
-    });
   });
 
   afterEach(() => {
