@@ -1,0 +1,104 @@
+# Cockpit view (simulator) flow for the release APK in demo mode: onboarding Skip -> List -> first
+# aircraft's detail card -> "Cockpit view" -> wait for the 3D globe -> screenshot -> hardware back.
+# A separate file from smoke.yaml so a globe problem shows up as its own failing flow and never makes
+# the smoke steps flaky. Run with `maestro test .maestro` from app/ (README.md); CI runs every
+# top-level flow in .github/workflows/android-e2e.yml.
+#
+# The globe is Cesium in a webview (an Expo DOM component). On a CI emulator WebGL is software
+# rendered and the Esri imagery/terrain tiles come over the network, so the flow only REQUIRES that
+# the cockpit screen opens, shows its HUD and Exit, and that back leaves it (the app did not crash or
+# hang). Whether the globe reached "ready" (first frame rendered), "failed" (no WebGL, engine didn't
+# load, 60 s timeout) or is still loading is recorded by the screenshots, not asserted: those waits are
+# `optional`. The `cockpit` screenshot is expected to show the satellite-imagery globe from the
+# aircraft's position with the HUD (callsign, ALT/SPD/HDG/PITCH, status) top left and Exit/Map top
+# right; a "3D view unavailable" card instead means the globe failed and says why.
+appId: no.wsh.skylens
+name: Cockpit view (demo mode)
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+
+# Same start as smoke.yaml (see there for why the long waits are ANR-dismissing retry blocks).
+- retry:
+    maxRetries: 3
+    commands:
+      - runFlow: subflows/dismiss-system-anr.yaml
+      - extendedWaitUntil:
+          visible:
+            id: "onboarding-skip"
+          timeout: 45000
+- tapOn:
+    id: "onboarding-skip"
+- retry:
+    maxRetries: 3
+    commands:
+      - runFlow: subflows/dismiss-system-anr.yaml
+      - extendedWaitUntil:
+          visible:
+            id: "status-aircraft-count"
+            text: "[1-9][0-9]* ac"
+          timeout: 20000
+
+# First aircraft in the List -> its detail card -> Cockpit view (in the card's action row).
+- runFlow: subflows/dismiss-system-anr.yaml
+- tapOn:
+    id: "tab-list"
+- retry:
+    maxRetries: 3
+    commands:
+      - runFlow: subflows/dismiss-system-anr.yaml
+      - extendedWaitUntil:
+          visible:
+            id: "list-ac-.*"
+          timeout: 15000
+- tapOn:
+    id: "list-ac-.*"
+    index: 0
+- extendedWaitUntil:
+    visible:
+      id: "detail-cockpit"
+    timeout: 15000
+- tapOn:
+    id: "detail-cockpit"
+
+# The native screen: HUD and Exit show straight away, whatever the globe is doing.
+- extendedWaitUntil:
+    visible:
+      id: "sim-screen"
+    timeout: 15000
+- assertVisible:
+    id: "sim-exit"
+- assertVisible:
+    id: "sim-name"
+- takeScreenshot: cockpit-opened
+
+# The globe: rendered its first frame or gave up (the screen itself times out after 60 s). Optional,
+# see the header. Then, if it is up, give the imagery a while to stream in before the screenshot.
+- extendedWaitUntil:
+    visible:
+      id: "sim-globe-(ready|failed)"
+    timeout: 75000
+    optional: true
+- runFlow:
+    when:
+      visible:
+        id: "sim-globe-ready"
+    commands:
+      - extendedWaitUntil:
+          visible:
+            id: "sim-globe-ready"
+            text: ".*imagery (loaded|failed).*"
+          timeout: 30000
+          optional: true
+- takeScreenshot: cockpit
+
+# Hardware back leaves the cockpit view (back to the List, where the tab bar is shown again).
+- runFlow: subflows/dismiss-system-anr.yaml
+- pressKey: back
+- extendedWaitUntil:
+    visible:
+      id: "tab-list"
+    timeout: 15000
+- takeScreenshot: cockpit-closed

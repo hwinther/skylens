@@ -1,14 +1,18 @@
 /**
  * "Cockpit view" action for the aircraft, vessel and satellite detail sheets: starts a simulator session
  * for the target (simStore), closes the sheet and opens the /sim route. Same handoff and styling as
- * ShowOnMapButton. Web only for now; the Android simulator is a later phase, so the button renders
- * nothing on native.
+ * ShowOnMapButton. Shown on the web and on Android (the Android screen runs the same Cesium globe in a
+ * DOM-component webview and has its own loading/failure states); hidden on iOS, which is not a target
+ * and has never been tried.
  */
 
 import { alpha } from "@/theme";
 import { Platform, Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from "react-native";
 import { useRouter } from "expo-router";
 import { useSimStore, type SimTarget } from "@/state/simStore";
+
+/** Where the cockpit view exists. */
+const SIM_PLATFORMS: ReadonlySet<string> = new Set(["web", "android"]);
 
 export interface SimulatorButtonProps {
   target: SimTarget;
@@ -23,7 +27,7 @@ export interface SimulatorButtonProps {
 export function SimulatorButton({ target, accent, onClose, testID, style }: SimulatorButtonProps) {
   const router = useRouter();
   const start = useSimStore((s) => s.start);
-  if (Platform.OS !== "web") return null;
+  if (!SIM_PLATFORMS.has(Platform.OS)) return null;
   return (
     <Pressable
       testID={testID}
