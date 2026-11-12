@@ -73,3 +73,37 @@ test("calibration and layer choices survive a restart", async () => {
     onboarded: true,
   });
 });
+
+test("the List filter and collapsed sections survive a restart", async () => {
+  installLocalStorage();
+  const first = await loadStore();
+  first.getState().toggleListKind("sea");
+  first.getState().toggleListSection("overhead");
+
+  const relaunched = await loadStore();
+  expect(relaunched.getState().listHiddenKinds).toEqual(["sea"]);
+  expect(relaunched.getState().listCollapsedSections).toEqual(["overhead"]);
+});
+
+test("settings saved before the List filter existed load with nothing hidden or collapsed", async () => {
+  installLocalStorage({ [KEY]: JSON.stringify({ state: { onboarded: true, showShips: false }, version: 0 }) });
+  const store = await loadStore();
+  expect(store.getState()).toMatchObject({
+    onboarded: true,
+    showShips: false,
+    listHiddenKinds: [],
+    listCollapsedSections: [],
+  });
+});
+
+test("unknown List kinds and sections in storage are ignored", async () => {
+  installLocalStorage({
+    [KEY]: JSON.stringify({
+      state: { listHiddenKinds: ["comets", "sea", "sea"], listCollapsedSections: "radio" },
+      version: 0,
+    }),
+  });
+  const store = await loadStore();
+  expect(store.getState().listHiddenKinds).toEqual(["sea"]);
+  expect(store.getState().listCollapsedSections).toEqual([]);
+});
