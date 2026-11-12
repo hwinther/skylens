@@ -1,8 +1,9 @@
 /**
- * Settings: sign in/out, azimuth trim, hFOV calibration (default 66°), subscription
- * radius, mock-auth toggle, and the demo-mode toggle. Calibration values persist to
- * secure-store via the settings store. Steppers are used instead of a native slider
- * to avoid an extra native dependency; the values feed straight into the AR pipeline.
+ * Settings: mode (demo/live) and account (sign in/out) at the top, then layers, azimuth trim,
+ * hFOV calibration (default 66°), subscription radius and About. Values persist via the settings
+ * store (SecureStore on native, localStorage on web). The mock-auth toggle is dev-only. Steppers
+ * are used instead of a native slider to avoid an extra native dependency; the values feed straight
+ * into the AR pipeline.
  */
 
 import { alpha, color } from "@/theme";
@@ -12,7 +13,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useSettingsStore } from "@/state/settingsStore";
-import { useAuthStore } from "@/state/authStore";
+import { useApiAccess, useApiAllowed, useAuthStore, type AuthStatus } from "@/state/authStore";
+import type { ApiAccess } from "@/auth/access";
 import { useAuth } from "@/auth/useAuth";
 import { DEFAULT_HFOV_DEG } from "@/ar/projection";
 import { ApiClient, getApiBaseUrl } from "@/api";
@@ -76,20 +78,42 @@ export default function SettingsScreen() {
   const status = useAuthStore((s) => s.status);
   const mockMode = useAuthStore((s) => s.mockMode);
   const setMockMode = useAuthStore((s) => s.setMockMode);
-  const { signIn, signOut } = useAuth();
+  const { signIn, signOut, loading: signInLoading } = useAuth();
+  const lastError = useAuthStore((s) => s.lastError);
+  const apiAllowed = useApiAllowed();
+  const access = useApiAccess();
+  const [userName, setUserName] = useState<string | null>(null);
+
+  // The signed-in user's name, from /api/me. Only with a real session; fail-soft.
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    let alive = true;
+    new ApiClient({ baseUrl: getApiBaseUrl() })
+      .me()
+      .then((me) => {
+        if (alive) setUserName(me.preferredUsername ?? me.sub ?? null);
+      })
+      .catch(() => {
+        if (alive) setUserName(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [status]);
 
   const app = useMemo(() => getVersionLine(), []);
   const [backend, setBackend] = useState<BackendState>({ status: "loading" });
   const [showFullSha, setShowFullSha] = useState(false);
 
-  // Backend build info. Prefer /api/version (carries the full sha) when signed in; otherwise fall
-  // back to the anonymous /healthz `version` field. Fail-soft: any error → "unavailable", never
-  // crashes the screen. Re-runs when auth status changes so signing in upgrades to the full sha.
+  // Backend build info. Prefer /api/version (carries the full sha) when the API may be called;
+  // otherwise fall back to the anonymous /healthz `version` field. Fail-soft: any error →
+  // "unavailable", never crashes the screen. Re-runs when access changes so signing in upgrades to
+  // the full sha.
   useEffect(() => {
     let alive = true;
     const client = new ApiClient({ baseUrl: getApiBaseUrl() });
     (async () => {
-      if (status === "authenticated") {
+      if (apiAllowed) {
         try {
           const v = await client.version();
           if (alive) setBackend({ status: "ok", version: v.version, sha: v.sha });
@@ -111,7 +135,7 @@ export default function SettingsScreen() {
     return () => {
       alive = false;
     };
-  }, [status]);
+  }, [apiAllowed]);
 
   const appValue = appVersionValue(app.line, app.sha, showFullSha);
   const backendValue = backendVersionValue(backend, showFullSha);
@@ -121,6 +145,50 @@ export default function SettingsScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Settings</Text>
+
+        <Group title="Mode & account" defaultOpen>
+          <Section title="Mode">
+            <Row label="Demo mode (replay + drag-to-look)">
+              <Switch testID="settings-demo-mode" value={demoMode} onValueChange={setDemoMode} />
+            </Row>
+            <Text style={styles.hint}>
+              {demoMode
+                ? "Demo replays recorded traffic with drag-to-look; no account needed. Turn it off for live data."
+                : "Live: traffic, ships, airports and satellites from the Skylens server."}
+            </Text>
+          </Section>
+
+          <Section title="Account">
+            <Row label="Status" value={accountStatusText(status, access)} />
+            {status === "authenticated" && userName ? <Row label="Signed in as" value={userName} /> : null}
+            {__DEV__ ? (
+              <Row label="Mock auth (dev only)">
+                <Switch value={mockMode} onValueChange={setMockMode} />
+              </Row>
+            ) : null}
+            {lastError && status !== "authenticated" ? (
+              <Text testID="settings-signin-error" style={styles.error}>
+                {lastError}
+              </Text>
+            ) : null}
+            {status === "authenticated" ? (
+              <Button
+                testID="settings-signout"
+                label="Sign out"
+                onPress={() => void signOut()}
+                tone="danger"
+              />
+            ) : (
+              <Button
+                testID="settings-signin"
+                label={signInLabel(status, signInLoading, mockMode)}
+                disabled={status === "authenticating" || signInLoading}
+                // No await before signIn(): the web popup must open inside this press.
+                onPress={() => void signIn()}
+              />
+            )}
+          </Section>
+        </Group>
 
         <Group title="Layers & data" defaultOpen>
           <Section title="Ships">
@@ -308,26 +376,9 @@ export default function SettingsScreen() {
           />
         </Section>
 
-        <Section title="Demo">
-          <Row label="Demo mode (replay + drag-to-look)">
-            <Switch value={demoMode} onValueChange={setDemoMode} />
-          </Row>
-        </Section>
         </Group>
 
-        <Group title="Account">
-        <Section title="Account">
-          <Row label="Status" value={status} />
-          <Row label="Mock auth (Expo Go)">
-            <Switch value={mockMode} onValueChange={setMockMode} />
-          </Row>
-          {status === "authenticated" ? (
-            <Button label="Sign out" onPress={() => void signOut()} tone="danger" />
-          ) : (
-            <Button label={mockMode ? "Sign in (mock)" : "Sign in"} onPress={() => void signIn()} />
-          )}
-        </Section>
-
+        <Group title="About">
         <Section title="About">
           <Pressable
             style={styles.row}
@@ -355,6 +406,21 @@ export default function SettingsScreen() {
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+/** The account status in words, including whether this server needs a sign-in at all. */
+function accountStatusText(status: AuthStatus, access: ApiAccess): string {
+  if (status === "authenticated") return "Signed in";
+  if (status === "authenticating") return "Signing in…";
+  if (access === "open") return "Not needed on this server";
+  if (access === "sign-in-required") return "Signed out";
+  return "Checking…";
+}
+
+function signInLabel(status: AuthStatus, loading: boolean, mockMode: boolean): string {
+  if (status === "authenticating") return "Signing in…";
+  if (loading) return "Loading…";
+  return mockMode ? "Sign in (mock)" : "Sign in";
 }
 
 /** App version cell: reveal the full sha (swapped in for the 7-char short form) when tapped. */
@@ -525,17 +591,20 @@ function Button({
   onPress,
   tone,
   testID,
+  disabled,
 }: {
   label: string;
   onPress: () => void;
   tone?: "danger";
   testID?: string;
+  disabled?: boolean;
 }) {
   return (
     <Pressable
       testID={testID}
-      style={[styles.button, tone === "danger" && styles.buttonDanger]}
+      style={[styles.button, tone === "danger" && styles.buttonDanger, disabled && styles.buttonDisabled]}
       onPress={onPress}
+      disabled={disabled}
     >
       <Text style={styles.buttonText}>{label}</Text>
     </Pressable>
@@ -601,5 +670,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   buttonDanger: { backgroundColor: "#5a1f26" },
+  buttonDisabled: { opacity: 0.6 },
+  error: { color: color.status.error, fontSize: 13, fontWeight: "600" },
   buttonText: { color: color.text, fontSize: 16, fontWeight: "600" },
 });

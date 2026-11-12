@@ -36,6 +36,14 @@ test("a 401 reads as an expired session and repeats are counted", () => {
   expect(describeApiIssue(issue)).toBe("Session expired — couldn't load ports (401) ×2. Sign in again.");
 });
 
+test("a 401 while signed in reads as an expired session; signed out, as an invitation to sign in", () => {
+  const issue = { kind: "auth" as const, status: 401, endpoint: "/api/airports", count: 1 };
+  expect(describeApiIssue(issue, { signedOut: false })).toBe(
+    "Session expired — couldn't load airports (401). Sign in again.",
+  );
+  expect(describeApiIssue(issue, { signedOut: true })).toBe("Sign in to load airports (401).");
+});
+
 test("a later success on the same endpoint clears it; another endpoint doesn't", () => {
   const s = useApiIssueStore.getState();
   s.report("/api/airports?lat=1", 500, true);

@@ -3,6 +3,9 @@
  * for metadata (registration/type/operator). The "Route" button is the ONLY thing
  * that calls GET /api/aircraft/{hex}/route — that endpoint spends AeroAPI quota, so
  * it must be an explicit user action, never automatic.
+ *
+ * Without API access (signed out behind real auth, e.g. in demo mode) it fetches nothing and shows
+ * what the live snapshot already carries.
  */
 
 import { color } from "@/theme";
@@ -14,6 +17,7 @@ import { ShowOnMapButton } from "./ShowOnMapButton";
 import { SimulatorButton } from "./SimulatorButton";
 import type { ApiClient } from "@/api/client";
 import { useAircraftStore } from "@/state/aircraftStore";
+import { useApiAllowed } from "@/state/authStore";
 import type { AircraftDetail, RouteResponse } from "@/api/types";
 
 export interface DetailSheetProps {
@@ -34,12 +38,13 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
   const state = detail?.state ?? live ?? null;
   // Away-mode traffic carries its aggregator in `src`; credit it (adsb.fi's terms require a link).
   const credit = awaySourceCredit(state?.src);
+  const apiAllowed = useApiAllowed();
 
   useEffect(() => {
     setDetail(null);
     setRoute(null);
     setError(null);
-    if (!hex) return;
+    if (!hex || !apiAllowed) return;
     let cancelled = false;
     setLoading(true);
     client
@@ -61,7 +66,7 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
     return () => {
       cancelled = true;
     };
-  }, [hex, client]);
+  }, [hex, client, apiAllowed]);
 
   const loadRoute = () => {
     if (!hex) return;
@@ -77,16 +82,16 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
     <Sheet visible={!!hex} onClose={onClose} accent={color.entity.air}>
         {loading && <ActivityIndicator color={color.entity.air} />}
         {error && <Text style={styles.error}>{error}</Text>}
-        {detail && (
+        {(detail || (!apiAllowed && state)) && (
           <>
             <Text testID="detail-title" style={styles.title}>
               {state?.flight?.trim() ||
-                (state?.hex ?? detail.metadata?.hex ?? hex ?? "").toUpperCase()}
+                (state?.hex ?? detail?.metadata?.hex ?? hex ?? "").toUpperCase()}
             </Text>
-            <Row label="Registration" value={detail.metadata?.registration} />
-            <Row label="Type" value={detail.metadata?.typeName ?? detail.metadata?.typeCode} />
-            <Row label="Operator" value={detail.metadata?.operator} />
-            {detail.metadata?.military || state?.mil ? (
+            <Row label="Registration" value={detail?.metadata?.registration} />
+            <Row label="Type" value={detail?.metadata?.typeName ?? detail?.metadata?.typeCode} />
+            <Row label="Operator" value={detail?.metadata?.operator} />
+            {detail?.metadata?.military || state?.mil ? (
               <Row label="Military" value="Yes (registry flag)" />
             ) : null}
             <Row
@@ -97,9 +102,15 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
               label="Ground speed"
               value={state?.gs != null ? `${Math.round(state.gs)} kt` : null}
             />
-            <Row label="Source" value={credit?.name ?? state?.src ?? detail.metadata?.source} />
+            <Row label="Source" value={credit?.name ?? state?.src ?? detail?.metadata?.source} />
 
-            {!route && (
+            {!apiAllowed && (
+              <Text testID="detail-signin-hint" style={styles.hint}>
+                Sign in for registration, type, operator and route.
+              </Text>
+            )}
+
+            {apiAllowed && !route && (
               <Pressable style={styles.routeBtn} onPress={loadRoute} disabled={routeLoading}>
                 <Text style={styles.routeBtnText}>
                   {routeLoading ? "Loading route…" : "Route (uses AeroAPI)"}
@@ -165,6 +176,7 @@ const styles = StyleSheet.create({
   rowLabel: { color: color.textLabel, fontSize: 14 },
   rowValue: { color: color.text, fontSize: 14, fontWeight: "500" },
   error: { color: color.status.error, marginVertical: 8 },
+  hint: { color: color.textMuted, fontSize: 12, marginTop: 12 },
   routeBtn: {
     marginTop: 16,
     backgroundColor: color.accentFill,

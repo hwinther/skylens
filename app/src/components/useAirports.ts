@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import type { ApiClient } from "@/api/client";
 import type { AirportDto } from "@/api/types";
 import type { Observer } from "./webmap/relative";
+import { useApiAllowed } from "@/state/authStore";
 
 /** Airports are baked reference data; 150 km comfortably covers any radar/map view around the observer. */
 export const AIRPORTS_RADIUS_KM = 150;
@@ -28,7 +29,10 @@ export interface UseAirportsOptions {
 // Stable empty singleton so an idle/failed hook returns the same reference frame to frame.
 const NO_AIRPORTS: AirportDto[] = [];
 
-export function useAirports({ client, observer, enabled }: UseAirportsOptions): AirportDto[] {
+export function useAirports({ client, observer, enabled: wanted }: UseAirportsOptions): AirportDto[] {
+  // No API calls without access (signed out behind real auth): the layer just stays empty.
+  const apiAllowed = useApiAllowed();
+  const enabled = wanted && apiAllowed;
   const [airports, setAirports] = useState<AirportDto[]>(NO_AIRPORTS);
 
   // Round the observer to ~1 km so tiny GPS jitter never triggers a needless refetch of static data.

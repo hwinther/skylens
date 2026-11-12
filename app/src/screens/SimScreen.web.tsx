@@ -58,6 +58,7 @@ import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
 import { buildSatrec, satelliteStateAt } from "@/ar/satellites";
 import { useAircraftStore } from "@/state/aircraftStore";
+import { isApiAllowed } from "@/state/authStore";
 import { useVesselStore } from "@/state/vesselStore";
 import { useSimStore, type SimTarget } from "@/state/simStore";
 import { loadCesium } from "@/sim/loadCesium";
@@ -239,17 +240,22 @@ export default function SimScreen() {
       } else {
         const noradId = Number(target.id);
         nameRef.current = `NORAD ${target.id}`;
-        new ApiClient({ baseUrl: getApiBaseUrl() })
-          .satelliteDetail(noradId)
-          .then((detail) => {
-            if (cancelled) return;
-            satrec = buildSatrec(detail.satellite.omm);
-            nameRef.current = detail.satellite.name?.trim() || nameRef.current;
-            if (!satrec) setError("This satellite's orbit can't be propagated.");
-          })
-          .catch(() => {
-            if (!cancelled) setError("Couldn't load the satellite's orbit.");
-          });
+        if (!isApiAllowed()) {
+          // Signed out behind real auth: no API calls, so the orbit can't be loaded.
+          setError("Sign in to load the satellite's orbit.");
+        } else {
+          new ApiClient({ baseUrl: getApiBaseUrl() })
+            .satelliteDetail(noradId)
+            .then((detail) => {
+              if (cancelled) return;
+              satrec = buildSatrec(detail.satellite.omm);
+              nameRef.current = detail.satellite.name?.trim() || nameRef.current;
+              if (!satrec) setError("This satellite's orbit can't be propagated.");
+            })
+            .catch(() => {
+              if (!cancelled) setError("Couldn't load the satellite's orbit.");
+            });
+        }
       }
 
       // --- HUD + subscription centre at 4 Hz -----------------------------------------------------
@@ -401,7 +407,8 @@ export default function SimScreen() {
             let inFlight = false;
             const maybeFetch = () => {
               const pose = lastPose;
-              if (!pose || inFlight || cancelled) return;
+              // No API calls without access (signed out behind real auth): no labels, no fetch.
+              if (!pose || inFlight || cancelled || !isApiAllowed()) return;
               if (fetchedAt && distanceKm(fetchedAt.lat, fetchedAt.lon, pose.lat, pose.lon) < refetchKm) return;
               inFlight = true;
               const at = { lat: pose.lat, lon: pose.lon };

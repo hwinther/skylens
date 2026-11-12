@@ -18,6 +18,7 @@ import { SimulatorButton } from "./SimulatorButton";
 import { useRouter } from "expo-router";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
+import { useApiAllowed } from "@/state/authStore";
 import type { SatelliteDetail, SatelliteTransmitter } from "@/api/types";
 import {
   buildSatrec,
@@ -74,6 +75,8 @@ export function SatelliteDetailSheet({
   onClose,
 }: SatelliteDetailSheetProps) {
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
+  // Without API access (signed out behind real auth) only the live view's rows show.
+  const apiAllowed = useApiAllowed();
   const router = useRouter();
   const setTracked = useSatelliteTrackStore((s) => s.setTracked);
   const [detail, setDetail] = useState<SatelliteDetail | null>(null);
@@ -86,7 +89,7 @@ export function SatelliteDetailSheet({
   useEffect(() => {
     setDetail(null);
     setError(null);
-    if (noradId == null) return;
+    if (noradId == null || !apiAllowed) return;
     let cancelled = false;
     setLoading(true);
     client
@@ -103,7 +106,7 @@ export function SatelliteDetailSheet({
     return () => {
       cancelled = true;
     };
-  }, [noradId, client]);
+  }, [noradId, client, apiAllowed]);
 
   useEffect(() => {
     if (noradId == null) return;

@@ -104,6 +104,7 @@ export default function ArScreen() {
   const setSnapshot = useAircraftStore((s) => s.setSnapshot);
   const setSource = useAircraftStore((s) => s.setSource);
   const setConnection = useAircraftStore((s) => s.setConnection);
+  const clearAircraft = useAircraftStore((s) => s.clear);
 
   const client = useMemo(() => new ApiClient({ baseUrl }), [baseUrl]);
 
@@ -193,19 +194,30 @@ export default function ArScreen() {
     });
     return () => {
       handle.stop();
+      // Leaving demo: drop the replayed aircraft so live mode (which may be waiting for a sign-in)
+      // never shows them as if they were live.
+      clearAircraft();
       setConnection("disconnected");
     };
-  }, [demoMode, setSnapshot, setSource, setConnection, setObserverPosition]);
+  }, [demoMode, setSnapshot, setSource, setConnection, setObserverPosition, clearAircraft]);
 
   useEffect(() => {
     if (demoMode) return;
     // Seed the projection origin so the overlay can place aircraft before (or instead of) the
     // native GPS watch — on web the one-shot browser fix from useObserverLocation is all we get.
-    // useLiveFeed sets the source.
+    // Live mode says so even before (or without) a hub connection, e.g. while waiting for a sign-in.
+    setSource("live");
     if (observer)
       setObserverPosition({ lat: observer.lat, lon: observer.lon, alt: observer.alt ?? 0 });
     if (!cameraPermission?.granted) void requestCameraPermission();
-  }, [demoMode, observer, setObserverPosition, cameraPermission?.granted, requestCameraPermission]);
+  }, [
+    demoMode,
+    observer,
+    setObserverPosition,
+    setSource,
+    cameraPermission?.granted,
+    requestCameraPermission,
+  ]);
 
   const overlay = (
     <ArOverlay

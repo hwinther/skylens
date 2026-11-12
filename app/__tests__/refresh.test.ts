@@ -9,6 +9,8 @@ import type { StoredTokens } from "@/auth/tokenStore";
 // refresh.ts caches discovery and the in-flight refresh at module scope, so each test loads fresh
 // copies of it and of the stores it shares state with.
 let ensureFreshAccessToken: typeof import("@/auth/refresh").ensureFreshAccessToken;
+let forceRefreshAccessToken: typeof import("@/auth/refresh").forceRefreshAccessToken;
+let storage: import("zustand/middleware").StateStorage;
 let tokens: typeof import("@/auth/tokenStore");
 let useAuthStore: typeof import("@/state/authStore").useAuthStore;
 let fetchDiscovery: jest.Mock;
@@ -42,7 +44,9 @@ beforeEach(() => {
   jest.resetModules();
   jest.spyOn(console, "warn").mockImplementation(() => {});
   /* eslint-disable @typescript-eslint/no-require-imports */
-  ({ ensureFreshAccessToken } = require("@/auth/refresh"));
+  ({ ensureFreshAccessToken, forceRefreshAccessToken } = require("@/auth/refresh"));
+  // The same storage adapter tokenStore persists through; writing to it stands in for another tab.
+  storage = require("@/state/persistStorage").platformStorage();
   tokens = require("@/auth/tokenStore");
   ({ useAuthStore } = require("@/state/authStore"));
   const AuthSession = require("expo-auth-session");
@@ -104,4 +108,63 @@ test("mock tokens pass through untouched", async () => {
   await tokens.setTokens({ ...EXPIRED, accessToken: "mock", mock: true });
   await expect(ensureFreshAccessToken()).resolves.toBe("mock");
   expect(refreshAsync).not.toHaveBeenCalled();
+});
+
+/** Another tab persisting its own (refreshed) token set. */
+async function otherTabWrites(t: StoredTokens) {
+  await storage.setItem("skylens.tokens.v1", JSON.stringify(t));
+}
+
+const OTHER_TAB: StoredTokens = {
+  accessToken: "other-tab",
+  refreshToken: "rt-2",
+  idToken: null,
+  expiresAt: Date.now() + 3_600_000,
+};
+
+test("adopts a token set another tab already refreshed instead of spending the refresh token", async () => {
+  await tokens.setTokens(EXPIRED);
+  await otherTabWrites(OTHER_TAB);
+
+  await expect(ensureFreshAccessToken()).resolves.toBe("other-tab");
+  expect(refreshAsync).not.toHaveBeenCalled();
+  expect(tokens.getTokensSync()).toMatchObject({ accessToken: "other-tab", refreshToken: "rt-2" });
+});
+
+test("ignores another tab's set when it is expired too, and refreshes", async () => {
+  await tokens.setTokens(EXPIRED);
+  await otherTabWrites({ ...OTHER_TAB, expiresAt: Date.now() - 1000 });
+  refreshAsync.mockResolvedValue({ accessToken: "fresh", expiresIn: 3600 });
+
+  await expect(ensureFreshAccessToken()).resolves.toBe("fresh");
+  expect(refreshAsync).toHaveBeenCalledTimes(1);
+});
+
+test("a rejected refresh re-reads storage and adopts a set another tab rotated in meanwhile", async () => {
+  await tokens.setTokens(EXPIRED);
+  refreshAsync.mockImplementation(async () => {
+    // The other tab won the race: it rotated the refresh token, so ours is now rejected.
+    await otherTabWrites(OTHER_TAB);
+    throw new Error("invalid_grant");
+  });
+
+  await expect(ensureFreshAccessToken()).resolves.toBe("other-tab");
+  expect(useAuthStore.getState().status).toBe("authenticated");
+  expect(tokens.getTokensSync()).toMatchObject({ accessToken: "other-tab" });
+});
+
+test("forceRefreshAccessToken refreshes a token that still looks valid", async () => {
+  await tokens.setTokens({ ...EXPIRED, accessToken: "rejected", expiresAt: Date.now() + 3_600_000 });
+  refreshAsync.mockResolvedValue({ accessToken: "fresh", expiresIn: 3600 });
+
+  await expect(forceRefreshAccessToken()).resolves.toBe("fresh");
+  expect(refreshAsync).toHaveBeenCalledTimes(1);
+});
+
+test("forceRefreshAccessToken ends the session when the refresh is rejected", async () => {
+  await tokens.setTokens({ ...EXPIRED, accessToken: "rejected", expiresAt: Date.now() + 3_600_000 });
+  refreshAsync.mockRejectedValue(new Error("invalid_grant"));
+
+  await expect(forceRefreshAccessToken()).resolves.toBeNull();
+  expect(useAuthStore.getState().status).toBe("unauthenticated");
 });
