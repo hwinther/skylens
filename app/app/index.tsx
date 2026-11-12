@@ -38,6 +38,7 @@ import {
   useRadioSky,
   useSatellites,
   VesselDetailSheet,
+  type SignalLostIds,
 } from "@/components";
 import { airportFilter } from "@/components/webmap/airportStyle";
 import { useDetailSelection } from "@/components/useDetailSelection";
@@ -55,6 +56,7 @@ import { useSettingsStore } from "@/state/settingsStore";
 
 /** Height of the AR status strip (two rows), which the side-panel detail card starts below. */
 const STATUS_STRIP_CLEARANCE = 64;
+const NO_SIGNAL_LOST: SignalLostIds = { aircraft: [], vessels: [] };
 
 export default function ArScreen() {
   const demoMode = useSettingsStore((s) => s.demoMode);
@@ -105,6 +107,8 @@ export default function ArScreen() {
   const panelTop = insets.top + STATUS_STRIP_CLEARANCE;
   // Trust-indicator legend overlay, opened from the status strip's info glyph.
   const [showLegend, setShowLegend] = useState(false);
+  // Aircraft/vessels whose signal the AR overlay reports as lost, for the detail card's status line.
+  const [signalLost, setSignalLost] = useState<SignalLostIds>(NO_SIGNAL_LOST);
 
   const baseUrl = useMemo(() => getApiBaseUrl(), []);
   // Live-mode observer: baked home coords, else a one-shot device/browser geolocation fix, resolved
@@ -269,6 +273,7 @@ export default function ArScreen() {
       onSelect={setSelectedHex}
       onSelectSatellite={setSelectedNoradId}
       onSelectVessel={setSelectedMmsi}
+      onSignalLost={setSignalLost}
       // No camera feed (native without permission, or web without a working AR camera) → synthetic horizon.
       showHorizon={!demoMode && !cameraPermission?.granted && !webCamShown}
     />
@@ -376,12 +381,14 @@ export default function ArScreen() {
         hex={selectedHex}
         client={client}
         panelTop={panelTop}
+        signalLost={selectedHex != null && signalLost.aircraft.includes(selectedHex)}
         onClose={() => setSelectedHex(null)}
       />
       <VesselDetailSheet
         mmsi={selectedMmsi}
         panelTop={panelTop}
         vessel={selectedMmsi != null ? vessels.find((v) => v.mmsi === selectedMmsi) : undefined}
+        signalLost={selectedMmsi != null && signalLost.vessels.includes(selectedMmsi)}
         onClose={() => setSelectedMmsi(null)}
       />
       <SatelliteDetailSheet

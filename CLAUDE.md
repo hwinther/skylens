@@ -119,6 +119,12 @@ npm run coverage:summary          # unit (../app/coverage) + e2e (monocart-cover
   (`isMapAvailable`). E2E that wants blips must click `map-view-radar` first.
 - **Demo mode** (`src/mock/`) replays `recorded-aircraft.json` with a drag-to-look pose, so the AR
   overlay works on an emulator or desktop with no feed.
+- **Signal lost** (`src/ar/signalLost.ts`): the one definition of a stale target, from the per-kind
+  `trackLimits` in `src/ar/positionTracker.ts`, measured on the tracker's sample (the own feed re-sends a
+  quiet aircraft's last position with its old `seenPos`, so the DTO alone never looks stale). The sim HUD
+  and the AR overlay both use it; AR dims lost aircraft/ships (dashed chip, hollow anchor
+  `ar-ac-lost-<hex>` / `ar-ves-lost-<mmsi>`, "lost · 45 s", hollow edge arrow) and reports them to the
+  AR screen's detail card. Satellites are propagated from TLEs and are never "lost".
 - **Simulator / cockpit view** (`/sim`, web only for now): `src/screens/SimScreen.web.tsx` renders a
   Cesium globe (Esri World Imagery + terrain) with the camera on the followed aircraft/vessel/satellite.
   Cesium is NOT bundled by Metro: `scripts/copy-cesium.mjs` (postinstall) copies its prebuilt runtime

@@ -38,10 +38,17 @@ import { RadioLabel } from "./RadioLabel";
 import { AirportArLabel } from "./AirportArLabel";
 import { airportArPriority } from "./webmap/airportStyle";
 import { PositionTracker, type TrackPoint } from "@/ar/positionTracker";
+import { lostAgeS } from "@/ar/signalLost";
 import { aircraftSample } from "@/sim/simPose";
 
 const aircraftId = (ac: AircraftDto) => ac.hex;
 const vesselId = (v: VesselDto) => v.mmsi;
+
+/** Ids of the aircraft (hex) and vessels (MMSI) whose signal is lost (src/ar/signalLost). */
+export interface SignalLostIds {
+  aircraft: readonly string[];
+  vessels: readonly string[];
+}
 
 export interface ArOverlayProps {
   aircraft: AircraftDto[];
@@ -85,6 +92,8 @@ export interface ArOverlayProps {
   onSelectSatellite?: (noradId: number) => void;
   /** Tapping a vessel label's icon/name; omitted → vessel labels stay display-only. */
   onSelectVessel?: (mmsi: string) => void;
+  /** Called when the set of signal-lost aircraft/vessels changes (for the detail card's status line). */
+  onSignalLost?: (lost: SignalLostIds) => void;
   /** Airports (already filtered by the small-airfields toggle) for the fixed-infrastructure pass. */
   airports?: AirportDto[];
   /** Draw the airports pass. */
@@ -102,11 +111,14 @@ interface RenderLabel {
   y: number;
   anchorY: number;
   rangeKm: number | null;
+  /** Whole seconds since the last position when the signal is lost, else null. */
+  lostAgeS: number | null;
 }
 
 interface RenderArrow {
   hex: string;
   bearingDeg: number;
+  lost: boolean;
 }
 
 interface RenderVessel {
@@ -115,6 +127,7 @@ interface RenderVessel {
   y: number;
   anchorY: number;
   rangeKm: number;
+  lostAgeS: number | null;
 }
 
 interface RenderSatellite {
@@ -214,6 +227,7 @@ export function ArOverlay({
   onSelect,
   onSelectSatellite,
   onSelectVessel,
+  onSignalLost,
   showHorizon = false,
 }: ArOverlayProps) {
   const { width, height } = useWindowDimensions();
@@ -296,9 +310,17 @@ export function ArOverlay({
     showEclipticRef.current = showEcliptic;
   }, [aircraft, hFovDeg, showHorizon, vessels, showShips, showAton, satellites, satellitesSampledAt, showSatellites, planets, showPlanets, radioTargets, showRadioSky, airports, showAirports, ecliptic, showEcliptic]);
 
+  // The signal-lost callback lives in its own ref so the rAF loop never restarts for it.
+  const onSignalLostRef = useRef(onSignalLost);
+  useEffect(() => {
+    onSignalLostRef.current = onSignalLost;
+  }, [onSignalLost]);
+
   useEffect(() => {
     let raf = 0;
     let lastRun = 0;
+    // Last reported signal-lost set, so onSignalLost only fires when it changes.
+    let lostKey = "";
     // Cap the overlay's heavy work (reprojecting N aircraft + declutter + the label-tree
     // re-render) at ~20 fps. The rAF keeps firing at display rate, but doing all that 60x/s
     // pins the JS thread the moment planes are present — starving touch handling and the pose
@@ -328,11 +350,15 @@ export function ArOverlay({
       const nextLabels: RenderLabel[] = [];
       const nextArrows: RenderArrow[] = [];
       const screenLabels: ScreenLabel[] = [];
+      const lostAircraft: string[] = [];
+      const lostVessels: string[] = [];
 
       if (observer) {
         for (const ac of aircraftRef.current) {
           // Unknown to the tracker = no position in the snapshot.
           if (!aircraftTracker.positionAt(ac.hex, nowMs, pos)) continue;
+          const acLostAgeS = lostAgeS(aircraftTracker.sampleOf(ac.hex), nowMs);
+          if (acLostAgeS != null) lostAircraft.push(ac.hex);
           const angles = lookAngles(observer, pos);
           const proj = project(
             { azimuth: angles.azimuth, elevation: angles.elevation },
@@ -354,9 +380,10 @@ export function ArOverlay({
               y: py,
               anchorY: py,
               rangeKm: angles.slantRange / 1000,
+              lostAgeS: acLostAgeS,
             });
           } else if (proj.arrowBearingDeg != null) {
-            nextArrows.push({ hex: ac.hex, bearingDeg: proj.arrowBearingDeg });
+            nextArrows.push({ hex: ac.hex, bearingDeg: proj.arrowBearingDeg, lost: acLostAgeS != null });
           }
         }
       }
@@ -381,7 +408,7 @@ export function ArOverlay({
       // label placement is completely untouched. Off-screen vessels get no edge arrow — the band is
       // dense and side arrows would just be horizon noise (aircraft keep theirs).
       if (observer && (showShipsRef.current || showAtonRef.current)) {
-        const cand: { v: VesselDto; azimuth: number; distKm: number }[] = [];
+        const cand: { v: VesselDto; azimuth: number; distKm: number; lostAgeS: number | null }[] = [];
         for (const v of vesselsRef.current) {
           if (v.lat == null || v.lon == null) continue;
           const isAton = v.kind === "aton";
@@ -393,11 +420,13 @@ export function ArOverlay({
           } else if (!vesselTracker.positionAt(v.mmsi, nowMs, pos)) {
             continue;
           }
+          const vLostAgeS = isAton ? null : lostAgeS(vesselTracker.sampleOf(v.mmsi), nowMs);
+          if (vLostAgeS != null) lostVessels.push(v.mmsi);
           pos.alt = 0;
           const a = lookAngles(observer, pos);
           const distKm = a.slantRange / 1000;
           if (distKm > VESSEL_DISTANCE_CAP_KM) continue;
-          cand.push({ v, azimuth: a.azimuth, distKm });
+          cand.push({ v, azimuth: a.azimuth, distKm, lostAgeS: vLostAgeS });
         }
         // Nearest-first, then hard-cap before the (O(n²)) projection + declutter work.
         cand.sort((p, q) => p.distKm - q.distKm);
@@ -412,7 +441,7 @@ export function ArOverlay({
           const horizonPy = height / 2 - (proj.yNdc * height) / 2;
           const py = horizonPy + surfaceBandOffset(c.distKm);
           vScreenLabels.push({ id: c.v.mmsi, x: px, y: py, priority: 1 / Math.max(c.distKm, 0.1) });
-          vRender.push({ vessel: c.v, x: px, y: py, anchorY: py, rangeKm: c.distKm });
+          vRender.push({ vessel: c.v, x: px, y: py, anchorY: py, rangeKm: c.distKm, lostAgeS: c.lostAgeS });
         }
 
         if (vRender.length === 0) {
@@ -433,6 +462,12 @@ export function ArOverlay({
       } else {
         setVesselLabels(NO_VESSELS);
         setVesselClusters(NO_CLUSTERS);
+      }
+
+      const nextLostKey = `${lostAircraft.join(",")}|${lostVessels.join(",")}`;
+      if (nextLostKey !== lostKey) {
+        lostKey = nextLostKey;
+        onSignalLostRef.current?.({ aircraft: lostAircraft, vessels: lostVessels });
       }
 
       // --- Airports pass: fixed ground infrastructure at their true az/el ---
@@ -674,6 +709,7 @@ export function ArOverlay({
           y={v.y}
           anchorY={v.anchorY}
           rangeKm={v.rangeKm}
+          lostAgeS={v.lostAgeS}
           onPress={onSelectVessel}
         />
       ))}
@@ -738,6 +774,7 @@ export function ArOverlay({
           y={l.y}
           anchorY={l.anchorY}
           rangeKm={l.rangeKm}
+          lostAgeS={l.lostAgeS}
           onPress={onSelect}
         />
       ))}
@@ -752,7 +789,14 @@ export function ArOverlay({
           testID={`ac-arrow-${a.hex}`}
           style={[styles.arrow, arrowPosition(a.bearingDeg, width, height)]}
         >
-          <Text style={styles.arrowText}>▲</Text>
+          {a.lost ? (
+            // Signal lost: a hollow, dimmed arrow, like the label's hollow anchor dot.
+            <Text testID={`ar-ac-arrow-lost-${a.hex}`} style={[styles.arrowText, styles.arrowTextLost]}>
+              △
+            </Text>
+          ) : (
+            <Text style={styles.arrowText}>▲</Text>
+          )}
         </View>
       ))}
     </View>
@@ -880,4 +924,5 @@ const styles = StyleSheet.create({
   },
   arrow: { position: "absolute", width: 24, height: 24, alignItems: "center", justifyContent: "center", pointerEvents: "none" },
   arrowText: { color: alpha(color.entity.air, 0.9), fontSize: 18 },
+  arrowTextLost: { color: alpha(color.entity.air, 0.45) },
 });
