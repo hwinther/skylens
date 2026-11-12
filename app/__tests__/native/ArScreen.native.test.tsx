@@ -12,6 +12,7 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react-native";
 import { router } from "expo-router";
 import { useCameraPermissions } from "expo-camera";
+import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import ArScreen from "../../app/index";
 import * as mockFeed from "@/mock/mockFeed";
@@ -175,6 +176,14 @@ describe("ArScreen", () => {
 
     expect(useAircraftStore.getState().byHex).toEqual({});
     expect(useAircraftStore.getState().source).toBe("live");
+  });
+
+  it("demo mode's sky image is sized to fill the screen, not to the asset's intrinsic size", async () => {
+    // On Android, Image places the static asset's own size (sky.png: 64x256) ahead of the style as
+    // width/height, and that beats left/right/top/bottom stretching; only an explicit size wins.
+    await renderAr();
+    const sky = StyleSheet.flatten(screen.getByTestId("ar-demo-sky").props.style);
+    expect(sky).toMatchObject({ position: "absolute", width: "100%", height: "100%" });
   });
 
   it("demo mode looks through the drag pose (east, 20° up), not the live sensor pose", async () => {

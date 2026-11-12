@@ -41,6 +41,15 @@ const iconColor = (c: ColorValue) => (typeof c === "number" || c == null ? undef
  */
 const HIDDEN_ROUTE = { tabBarItemStyle: { display: "none" } } as const;
 
+/**
+ * A hidden route that also drops the tab bar itself: full-screen pages, and pages whose only way out
+ * should be their own (onboarding must be finished or skipped, or it comes back on the next launch;
+ * /oauth is a transient redirect landing). /sign-in keeps the bar: its only exits are signing in or
+ * switching to demo, so without the bar a user who wants neither (e.g. to change a setting while the
+ * sign-in service is down) would be stuck, with no history to go back to after a direct link.
+ */
+const FULL_SCREEN_ROUTE = { ...HIDDEN_ROUTE, tabBarStyle: { display: "none" } } as const;
+
 /** How often to re-ask whether the backend requires a sign-in while it has given no answer. */
 const AUTH_PROBE_RETRY_MS = 5_000;
 
@@ -189,10 +198,9 @@ export default function RootLayout() {
             }}
           />
           <Tabs.Screen name="sign-in" options={HIDDEN_ROUTE} />
-          <Tabs.Screen name="oauth" options={HIDDEN_ROUTE} />
-          <Tabs.Screen name="onboarding" options={HIDDEN_ROUTE} />
-          {/* The simulator is full-screen, so it also drops the tab bar itself. */}
-          <Tabs.Screen name="sim" options={{ ...HIDDEN_ROUTE, tabBarStyle: { display: "none" } }} />
+          <Tabs.Screen name="oauth" options={FULL_SCREEN_ROUTE} />
+          <Tabs.Screen name="onboarding" options={FULL_SCREEN_ROUTE} />
+          <Tabs.Screen name="sim" options={FULL_SCREEN_ROUTE} />
         </Tabs>
         {/* Failed REST calls (expired session, server error, offline) shown above every tab. */}
         <ApiIssueBanner />

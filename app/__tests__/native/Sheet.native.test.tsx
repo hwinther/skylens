@@ -4,9 +4,10 @@
  * Android's hardware back button (registered only while the card is open on a focused screen).
  */
 import { useState } from "react";
-import { DeviceEventEmitter, Text } from "react-native";
+import { DeviceEventEmitter, StyleSheet, Text } from "react-native";
 import { render, screen, fireEvent, act } from "@testing-library/react-native";
 import { Sheet, SheetSummary } from "@/components/Sheet";
+import { color } from "@/theme";
 
 /** A screen that owns the open/closed state, like the real screens do through useDetailSelection. */
 function Harness({ onClosed }: { onClosed?: () => void }) {
@@ -44,6 +45,14 @@ describe("Sheet (compact card)", () => {
     expect(screen.getByTestId("detail-card-summary")).toHaveTextContent("FL350 · 450 kt");
     expect(screen.queryByTestId("detail-card-body")).not.toBeOnTheScreen();
     expect(screen.queryByTestId("full-details")).not.toBeOnTheScreen();
+  });
+
+  it("has an opaque surface on native (no blur there, so translucency would let the scene bleed through)", async () => {
+    await render(<Harness />);
+
+    const card = StyleSheet.flatten(screen.getByTestId("detail-card").props.style);
+    expect(card.backgroundColor).toBe(color.bg);
+    expect(card).not.toHaveProperty("backdropFilter");
   });
 
   it("expands with the toggle, then collapses again", async () => {

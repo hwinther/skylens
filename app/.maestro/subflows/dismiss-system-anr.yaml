@@ -1,0 +1,23 @@
+# Dismisses a system "<app> isn't responding" dialog that belongs to ANOTHER app (on the first CI run
+# it was "Pixel Launcher isn't responding", which hid our whole screen from Maestro) by tapping
+# "Close app": the same thing `hide_error_dialogs` does, and unlike "Wait" it can't come straight back
+# while the other app is still stuck; Android restarts the launcher / System UI by itself.
+# Our own app's dialog ("Skylens isn't responding") is deliberately not matched: it is left on screen
+# so the next wait fails with it in the screenshot. In CI `hide_error_dialogs` normally stops these
+# dialogs from showing at all (see android-e2e.yml); this is the fallback for one already up, and for
+# local emulators.
+#
+# Kept out of the top-level folder so `maestro test .maestro` does not run it as a flow of its own
+# (the default workspace pattern only picks up top-level files). The `when: visible` check waits up
+# to ~7 s for the dialog before skipping, so call it only where a wait follows.
+appId: no.wsh.skylens
+---
+- runFlow:
+    when:
+      visible:
+        id: "android:id/alertTitle"
+        # Full-string regex; "isn.t" also matches a typographic apostrophe.
+        text: '(?!Skylens\b).+ isn.t responding'
+    commands:
+      - tapOn:
+          id: "android:id/aerr_close"

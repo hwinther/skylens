@@ -1,5 +1,5 @@
 /**
- * Upcoming sky-events hook for the List screen's "Upcoming" section.
+ * Upcoming sky-events hook for the List screen's "Events" section.
  *
  * Unlike the spatial hooks (usePlanets/useRadioSky/useSatellites) this feed does NOT move on a human
  * timescale: equinoxes, eclipses, oppositions and supermoons are days-to-years apart. So the whole list

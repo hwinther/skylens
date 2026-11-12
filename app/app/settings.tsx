@@ -325,8 +325,8 @@ export default function SettingsScreen() {
           <Text style={styles.hint}>
             Sun, Moon and the naked-eye planets in the AR sky, plus the ecliptic — the arc they all
             ride. Radio sky adds the fixed hydrogen-line targets (Sgr A*, Cas A, Cyg A, Tau A) for SDR
-            observing. Upcoming lists the next equinox, eclipses, oppositions and supermoons. Computed
-            on-device; no network needed.
+            observing. Upcoming sky events fill the Events section of the List: the next equinox,
+            eclipses, oppositions and supermoons. Computed on-device; no network needed.
           </Text>
         </Section>
         </Group>

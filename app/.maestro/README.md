@@ -23,5 +23,17 @@ Metro is not needed. `launchApp` clears the app's state, so the flow starts from
 ## CI
 
 `.github/workflows/android-e2e.yml` runs the flow nightly, on manual dispatch, and on PRs labelled
-`mobile-e2e`. On failure, Maestro's screenshots/debug output and logcat are uploaded as the
-`maestro-output` artifact.
+`mobile-e2e`. Every run (pass or fail) uploads a `maestro-output-<attempt>` artifact, kept 7 days:
+the flow's screenshots (`artifacts/<timestamp>/Smoke (demo mode)/screenshots`), the JUnit report,
+Maestro's log and the failing step's view hierarchy, plus device screenshots from just before and
+after the test, logcat (main, system, crash, events; from boot), `dumpsys activity activities`, and
+the dropbox ANR/crash entries.
+
+## System dialogs
+
+On a freshly booted CI emulator another app can go ANR ("Pixel Launcher isn't responding") and its
+dialog hides the app from Maestro. CI sets `hide_error_dialogs` so such an app is killed instead of
+showing the dialog, and the flow's long waits are `retry` blocks that first run
+`subflows/dismiss-system-anr.yaml`, which taps "Close app" on another app's ANR dialog. Our own
+app's dialog ("Skylens isn't responding") is never dismissed, so an ANR in the app still fails the
+flow. Sub-flows live in `subflows/` because `maestro test .maestro` runs every top-level YAML file.

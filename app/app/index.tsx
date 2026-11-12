@@ -279,7 +279,12 @@ export default function ArScreen() {
       {demoMode ? (
         <GestureDetector gesture={demo.gesture}>
           <View style={StyleSheet.absoluteFill}>
-            <Image source={require("../assets/sky.png")} style={StyleSheet.absoluteFill} />
+            <Image
+              testID="ar-demo-sky"
+              source={require("../assets/sky.png")}
+              resizeMode="cover"
+              style={styles.sky}
+            />
             {overlay}
           </View>
         </GestureDetector>
@@ -436,6 +441,11 @@ export default function ArScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
+  // The demo sky. Explicit 100 % width/height are required, not just absoluteFill: on native, Image
+  // puts the static asset's intrinsic size (sky.png is 64x256) in front of the style as width/height,
+  // and an explicit width/height wins over left/right/top/bottom stretching. ImageBackground used to
+  // re-apply the container's size for the same reason.
+  sky: { ...StyleSheet.absoluteFill, width: "100%", height: "100%" },
   top: { position: "absolute", top: 0, left: 0, right: 0, pointerEvents: "box-none" },
   noCam: { backgroundColor: color.bg },
   // Centered iOS "Enable AR" pill — the user gesture that unlocks camera + compass permission.

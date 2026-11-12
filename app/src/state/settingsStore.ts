@@ -61,7 +61,7 @@ interface SettingsState {
   showEcliptic: boolean;
   /** Draw the fixed radio-astronomy sources (Sgr A*, Cas A, Cyg A, Tau A) in the AR sky + Radio list. */
   showRadioSky: boolean;
-  /** Show the "Upcoming" sky-events feed (equinoxes, eclipses, oppositions, supermoons) in the List. */
+  /** Show the List's Events section: upcoming equinoxes, eclipses, oppositions, supermoons. */
   showSkyEvents: boolean;
   /** Draw fishing-regulation zones (cod boundaries / forbidden / zero areas) on the geographic map. */
   showFishingZones: boolean;
