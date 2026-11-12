@@ -26,7 +26,12 @@ ARG GIT_SHA=unknown
 ENV EXPO_PUBLIC_FORCE_LIVE=1 \
     EXPO_PUBLIC_APP_VERSION=$APP_VERSION \
     EXPO_PUBLIC_GIT_SHA=$GIT_SHA
-RUN npx expo export --platform web
+# --source-maps: external .js.map files next to each hashed chunk, linked by a `sourceMappingURL`
+# comment (Metro's sectioned maps, sources as "/src/..." / "/app/..." with sourcesContent). The e2e
+# coverage (e2e/playwright.ci.config.ts) maps the browser's V8 coverage back to app/ source through
+# them; they also make production stack traces readable. Served by UseStaticFiles like the chunks
+# (~12 MB uncompressed, fetched only by devtools / the coverage reporter).
+RUN npx expo export --platform web --source-maps
 
 # 2) Publish the API -> /app/publish. The SPA is copied into wwwroot BEFORE publish so it's embedded.
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS backend

@@ -7,3 +7,5 @@ blob-report
 Dockerfile
 .dockerignore
 otel-out
+monocart-report
+monocart-coverage

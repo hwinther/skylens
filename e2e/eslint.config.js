@@ -4,7 +4,7 @@ import { base, ignores, node, playwright } from '@wshno/eslint-config'
 /** @type {import('eslint').Linter.Config[]} */
 export default [
   ...ignores,
-  { ignores: ['playwright-report/**', 'test-results/**'] },
+  { ignores: ['playwright-report/**', 'test-results/**', 'monocart-report/**', 'monocart-coverage/**'] },
   ...base,
   ...node,
   ...playwright(['tests/**/*.ts']),

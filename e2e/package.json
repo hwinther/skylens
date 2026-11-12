@@ -9,7 +9,9 @@
     "test:ci": "playwright test --config playwright.ci.config.ts",
     "report": "playwright show-report",
     "typecheck": "tsc",
-    "lint": "eslint . --report-unused-disable-directives --max-warnings 0"
+    "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
+    "test:scripts": "node --test \"scripts/*.test.mjs\"",
+    "coverage:summary": "node scripts/coverage-summary.mjs --unit ../app/coverage/lcov.info --e2e monocart-coverage/lcov.info"
   },
   "devDependencies": {
     "@types/node": "26.6.5",
@@ -18,6 +20,7 @@
     "@wshno/prettier-config": "0.1.1",
     "@wshno/tsconfig": "0.1.1",
     "eslint": "10.14.0",
+    "monocart-reporter": "2.15.1",
     "prettier": "3.9.10",
     "typescript": "6.0.3"
   },
