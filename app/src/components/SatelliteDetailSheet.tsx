@@ -32,6 +32,7 @@ import {
   type Observer,
   type SatelliteView,
 } from "@/ar";
+import { formatOrbitSummary, orbitInfo } from "@/ar/orbitClass";
 import { useSatelliteTrackStore } from "@/state/satelliteTrackStore";
 import { compass8 } from "./webmap/relative";
 
@@ -136,6 +137,7 @@ export function SatelliteDetailSheet({
   const name = view?.name?.trim() || detail?.satellite.name?.trim() || String(noradId ?? "");
   const group = view?.group ?? detail?.satellite.group;
   const transmitters = detail ? sortTransmitters(detail.transmitters) : [];
+  const orbit = detail ? orbitInfo(detail.satellite.omm) : null;
 
   return (
     <Sheet visible={noradId != null} onClose={onClose} accent={color.entity.orbit} maxHeightPct={82}>
@@ -167,6 +169,12 @@ export function SatelliteDetailSheet({
         ) : (
           <Text style={styles.belowMask}>Below the elevation mask — live pass data hidden.</Text>
         )}
+
+        {orbit ? (
+          <View style={styles.liveRows}>
+            <LiveRow label="Orbit" value={formatOrbitSummary(orbit)} valueTestID="sat-detail-orbit" />
+          </View>
+        ) : null}
 
         <View testID="sat-next-pass" style={styles.passSection}>
           <Text style={styles.passHeading}>Next pass</Text>
@@ -275,11 +283,13 @@ export function SatelliteDetailSheet({
   );
 }
 
-function LiveRow({ label, value }: { label: string; value: string }) {
+function LiveRow({ label, value, valueTestID }: { label: string; value: string; valueTestID?: string }) {
   return (
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.rowValue}>{value}</Text>
+      <Text testID={valueTestID} style={styles.rowValue}>
+        {value}
+      </Text>
     </View>
   );
 }

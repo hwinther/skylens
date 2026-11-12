@@ -24,7 +24,13 @@ import {
   VESSEL_EYE_M,
   type SimSample,
 } from "@/sim/simPose";
-import { BLEND_MS, MAX_EXTRAPOLATE_S, SimTracker, STALE_AFTER_S } from "@/sim/tracker";
+import {
+  AIRCRAFT_MAX_EXTRAPOLATE_S,
+  AIRCRAFT_STALE_AFTER_S,
+  SATELLITE_MAX_EXTRAPOLATE_S,
+  VESSEL_MAX_EXTRAPOLATE_S,
+} from "@/ar/positionTracker";
+import { BLEND_MS, SimTracker, trackLimits } from "@/sim/tracker";
 
 const T0 = 1_800_000_000_000;
 
@@ -41,6 +47,7 @@ const ac = (over: Partial<AircraftDto> = {}): AircraftDto => ({
 });
 
 const sample = (over: Partial<SimSample> = {}): SimSample => ({
+  kind: "aircraft",
   lat: 60,
   lon: 10,
   altM: 3000,
@@ -72,6 +79,10 @@ describe("aircraftSample", () => {
     expect(aircraftSample(ac({ seen: 0.2, seenPos: 2.8 }), T0)!.timeMs).toBe(T0 - 2800);
     // Sources without seenPos fall back to seen.
     expect(aircraftSample(ac({ seen: 0.2, seenPos: null }), T0)!.timeMs).toBe(T0 - 200);
+  });
+
+  it("is tagged as an aircraft (which picks its stale / extrapolation limits)", () => {
+    expect(aircraftSample(ac(), T0)!.kind).toBe("aircraft");
   });
 
   it("returns null without a position", () => {
@@ -158,10 +169,10 @@ describe("SimTracker", () => {
     t.update(sample({ headingDeg: 0, speedMps: 111.32 }), T0);
     const fresh = t.pose(T0 + 1000)!;
     expect(fresh.stale).toBe(false);
-    const a = t.pose(T0 + MAX_EXTRAPOLATE_S * 1000)!;
-    const b = t.pose(T0 + (MAX_EXTRAPOLATE_S + 60) * 1000)!;
+    const a = t.pose(T0 + AIRCRAFT_MAX_EXTRAPOLATE_S * 1000)!;
+    const b = t.pose(T0 + (AIRCRAFT_MAX_EXTRAPOLATE_S + 60) * 1000)!;
     expect(b.lat).toBeCloseTo(a.lat, 9);
-    expect(t.pose(T0 + (STALE_AFTER_S + 1) * 1000)!.stale).toBe(true);
+    expect(t.pose(T0 + (AIRCRAFT_STALE_AFTER_S + 1) * 1000)!.stale).toBe(true);
   });
 
   it("keeps flying when a moving object repeats the same position", () => {
@@ -184,6 +195,49 @@ describe("SimTracker", () => {
     t.update(sample({ speedMps: 0 }), T0);
     t.update(sample({ speedMps: 0, timeMs: T0 + 20_000 }), T0 + 20_000);
     expect(t.pose(T0 + 20_000)!.stale).toBe(false); // a moored vessel isn't "signal lost"
+  });
+
+  // "Signal lost" depends on what is followed: vessels report far less often than aircraft.
+  const staleAt = (over: Partial<SimSample>, ageS: number) => {
+    const t = new SimTracker();
+    t.update(sample(over), T0);
+    return t.pose(T0 + ageS * 1000)!.stale;
+  };
+
+  it("flags an aircraft as lost after 30 s", () => {
+    expect(staleAt({ kind: "aircraft" }, 20)).toBe(false);
+    expect(staleAt({ kind: "aircraft" }, 31)).toBe(true);
+  });
+
+  it("flags a moving vessel as lost after 120 s", () => {
+    expect(staleAt({ kind: "vessel", speedMps: 6 }, 100)).toBe(false);
+    expect(staleAt({ kind: "vessel", speedMps: 6 }, 121)).toBe(true);
+  });
+
+  it("flags a stationary vessel as lost only after 420 s", () => {
+    expect(staleAt({ kind: "vessel", speedMps: 0 }, 300)).toBe(false);
+    expect(staleAt({ kind: "vessel", speedMps: 0 }, 421)).toBe(true);
+  });
+
+  it("keeps the satellite thresholds (15 s stale, 30 s extrapolation)", () => {
+    expect(trackLimits("satellite", 7600)).toEqual({ staleAfterS: 15, maxExtrapolateS: 30 });
+    expect(staleAt({ kind: "satellite" }, 15)).toBe(false);
+    expect(staleAt({ kind: "satellite" }, 16)).toBe(true);
+  });
+
+  it.each([
+    ["aircraft", 111.32, AIRCRAFT_MAX_EXTRAPOLATE_S],
+    ["vessel", 111.32, VESSEL_MAX_EXTRAPOLATE_S],
+    ["satellite", 111.32, SATELLITE_MAX_EXTRAPOLATE_S],
+  ] as const)("stops dead-reckoning a %s at its own cap", (kind, speedMps, capS) => {
+    const t = new SimTracker();
+    t.update(sample({ kind, speedMps, headingDeg: 0 }), T0);
+    const before = t.pose(T0 + (capS - 1) * 1000)!.lat;
+    const atCap = t.pose(T0 + capS * 1000)!.lat;
+    const after = t.pose(T0 + (capS + 100) * 1000)!.lat;
+    expect(atCap - before).toBeCloseTo(0.001, 5); // still moving up to the cap
+    expect(atCap).toBeCloseTo(60 + capS * 0.001, 3);
+    expect(after).toBeCloseTo(atCap, 9);
   });
 
   it("ignores out-of-order samples", () => {

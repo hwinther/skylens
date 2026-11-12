@@ -11,13 +11,13 @@ import { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import {
   declutter,
-  deadReckonVessel,
   effectiveHFovDeg,
   extrapolateView,
   GROUP_PRIORITY,
   lookAngles,
   project,
   surfaceBandOffset,
+  vesselMotionSample,
   VESSEL_DISTANCE_CAP_KM,
   VESSEL_RENDER_CAP,
   type CameraPose,
@@ -37,7 +37,11 @@ import { PlanetLabel } from "./PlanetLabel";
 import { RadioLabel } from "./RadioLabel";
 import { AirportArLabel } from "./AirportArLabel";
 import { airportArPriority } from "./webmap/airportStyle";
-import { deadReckon } from "@/ar/smoothing";
+import { PositionTracker, type TrackPoint } from "@/ar/positionTracker";
+import { aircraftSample } from "@/sim/simPose";
+
+const aircraftId = (ac: AircraftDto) => ac.hex;
+const vesselId = (v: VesselDto) => v.mmsi;
 
 export interface ArOverlayProps {
   aircraft: AircraftDto[];
@@ -232,14 +236,33 @@ export function ArOverlay({
   // Cardinal-point hints (N/E/S/W) that are within the horizontal FOV this frame.
   const [cardinals, setCardinals] = useState<CardinalMark[]>([]);
 
+  // Smoothed positions, fed once per snapshot (not per frame): each sample is timed by its position's
+  // own age (seenPos / seen), a repeated position of a moving object doesn't pull the label back, and the
+  // remaining prediction error fades out instead of jumping. Ids that leave the snapshot are dropped.
+  const [aircraftTracker] = useState(() => new PositionTracker());
+  const [vesselTracker] = useState(() => new PositionTracker());
+  // Declared before the ref-sync effect so the tracker already knows every aircraft in the new list.
+  useEffect(() => {
+    const receivedAt = snapshotAt || Date.now();
+    aircraftTracker.sync(aircraft, aircraftId, (ac) => aircraftSample(ac, receivedAt), Date.now());
+  }, [aircraftTracker, aircraft, snapshotAt]);
+  useEffect(() => {
+    const receivedAt = vesselsSnapshotAt || Date.now();
+    // AtoN are fixed and never dead-reckon, so they aren't tracked.
+    vesselTracker.sync(
+      vessels,
+      vesselId,
+      (v) => (v.kind === "aton" ? null : vesselMotionSample(v, receivedAt)),
+      Date.now(),
+    );
+  }, [vesselTracker, vessels, vesselsSnapshotAt]);
+
   // Keep the latest inputs in refs so the rAF loop (started once) reads fresh data.
   // Syncing happens in an effect (not during render) so ref writes stay side-effects.
   const aircraftRef = useRef(aircraft);
-  const snapshotAtRef = useRef(snapshotAt);
   const hFovRef = useRef(hFovDeg);
   const showHorizonRef = useRef(showHorizon);
   const vesselsRef = useRef(vessels);
-  const vesselsSnapshotAtRef = useRef(vesselsSnapshotAt);
   const showShipsRef = useRef(showShips);
   const showAtonRef = useRef(showAton);
   const satellitesRef = useRef(satellites);
@@ -255,11 +278,9 @@ export function ArOverlay({
   const showEclipticRef = useRef(showEcliptic);
   useEffect(() => {
     aircraftRef.current = aircraft;
-    snapshotAtRef.current = snapshotAt;
     hFovRef.current = hFovDeg;
     showHorizonRef.current = showHorizon;
     vesselsRef.current = vessels;
-    vesselsSnapshotAtRef.current = vesselsSnapshotAt;
     showShipsRef.current = showShips;
     showAtonRef.current = showAton;
     satellitesRef.current = satellites;
@@ -273,7 +294,7 @@ export function ArOverlay({
     showAirportsRef.current = showAirports;
     eclipticRef.current = ecliptic;
     showEclipticRef.current = showEcliptic;
-  }, [aircraft, snapshotAt, hFovDeg, showHorizon, vessels, vesselsSnapshotAt, showShips, showAton, satellites, satellitesSampledAt, showSatellites, planets, showPlanets, radioTargets, showRadioSky, airports, showAirports, ecliptic, showEcliptic]);
+  }, [aircraft, hFovDeg, showHorizon, vessels, showShips, showAton, satellites, satellitesSampledAt, showSatellites, planets, showPlanets, radioTargets, showRadioSky, airports, showAirports, ecliptic, showEcliptic]);
 
   useEffect(() => {
     let raf = 0;
@@ -290,6 +311,8 @@ export function ArOverlay({
       aspect: width / height,
       cullMargin: 0.15,
     };
+    // Reused for every tracked position lookup, so the loop doesn't allocate one per object per frame.
+    const pos: TrackPoint = { lat: 0, lon: 0, alt: 0 };
 
     const tick = () => {
       raf = requestAnimationFrame(tick);
@@ -307,15 +330,10 @@ export function ArOverlay({
       const screenLabels: ScreenLabel[] = [];
 
       if (observer) {
-        const ageS = Math.max(0, (Date.now() - snapshotAtRef.current) / 1000);
         for (const ac of aircraftRef.current) {
-          if (ac.lat == null || ac.lon == null) continue;
-          const alt = (ac.alt ?? 0) * 0.3048; // ft → m
-          const dr = deadReckon(
-            { lat: ac.lat, lon: ac.lon, alt, gs: ac.gs ?? 0, trk: ac.trk ?? 0, vr: ac.vr ?? 0 },
-            ageS,
-          );
-          const angles = lookAngles(observer, { lat: dr.lat, lon: dr.lon, alt: dr.alt });
+          // Unknown to the tracker = no position in the snapshot.
+          if (!aircraftTracker.positionAt(ac.hex, nowMs, pos)) continue;
+          const angles = lookAngles(observer, pos);
           const proj = project(
             { azimuth: angles.azimuth, elevation: angles.elevation },
             pose,
@@ -363,17 +381,20 @@ export function ArOverlay({
       // label placement is completely untouched. Off-screen vessels get no edge arrow — the band is
       // dense and side arrows would just be horizon noise (aircraft keep theirs).
       if (observer && (showShipsRef.current || showAtonRef.current)) {
-        const vAgeS = Math.max(0, (Date.now() - vesselsSnapshotAtRef.current) / 1000);
         const cand: { v: VesselDto; azimuth: number; distKm: number }[] = [];
         for (const v of vesselsRef.current) {
           if (v.lat == null || v.lon == null) continue;
           const isAton = v.kind === "aton";
           if (isAton ? !showAtonRef.current : !showShipsRef.current) continue;
-          // Ships dead-reckon along cog/sog between 5 s snapshots; AtoN are fixed and never do.
-          const pos = isAton
-            ? { lat: v.lat, lon: v.lon }
-            : deadReckonVessel({ lat: v.lat, lon: v.lon, sog: v.sog, cog: v.cog }, vAgeS);
-          const a = lookAngles(observer, { lat: pos.lat, lon: pos.lon, alt: 0 });
+          // Ships dead-reckon along cog/sog between snapshots (smoothed by the tracker); AtoN are fixed.
+          if (isAton) {
+            pos.lat = v.lat;
+            pos.lon = v.lon;
+          } else if (!vesselTracker.positionAt(v.mmsi, nowMs, pos)) {
+            continue;
+          }
+          pos.alt = 0;
+          const a = lookAngles(observer, pos);
           const distKm = a.slantRange / 1000;
           if (distKm > VESSEL_DISTANCE_CAP_KM) continue;
           cand.push({ v, azimuth: a.azimuth, distKm });
@@ -602,7 +623,7 @@ export function ArOverlay({
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [width, height, poseRef, positionRef]);
+  }, [width, height, poseRef, positionRef, aircraftTracker, vesselTracker]);
 
   return (
     <View style={[StyleSheet.absoluteFill, { pointerEvents: "box-none" }]}>

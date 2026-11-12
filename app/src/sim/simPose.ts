@@ -9,10 +9,11 @@
 
 import type { AircraftDto, VesselDto } from "@/api/types";
 import { normalizeAzimuth, rad2deg } from "@/ar/geo";
+import type { TrackKind } from "@/ar/positionTracker";
 import type { SatelliteState } from "@/ar/satellites";
 import { FPM_TO_MPS, KNOTS_TO_MPS } from "@/ar/smoothing";
 
-export type SimKind = "aircraft" | "vessel" | "satellite";
+export type SimKind = TrackKind;
 
 export const FEET_TO_M = 0.3048;
 
@@ -49,6 +50,8 @@ export function horizonDipDeg(altM: number): number {
 const AIS_NO_HEADING = 511;
 
 export interface SimSample {
+  /** What is followed; with the speed it picks the stale threshold and extrapolation cap (trackLimits). */
+  kind: SimKind;
   lat: number;
   lon: number;
   /** Height above the ellipsoid, metres (baro altitude for aircraft: close enough for a view). */
@@ -87,6 +90,7 @@ export function aircraftSample(ac: AircraftDto, receivedAtMs: number): SimSample
   const age = finite(ac.seenPos) ? ac.seenPos : ac.seen;
   const seenS = finite(age) ? Math.max(0, age) : 0;
   return {
+    kind: "aircraft",
     lat: ac.lat,
     lon: ac.lon,
     altM: finite(ac.alt) ? Math.max(0, ac.alt * FEET_TO_M) : 0,
@@ -108,6 +112,7 @@ export function vesselSample(v: VesselDto, receivedAtMs: number): SimSample | nu
   const hdg = finite(v.hdg) && v.hdg !== AIS_NO_HEADING && v.hdg >= 0 && v.hdg < 360 ? v.hdg : null;
   const cog = finite(v.cog) && v.cog >= 0 && v.cog < 360 ? v.cog : null;
   return {
+    kind: "vessel",
     lat: v.lat,
     lon: v.lon,
     altM: VESSEL_EYE_M,
@@ -122,6 +127,7 @@ export function vesselSample(v: VesselDto, receivedAtMs: number): SimSample | nu
 /** A propagated satellite state (exact for `timeMs`) as a sample. */
 export function satelliteSample(s: SatelliteState, timeMs: number): SimSample {
   return {
+    kind: "satellite",
     lat: s.lat,
     lon: s.lon,
     altM: s.altKm * 1000,
