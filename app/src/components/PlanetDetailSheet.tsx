@@ -1,5 +1,5 @@
 /**
- * Planet detail bottom sheet. Opens on a tap of a planet label (AR overlay) or a "Sky"-list row.
+ * Planet detail card. Opens on a tap of a planet label (AR overlay) or a "Sky"-list row.
  *
  * Mirrors SatelliteDetailSheet's chrome and close behaviour but needs NO network: a body is a pure
  * function of the observer + instant, so the "tonight" rise / set / culmination are computed locally
@@ -11,8 +11,8 @@
 
 import { alpha, color } from "@/theme";
 import { useEffect, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { Sheet } from "./Sheet";
+import { StyleSheet, Text, View } from "react-native";
+import { Sheet, SheetSummary } from "./Sheet";
 import {
   Body,
   bodyForKey,
@@ -33,6 +33,8 @@ export interface PlanetDetailSheetProps {
   /** Observer position for the "tonight" rise/set/culmination prediction; omit (or null) to hide it. */
   observer?: PlanetObserver | null;
   onClose: () => void;
+  /** Side-panel layout only: offset from the top of the screen (see Sheet). */
+  panelTop?: number;
 }
 
 /** Local wall-clock time for an event instant, e.g. "18:42" (display only). */
@@ -45,7 +47,7 @@ function eventDate(d: Date): string {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-export function PlanetDetailSheet({ body, view, observer, onClose }: PlanetDetailSheetProps) {
+export function PlanetDetailSheet({ body, view, observer, onClose, panelTop }: PlanetDetailSheetProps) {
   // Capture "now" once per open so the predicted times are fixed while the sheet is up.
   const [openedAt, setOpenedAt] = useState<number>(() => Date.now());
   useEffect(() => {
@@ -79,7 +81,14 @@ export function PlanetDetailSheet({ body, view, observer, onClose }: PlanetDetai
   const name = view?.name?.trim() || body || "";
 
   return (
-    <Sheet visible={body != null} onClose={onClose} accent={color.entity.sky} maxHeightPct={82}>
+    <Sheet
+      visible={body != null}
+      panelTop={panelTop}
+      onClose={onClose}
+      accent={color.entity.sky}
+      maxHeightPct={82}
+      label="Sky object details"
+      header={
         <View style={styles.header}>
           <Text testID="planet-detail-title" style={styles.title} numberOfLines={1}>
             {name}
@@ -90,7 +99,21 @@ export function PlanetDetailSheet({ body, view, observer, onClose }: PlanetDetai
             </View>
           ) : null}
         </View>
-
+      }
+      summary={
+        <SheetSummary
+          parts={
+            view
+              ? [
+                  `El ${Math.round(view.elevationDeg)}°`,
+                  `Az ${Math.round(view.azimuthDeg)}° ${compass8(view.azimuthDeg)}`,
+                  view.magnitude != null ? `mag ${view.magnitude.toFixed(1)}` : null,
+                ]
+              : ["Below the horizon"]
+          }
+        />
+      }
+    >
         {view ? (
           <View style={styles.liveRows}>
             <LiveRow label="Elevation" value={`${Math.round(view.elevationDeg)}°`} />
@@ -175,9 +198,9 @@ export function PlanetDetailSheet({ body, view, observer, onClose }: PlanetDetai
 
         {jupiterMoons ? <GalileanMoons view={jupiterMoons} /> : null}
 
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.scrollContent}>
           <Text style={styles.attribution}>Ephemeris: astronomy-engine (on-device)</Text>
-        </ScrollView>
+        </View>
     </Sheet>
   );
 }
@@ -244,7 +267,7 @@ function GalileanMoons({ view }: { view: JupiterMoonsView }) {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  header: { flexDirection: "row", alignItems: "center", gap: 8 },
   title: { color: "#FBEFD0", fontSize: 20, fontWeight: "700", flexShrink: 1 },
   chip: {
     backgroundColor: alpha(color.entity.sky, 0.16),
@@ -272,7 +295,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
   rowLabel: { color: color.textLabel, fontSize: 14 },
   rowValue: { color: color.text, fontSize: 14, fontWeight: "500" },
-  scroll: { flexGrow: 0 },
   scrollContent: { paddingTop: 4 },
   attribution: { color: color.textMuted, fontSize: 11, marginTop: 12 },
   // Galilean-moon finder strip.

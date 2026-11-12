@@ -1,5 +1,5 @@
 /**
- * Vessel detail bottom sheet. Opens on a tap of a ship/AtoN row in the List tab or a vessel marker on
+ * Vessel detail card. Opens on a tap of a ship/AtoN row in the List tab or a vessel marker on
  * the Map. Mirrors SatelliteDetailSheet: a cancellable fetch on mmsi change (GET /api/vessels/{mmsi}
  * for the BarentsWatch-enriched static/voyage metadata) plus the same sheet chrome and close behaviour,
  * and it self-provisions its own ApiClient the same way.
@@ -13,8 +13,8 @@
 
 import { alpha, color } from "@/theme";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Sheet } from "./Sheet";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { Sheet, sheetActionStyle, SheetSummary } from "./Sheet";
 import { ShowOnMapButton } from "./ShowOnMapButton";
 import { SimulatorButton } from "./SimulatorButton";
 import { ApiClient } from "@/api/client";
@@ -22,6 +22,8 @@ import { getApiBaseUrl } from "@/api/config";
 import { useApiAllowed } from "@/state/authStore";
 import type { VesselDetail, VesselDto } from "@/api/types";
 import { aidTypeLabel, formatDimensions, navStatusText } from "./vesselFormat";
+import { useObserver } from "./useObserver";
+import { compass8, relativePosition } from "./webmap/relative";
 
 // Teal family — matches VesselLabel / iconForVessel; a maritime accent distinct from aircraft blue
 // and satellite violet.
@@ -32,12 +34,15 @@ export interface VesselDetailSheetProps {
   /** Live DTO from the 5 s list, for the always-fresh position/SOG/COG rows; undefined once aged out. */
   vessel?: VesselDto;
   onClose: () => void;
+  /** Side-panel layout only: offset from the top of the screen (see Sheet). */
+  panelTop?: number;
 }
 
-export function VesselDetailSheet({ mmsi, vessel, onClose }: VesselDetailSheetProps) {
+export function VesselDetailSheet({ mmsi, vessel, onClose, panelTop }: VesselDetailSheetProps) {
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
   // Without API access (signed out behind real auth) only the live DTO's rows show.
   const apiAllowed = useApiAllowed();
+  const observer = useObserver();
   const [detail, setDetail] = useState<VesselDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +81,8 @@ export function VesselDetailSheet({ mmsi, vessel, onClose }: VesselDetailSheetPr
   const moving = vessel?.sog != null && vessel.sog > 0.5;
   const navStatus = navStatusText(vessel?.navStatus);
   const dims = metadata ? formatDimensions(metadata) : null;
+  const rel = hasPosition ? relativePosition(observer, vessel!.lat!, vessel!.lon!) : null;
+  const distance = rel ? `${rel.distanceKm.toFixed(1)} km ${compass8(rel.bearingDeg)}` : null;
   // IMO 0 (or absent) means "not supplied" — hide the row rather than showing a bogus 0.
   const imo = metadata?.imo != null && metadata.imo > 0 ? String(metadata.imo) : null;
   // The merge keeps the local feed's "ais" source; only an away-mode vessel we don't track locally
@@ -109,7 +116,14 @@ export function VesselDetailSheet({ mmsi, vessel, onClose }: VesselDetailSheetPr
     .join(" · ");
 
   return (
-    <Sheet visible={mmsi != null} onClose={onClose} accent={color.entity.sea} maxHeightPct={82}>
+    <Sheet
+      visible={mmsi != null}
+      panelTop={panelTop}
+      onClose={onClose}
+      accent={color.entity.sea}
+      maxHeightPct={82}
+      label="Vessel details"
+      header={
         <View style={styles.header}>
           <Text testID="vessel-detail-title" style={styles.title} numberOfLines={1}>
             {name}
@@ -120,25 +134,43 @@ export function VesselDetailSheet({ mmsi, vessel, onClose }: VesselDetailSheetPr
           {flag ? <Text style={styles.flag}>{flag}</Text> : null}
           {mmsi != null ? <Text style={styles.mmsi}>{mmsi}</Text> : null}
         </View>
-
-        {mmsi != null && hasPosition ? (
-          <ShowOnMapButton
-            testID="vessel-show-on-map"
-            focus={{ kind: "vessel", mmsi }}
-            accent={color.entity.sea}
-            onClose={onClose}
-          />
-        ) : null}
-        {mmsi != null && hasPosition ? (
-          <SimulatorButton
-            testID="vessel-cockpit"
-            target={{ kind: "vessel", id: mmsi }}
-            accent={color.entity.sea}
-            onClose={onClose}
-          />
-        ) : null}
-
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+      }
+      summary={
+        <SheetSummary
+          parts={
+            isAton
+              ? [aidTypeLabel(vessel?.aidType), vessel?.virtual ? "Virtual aid" : null, distance]
+              : [
+                  moving ? `${vessel!.sog!.toFixed(1)} kn` : navStatus,
+                  vessel?.cog != null ? `${Math.round(vessel.cog)}°` : null,
+                  distance,
+                ]
+          }
+        />
+      }
+      actions={
+        mmsi != null && hasPosition ? (
+          <>
+            <ShowOnMapButton
+              testID="vessel-show-on-map"
+              focus={{ kind: "vessel", mmsi }}
+              accent={color.entity.sea}
+              onClose={onClose}
+              style={sheetActionStyle}
+            />
+            <SimulatorButton
+              testID="vessel-cockpit"
+              target={{ kind: "vessel", id: mmsi }}
+              accent={color.entity.sea}
+              onClose={onClose}
+              style={sheetActionStyle}
+            />
+          </>
+        ) : null
+      }
+    >
+        {/* Scrolling is the card's job now (Sheet wraps the body in a ScrollView). */}
+        <View style={styles.scrollContent}>
           {loading && <ActivityIndicator color={color.entity.sea} />}
           {error && <Text style={styles.error}>{error}</Text>}
 
@@ -196,7 +228,7 @@ export function VesselDetailSheet({ mmsi, vessel, onClose }: VesselDetailSheetPr
               No additional data
             </Text>
           ) : null}
-        </ScrollView>
+        </View>
 
         <Text style={styles.attribution}>{attribution}</Text>
     </Sheet>
@@ -213,7 +245,7 @@ function Row({ label, value }: { label: string; value: string | null | undefined
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  header: { flexDirection: "row", alignItems: "center", gap: 8 },
   title: { color: "#CFF6EE", fontSize: 20, fontWeight: "700", flexShrink: 1 },
   chip: {
     backgroundColor: alpha(color.entity.sea, 0.16),
@@ -226,7 +258,6 @@ const styles = StyleSheet.create({
   chipText: { color: color.entity.sea, fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
   flag: { color: "#8FD3C6", fontSize: 12, fontWeight: "700", textTransform: "uppercase" },
   mmsi: { color: color.textLabel, fontSize: 13, fontWeight: "600", marginLeft: "auto" },
-  scroll: { flexGrow: 0 },
   scrollContent: { paddingTop: 2, gap: 12 },
   section: { gap: 2 },
   row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },

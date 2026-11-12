@@ -31,6 +31,8 @@ import type { LatLngTuple } from "@/components/webmap/geojson";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
 import { useObserver } from "@/components/useObserver";
+import { useDetailSelection } from "@/components/useDetailSelection";
+import { useSheetRightInset } from "@/components/Sheet";
 
 export default function MapScreen() {
   const aircraft = useAircraftList();
@@ -51,9 +53,19 @@ export default function MapScreen() {
   // Arriving from "Show ground track" (a track is set) opens the real Map, not the you-centric radar —
   // a globe-spanning track is meaningless on the radar. Captured once at mount.
   const [view, setView] = useState<MapView>(track.trackedNoradId != null ? "map" : "radar");
-  const [selectedHex, setSelectedHex] = useState<string | null>(null);
-  const [selectedMmsi, setSelectedMmsi] = useState<string | null>(null);
-  const [selectedAirportIdent, setSelectedAirportIdent] = useState<string | null>(null);
+  // One selection slot for the detail cards: they are non-modal, so tapping another marker (of any
+  // kind) swaps the open card instead of stacking a second one.
+  const detail = useDetailSelection();
+  const selectedHex = detail.idOf("aircraft");
+  const selectedMmsi = detail.idOf("vessel");
+  const selectedAirportIdent = detail.idOf("airport");
+  const {
+    aircraft: setSelectedHex,
+    vessel: setSelectedMmsi,
+    airport: setSelectedAirportIdent,
+  } = detail.set;
+  // While a side-panel card is open, right-edge controls move left by its width.
+  const cardRightInset = useSheetRightInset(detail.open);
   // Snap to the map view whenever a track is (re)selected — a track only renders there, and expo-router
   // keeps this tab mounted across a re-navigation from the sheet, so the mount-time default alone can't
   // catch a selection made while the tab already sits on radar. Guard runs via a named function to stay
@@ -121,6 +133,7 @@ export default function MapScreen() {
             rangeKm={radarRangeKm}
             onRangeChange={setRadarRangeKm}
             showCourseVectors={showCourseVectors}
+            controlsRightInset={cardRightInset}
           />
         ) : (
           <LeafletMap
@@ -144,10 +157,15 @@ export default function MapScreen() {
             focusSeq={focusSeq}
             following={following}
             onUserPan={stopFollowing}
+            controlsRightInset={cardRightInset}
           />
         )}
         {view === "map" && track.trackedNoradId != null ? (
-          <Pressable testID="clear-track" style={styles.clearTrack} onPress={track.clear}>
+          <Pressable
+            testID="clear-track"
+            style={[styles.clearTrack, { right: 12 + cardRightInset }]}
+            onPress={track.clear}
+          >
             <Text style={styles.clearTrackText}>✕ Clear track</Text>
           </Pressable>
         ) : null}
@@ -159,22 +177,24 @@ export default function MapScreen() {
             onClear={clearFocus}
           />
         ) : null}
+        {/* Detail card last, over the map; mounted in the body so the side panel starts below the
+            view toggle. */}
+        <DetailSheet hex={selectedHex} client={client} onClose={() => setSelectedHex(null)} />
+        <VesselDetailSheet
+          mmsi={selectedMmsi}
+          vessel={selectedMmsi != null ? vessels.find((v) => v.mmsi === selectedMmsi) : undefined}
+          onClose={() => setSelectedMmsi(null)}
+        />
+        <AirportDetailSheet
+          ident={selectedAirportIdent}
+          airport={
+            selectedAirportIdent != null
+              ? airports.find((a) => a.ident === selectedAirportIdent)
+              : undefined
+          }
+          onClose={() => setSelectedAirportIdent(null)}
+        />
       </View>
-      <DetailSheet hex={selectedHex} client={client} onClose={() => setSelectedHex(null)} />
-      <VesselDetailSheet
-        mmsi={selectedMmsi}
-        vessel={selectedMmsi != null ? vessels.find((v) => v.mmsi === selectedMmsi) : undefined}
-        onClose={() => setSelectedMmsi(null)}
-      />
-      <AirportDetailSheet
-        ident={selectedAirportIdent}
-        airport={
-          selectedAirportIdent != null
-            ? airports.find((a) => a.ident === selectedAirportIdent)
-            : undefined
-        }
-        onClose={() => setSelectedAirportIdent(null)}
-      />
     </SafeAreaView>
   );
 }

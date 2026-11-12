@@ -1,5 +1,5 @@
 /**
- * Aircraft detail bottom sheet. Opens on label tap, fetches GET /api/aircraft/{hex}
+ * Aircraft detail card. Opens on label tap, fetches GET /api/aircraft/{hex}
  * for metadata (registration/type/operator). The "Route" button is the ONLY thing
  * that calls GET /api/aircraft/{hex}/route — that endpoint spends AeroAPI quota, so
  * it must be an explicit user action, never automatic.
@@ -12,9 +12,11 @@ import { color } from "@/theme";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { awaySourceCredit, creditText } from "./awaySource";
-import { Sheet } from "./Sheet";
+import { Sheet, sheetActionStyle, SheetSummary } from "./Sheet";
 import { ShowOnMapButton } from "./ShowOnMapButton";
 import { SimulatorButton } from "./SimulatorButton";
+import { useObserver } from "./useObserver";
+import { compass8, relativePosition } from "./webmap/relative";
 import type { ApiClient } from "@/api/client";
 import { useAircraftStore } from "@/state/aircraftStore";
 import { useApiAllowed } from "@/state/authStore";
@@ -24,9 +26,11 @@ export interface DetailSheetProps {
   hex: string | null;
   client: ApiClient;
   onClose: () => void;
+  /** Side-panel layout only: offset from the top of the screen (see Sheet). */
+  panelTop?: number;
 }
 
-export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
+export function DetailSheet({ hex, client, onClose, panelTop }: DetailSheetProps) {
   const [detail, setDetail] = useState<AircraftDetail | null>(null);
   const [route, setRoute] = useState<RouteResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -39,6 +43,8 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
   // Away-mode traffic carries its aggregator in `src`; credit it (adsb.fi's terms require a link).
   const credit = awaySourceCredit(state?.src);
   const apiAllowed = useApiAllowed();
+  // Distance in the collapsed summary, measured from the same observer the List uses.
+  const observer = useObserver();
 
   useEffect(() => {
     setDetail(null);
@@ -78,16 +84,69 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
       .finally(() => setRouteLoading(false));
   };
 
+  const ready = !!detail || (!apiAllowed && !!state);
+  const title =
+    state?.flight?.trim() || (state?.hex ?? detail?.metadata?.hex ?? hex ?? "").toUpperCase();
+  const positioned = hex != null && state?.lat != null && state?.lon != null;
+  const rel = positioned ? relativePosition(observer, state!.lat!, state!.lon!) : null;
+
   return (
-    <Sheet visible={!!hex} onClose={onClose} accent={color.entity.air}>
-        {loading && <ActivityIndicator color={color.entity.air} />}
-        {error && <Text style={styles.error}>{error}</Text>}
-        {(detail || (!apiAllowed && state)) && (
+    <Sheet
+      visible={!!hex}
+      panelTop={panelTop}
+      onClose={onClose}
+      accent={color.entity.air}
+      label="Aircraft details"
+      header={
+        <View style={styles.header}>
+          {/* The callsign shows straight away from the live snapshot; the "detail-title" testID only
+              lands once the detail fetch has resolved (or there is no API access), as before. */}
+          <Text
+            testID={ready ? "detail-title" : "detail-title-pending"}
+            style={styles.title}
+            numberOfLines={1}
+          >
+            {title}
+          </Text>
+          {loading && <ActivityIndicator size="small" color={color.entity.air} />}
+        </View>
+      }
+      summary={
+        <SheetSummary
+          parts={[
+            detail?.metadata?.typeCode,
+            state?.alt != null ? `${state.alt.toLocaleString()} ft` : null,
+            state?.gs != null ? `${Math.round(state.gs)} kt` : null,
+            rel ? `${rel.distanceKm.toFixed(1)} km ${compass8(rel.bearingDeg)}` : null,
+          ]}
+        />
+      }
+      actions={
+        positioned ? (
+          // The live position is enough to show it on the map, even when the detail fetch failed
+          // (backend unreachable, unknown aircraft).
           <>
-            <Text testID="detail-title" style={styles.title}>
-              {state?.flight?.trim() ||
-                (state?.hex ?? detail?.metadata?.hex ?? hex ?? "").toUpperCase()}
-            </Text>
+            <ShowOnMapButton
+              testID="detail-show-on-map"
+              focus={{ kind: "aircraft", hex }}
+              accent={color.entity.air}
+              onClose={onClose}
+              style={sheetActionStyle}
+            />
+            <SimulatorButton
+              testID="detail-cockpit"
+              target={{ kind: "aircraft", id: hex }}
+              accent={color.entity.air}
+              onClose={onClose}
+              style={sheetActionStyle}
+            />
+          </>
+        ) : null
+      }
+    >
+        {error && <Text style={styles.error}>{error}</Text>}
+        {ready && (
+          <>
             <Row label="Registration" value={detail?.metadata?.registration} />
             <Row label="Type" value={detail?.metadata?.typeName ?? detail?.metadata?.typeCode} />
             <Row label="Operator" value={detail?.metadata?.operator} />
@@ -133,25 +192,6 @@ export function DetailSheet({ hex, client, onClose }: DetailSheetProps) {
           </>
         )}
 
-        {/* Outside the detail block: the live position is enough to show it on the map, even when
-            the detail fetch failed (backend unreachable, unknown aircraft). */}
-        {hex && state?.lat != null && state?.lon != null && (
-          <ShowOnMapButton
-            testID="detail-show-on-map"
-            focus={{ kind: "aircraft", hex }}
-            accent={color.entity.air}
-            onClose={onClose}
-          />
-        )}
-        {hex && state?.lat != null && state?.lon != null && (
-          <SimulatorButton
-            testID="detail-cockpit"
-            target={{ kind: "aircraft", id: hex }}
-            accent={color.entity.air}
-            onClose={onClose}
-          />
-        )}
-
         {credit && (
           <Pressable testID="detail-source-credit" onPress={() => void Linking.openURL(credit.url)}>
             <Text style={styles.attribution}>{creditText(credit)}</Text>
@@ -171,7 +211,8 @@ function Row({ label, value }: { label: string; value: string | null | undefined
 }
 
 const styles = StyleSheet.create({
-  title: { color: color.text, fontSize: 20, fontWeight: "700", marginBottom: 12 },
+  header: { flexDirection: "row", alignItems: "center", gap: 8 },
+  title: { color: color.text, fontSize: 20, fontWeight: "700", flexShrink: 1 },
   row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
   rowLabel: { color: color.textLabel, fontSize: 14 },
   rowValue: { color: color.text, fontSize: 14, fontWeight: "500" },

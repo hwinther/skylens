@@ -80,6 +80,9 @@ export const color = {
   // Modal / detail-sheet chrome
   scrim: "rgba(0, 0, 0, 0.4)", // modal/sheet backdrop
   handle: "#33506B", // drag handle (was hardcoded in all four detail sheets)
+  // Non-modal detail card / side panel: color.bg at 88 % so a hint of the scene shows through
+  // (web adds a backdrop blur on top; native stays plain translucency).
+  sheetSurface: "rgba(11, 22, 34, 0.88)",
 } as const;
 
 /** Course-vector (velocity-leader) colours — reference entity hues so they can't drift. */

@@ -64,6 +64,8 @@ import { MapFocusChip } from "@/components/webmap/MapFocusChip";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
 import { useObserver } from "@/components/useObserver";
+import { useDetailSelection } from "@/components/useDetailSelection";
+import { useSheetRightInset } from "@/components/Sheet";
 
 /**
  * One aircraft as a top-down airplane icon rotated to its track, laid flat on the map so the nose
@@ -318,9 +320,19 @@ export default function MapScreen() {
   // Arriving from "Show ground track" (a track is set) opens the real Map, not the you-centric radar —
   // a globe-spanning track is meaningless there. Captured once at mount.
   const [view, setView] = useState<MapViewMode>(track.trackedNoradId != null ? "map" : "radar");
-  const [selectedHex, setSelectedHex] = useState<string | null>(null);
-  const [selectedMmsi, setSelectedMmsi] = useState<string | null>(null);
-  const [selectedAirportIdent, setSelectedAirportIdent] = useState<string | null>(null);
+  // One selection slot for the detail cards: they are non-modal, so tapping another marker (of any
+  // kind) swaps the open card instead of stacking a second one.
+  const detail = useDetailSelection();
+  const selectedHex = detail.idOf("aircraft");
+  const selectedMmsi = detail.idOf("vessel");
+  const selectedAirportIdent = detail.idOf("airport");
+  const {
+    aircraft: setSelectedHex,
+    vessel: setSelectedMmsi,
+    airport: setSelectedAirportIdent,
+  } = detail.set;
+  // While a side-panel card is open (wide screens), right-edge controls move left by its width.
+  const cardRightInset = useSheetRightInset(detail.open);
   const mapRef = useRef<MapView>(null);
   const fittedFor = useRef<number | null>(null);
   // "Show on map" focus from a detail sheet: centre once per request (seq), then follow until the
@@ -435,6 +447,7 @@ export default function MapScreen() {
             rangeKm={radarRangeKm}
             onRangeChange={setRadarRangeKm}
             showCourseVectors={showCourseVectors}
+            controlsRightInset={cardRightInset}
           />
         ) : (
           <MapView
@@ -442,6 +455,8 @@ export default function MapScreen() {
             style={StyleSheet.absoluteFill}
             initialRegion={{ latitude: observer.lat, longitude: observer.lon, latitudeDelta: 1.2, longitudeDelta: 1.2 }}
             showsUserLocation
+            // Keeps Google's own controls (my-location button, logo) clear of a side-panel card.
+            mapPadding={{ top: 0, left: 0, bottom: 0, right: cardRightInset }}
             onMapReady={() => setMapReady(true)}
             // A user drag ends follow mode; the focus chip resumes it.
             onPanDrag={() => {
@@ -538,7 +553,11 @@ export default function MapScreen() {
           </Text>
         ) : null}
         {view === "map" && track.trackedNoradId != null ? (
-          <Pressable testID="clear-track" style={styles.clearTrack} onPress={track.clear}>
+          <Pressable
+            testID="clear-track"
+            style={[styles.clearTrack, { right: 12 + cardRightInset }]}
+            onPress={track.clear}
+          >
             <Text style={styles.clearTrackText}>✕ Clear track</Text>
           </Pressable>
         ) : null}
@@ -550,22 +569,24 @@ export default function MapScreen() {
             onClear={clearFocus}
           />
         ) : null}
+        {/* Detail card last, over the map; mounted in the body so the side panel starts below the
+            view toggle. */}
+        <DetailSheet hex={selectedHex} client={client} onClose={() => setSelectedHex(null)} />
+        <VesselDetailSheet
+          mmsi={selectedMmsi}
+          vessel={selectedMmsi != null ? vessels.find((v) => v.mmsi === selectedMmsi) : undefined}
+          onClose={() => setSelectedMmsi(null)}
+        />
+        <AirportDetailSheet
+          ident={selectedAirportIdent}
+          airport={
+            selectedAirportIdent != null
+              ? airports.find((a) => a.ident === selectedAirportIdent)
+              : undefined
+          }
+          onClose={() => setSelectedAirportIdent(null)}
+        />
       </View>
-      <DetailSheet hex={selectedHex} client={client} onClose={() => setSelectedHex(null)} />
-      <VesselDetailSheet
-        mmsi={selectedMmsi}
-        vessel={selectedMmsi != null ? vessels.find((v) => v.mmsi === selectedMmsi) : undefined}
-        onClose={() => setSelectedMmsi(null)}
-      />
-      <AirportDetailSheet
-        ident={selectedAirportIdent}
-        airport={
-          selectedAirportIdent != null
-            ? airports.find((a) => a.ident === selectedAirportIdent)
-            : undefined
-        }
-        onClose={() => setSelectedAirportIdent(null)}
-      />
     </SafeAreaView>
   );
 }

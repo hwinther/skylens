@@ -12,10 +12,10 @@
  */
 
 import { alpha, color } from "@/theme";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ImageBackground, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { CameraView, useCameraPermissions } from "expo-camera";
@@ -40,6 +40,7 @@ import {
   VesselDetailSheet,
 } from "@/components";
 import { airportFilter } from "@/components/webmap/airportStyle";
+import { useDetailSelection } from "@/components/useDetailSelection";
 import { RADIO_SOURCES, satGroupsFromSettings } from "@/ar";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
@@ -51,6 +52,9 @@ import {
 } from "@/state/aircraftStore";
 import { useVesselList, useVesselStore } from "@/state/vesselStore";
 import { useSettingsStore } from "@/state/settingsStore";
+
+/** Height of the AR status strip (two rows), which the side-panel detail card starts below. */
+const STATUS_STRIP_CLEARANCE = 64;
 
 export default function ArScreen() {
   const demoMode = useSettingsStore((s) => s.demoMode);
@@ -73,14 +77,32 @@ export default function ArScreen() {
   const showSmallAirfields = useSettingsStore((s) => s.showSmallAirfields);
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const [selectedHex, setSelectedHex] = useState<string | null>(null);
-  const [selectedMmsi, setSelectedMmsi] = useState<string | null>(null);
-  const [selectedPlanet, setSelectedPlanet] = useState<string | null>(null);
-  const [selectedRadioKey, setSelectedRadioKey] = useState<string | null>(null);
-  const [selectedAirportIdent, setSelectedAirportIdent] = useState<string | null>(null);
-  // Selected satellite for the Phase 5 detail sheet. Captured now so the overlay's tap wiring is
-  // complete; the sheet itself mounts in Phase 5 (see the placeholder near <DetailSheet/> below).
-  const [selectedNoradId, setSelectedNoradId] = useState<number | null>(null);
+  // One selection slot for all six detail cards: the cards are non-modal, so tapping another object
+  // (of any kind) swaps the open card instead of stacking a second one.
+  const detail = useDetailSelection();
+  const selectedHex = detail.idOf("aircraft");
+  const selectedMmsi = detail.idOf("vessel");
+  const selectedPlanet = detail.idOf("planet");
+  const selectedRadioKey = detail.idOf("radio");
+  const selectedAirportIdent = detail.idOf("airport");
+  const selectedSat = detail.idOf("satellite");
+  const selectedNoradId = selectedSat != null ? Number(selectedSat) : null;
+  const {
+    aircraft: setSelectedHex,
+    vessel: setSelectedMmsi,
+    planet: setSelectedPlanet,
+    radio: setSelectedRadioKey,
+    airport: setSelectedAirportIdent,
+    satellite: setSelectedSat,
+  } = detail.set;
+  const setSelectedNoradId = useCallback(
+    (id: number | null) => setSelectedSat(id == null ? null : String(id)),
+    [setSelectedSat],
+  );
+  // On a wide screen the card is a right-docked side panel; start it below the status strip so the
+  // strip's count and info button stay visible.
+  const insets = useSafeAreaInsets();
+  const panelTop = insets.top + STATUS_STRIP_CLEARANCE;
   // Trust-indicator legend overlay, opened from the status strip's info glyph.
   const [showLegend, setShowLegend] = useState(false);
 
@@ -344,14 +366,21 @@ export default function ArScreen() {
         </View>
       ) : null}
 
-      <DetailSheet hex={selectedHex} client={client} onClose={() => setSelectedHex(null)} />
+      <DetailSheet
+        hex={selectedHex}
+        client={client}
+        panelTop={panelTop}
+        onClose={() => setSelectedHex(null)}
+      />
       <VesselDetailSheet
         mmsi={selectedMmsi}
+        panelTop={panelTop}
         vessel={selectedMmsi != null ? vessels.find((v) => v.mmsi === selectedMmsi) : undefined}
         onClose={() => setSelectedMmsi(null)}
       />
       <SatelliteDetailSheet
         noradId={selectedNoradId}
+        panelTop={panelTop}
         view={selectedNoradId != null ? satHook.byNoradId.get(selectedNoradId) : undefined}
         observer={demoMode ? DEMO_HOME : observer}
         elevationMaskDeg={satElevationMaskDeg}
@@ -359,12 +388,14 @@ export default function ArScreen() {
       />
       <PlanetDetailSheet
         body={selectedPlanet}
+        panelTop={panelTop}
         view={selectedPlanet != null ? planetHook.byBody.get(selectedPlanet) : undefined}
         observer={demoMode ? DEMO_HOME : observer}
         onClose={() => setSelectedPlanet(null)}
       />
       <RadioDetailSheet
         sourceKey={selectedRadioKey}
+        panelTop={panelTop}
         view={selectedRadioKey != null ? radioHook.byKey.get(selectedRadioKey) : undefined}
         source={
           selectedRadioKey != null
@@ -376,6 +407,7 @@ export default function ArScreen() {
       />
       <AirportDetailSheet
         ident={selectedAirportIdent}
+        panelTop={panelTop}
         airport={
           selectedAirportIdent != null
             ? airports.find((a) => a.ident === selectedAirportIdent)
