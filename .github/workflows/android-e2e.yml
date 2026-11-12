@@ -108,19 +108,44 @@ jobs:
           arch: x86_64
           target: google_apis
           profile: pixel_6
+          # The runner's default is 2. On the first run the emulator was CPU-starved after boot
+          # (`input keyevent 82` took 9 s, system_server and SystemUI logged slow Looper dispatches)
+          # and Pixel Launcher went ANR. Public-repo ubuntu-latest runners have 4 vCPUs; one is left
+          # for the host side (SwiftShader rendering, Maestro's JVM).
+          cores: 3
           disable-animations: true
           working-directory: app
-          # Each line runs as its own `sh -c`; the last one keeps logcat even when the flow fails.
+          # Each line runs as its own `sh -c` and the first failing line stops the script. So the
+          # Maestro line records its exit code instead of failing, the diagnostics after it run either
+          # way (`|| true`), and the last line fails the step if the flows failed.
+          #  - hide_error_dialogs=1: an app that goes ANR is killed instead of covering the screen
+          #    with an "<app> isn't responding" dialog (AOSP ActivityTaskManagerService/AppErrors;
+          #    the setting is observed live on API 34). Our own app going ANR still fails the flow.
+          #  - wait-for-broadcast-idle: let the BOOT_COMPLETED fan-out settle before the test starts.
+          #  - logcat -G 16M (the emulator sets 2M, which had rotated out everything before the flow's
+          #    first command) and no `logcat -c`, so the dump keeps boot; `events` has am_anr/am_crash.
           script: |
             mkdir -p "$MAESTRO_OUT"
+            adb shell settings put global hide_error_dialogs 1
+            adb logcat -G 16M || echo "::warning::Could not resize the logcat buffer"
+            timeout 300 adb shell am wait-for-broadcast-idle || echo "::warning::Broadcast queues not idle after 300 s; starting anyway"
             adb install -r "$APK_PATH"
-            adb logcat -c
-            maestro test --format junit --output "$MAESTRO_OUT/report.xml" --test-output-dir "$MAESTRO_OUT/artifacts" --debug-output "$MAESTRO_OUT/debug" .maestro; rc=$?; adb logcat -d > "$MAESTRO_OUT/logcat.txt"; exit $rc
+            adb shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp' || true
+            adb exec-out screencap -p > "$MAESTRO_OUT/pre-test-screen.png" || true
+            maestro test --format junit --output "$MAESTRO_OUT/report.xml" --test-output-dir "$MAESTRO_OUT/artifacts" --debug-output "$MAESTRO_OUT/debug" .maestro || echo "$?" > "$MAESTRO_OUT/maestro-exit-code"
+            adb exec-out screencap -p > "$MAESTRO_OUT/post-test-screen.png" || true
+            adb logcat -d -b main,system,crash,events > "$MAESTRO_OUT/logcat.txt" || true
+            adb shell dumpsys activity activities > "$MAESTRO_OUT/dumpsys-activities.txt" || true
+            for t in system_app_anr data_app_anr system_app_crash data_app_crash; do echo "=== dropbox $t"; adb shell dumpsys dropbox --print "$t"; done > "$MAESTRO_OUT/dropbox-anr-crash.txt" 2>&1 || true
+            test ! -s "$MAESTRO_OUT/maestro-exit-code" || { echo "::error::Maestro flows failed (exit $(cat "$MAESTRO_OUT/maestro-exit-code"))"; exit 1; }
 
+      # Always, not only on failure: a passing run's screenshots are the only view of the native UI.
+      # Short retention; the attempt number keeps a re-run from colliding with the first upload.
       - name: Upload Maestro output
-        if: ${{ failure() }}
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: maestro-output
+          name: maestro-output-${{ github.run_attempt }}
           path: ${{ runner.temp }}/maestro-out
+          retention-days: 7
           if-no-files-found: warn

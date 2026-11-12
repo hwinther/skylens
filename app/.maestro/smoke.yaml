@@ -2,6 +2,11 @@
 # detail card -> Map (Map or Radar) -> Settings. Run with `maestro test .maestro` from app/ (see
 # README.md); CI runs it in .github/workflows/android-e2e.yml. Selectors are RN testIDs, which Maestro
 # matches as Android resource-ids; `id` and `text` are regexes.
+#
+# System dialogs: on the first CI run "Pixel Launcher isn't responding" covered the screen and the
+# first wait timed out with only the dialog in the hierarchy. The long waits below are therefore
+# `retry` blocks that first dismiss another app's ANR dialog (subflows/dismiss-system-anr.yaml; our
+# own app's ANR dialog is never dismissed) and then wait. `maxRetries: 3` is 4 attempts.
 appId: no.wsh.skylens
 name: Smoke (demo mode)
 ---
@@ -9,36 +14,53 @@ name: Smoke (demo mode)
     clearState: true
     permissions:
       all: allow
+# Whatever is on screen right after launch (a system dialog that was already up shows here).
+- takeScreenshot: launched
 
-# Fresh state routes to onboarding; Skip finishes it in demo mode. Generous waits: cold start of a
-# release build on a CI emulator (software GPU) can be slow.
-- extendedWaitUntil:
-    visible:
-      id: "onboarding-skip"
-    timeout: 120000
+# Fresh state routes to onboarding; Skip finishes it in demo mode. Cold start of a release build on a
+# CI emulator (software GPU): on the first run the activity was displayed ~2 s and React Native
+# running ~2.5 s after launch, so 45 s per attempt is plenty.
+- retry:
+    maxRetries: 3
+    commands:
+      - runFlow: subflows/dismiss-system-anr.yaml
+      - extendedWaitUntil:
+          visible:
+            id: "onboarding-skip"
+          timeout: 45000
+- takeScreenshot: onboarding
 - tapOn:
     id: "onboarding-skip"
 
 # AR screen: DEMO badge, and the "<n> ac" counter above zero once the recorded feed is replaying.
-- extendedWaitUntil:
-    visible:
-      id: "status-source"
-      text: "DEMO"
-    timeout: 60000
-- extendedWaitUntil:
-    visible:
-      id: "status-aircraft-count"
-      text: "[1-9][0-9]* ac"
-    timeout: 60000
+- retry:
+    maxRetries: 3
+    commands:
+      - runFlow: subflows/dismiss-system-anr.yaml
+      - extendedWaitUntil:
+          visible:
+            id: "status-source"
+            text: "DEMO"
+          timeout: 20000
+      - extendedWaitUntil:
+          visible:
+            id: "status-aircraft-count"
+            text: "[1-9][0-9]* ac"
+          timeout: 20000
 - takeScreenshot: ar
 
 # List: open the first aircraft row's detail card, expand it, close it with the back button.
+- runFlow: subflows/dismiss-system-anr.yaml
 - tapOn:
     id: "tab-list"
-- extendedWaitUntil:
-    visible:
-      id: "list-ac-.*"
-    timeout: 30000
+- retry:
+    maxRetries: 3
+    commands:
+      - runFlow: subflows/dismiss-system-anr.yaml
+      - extendedWaitUntil:
+          visible:
+            id: "list-ac-.*"
+          timeout: 15000
 - tapOn:
     id: "list-ac-.*"
     index: 0
@@ -53,6 +75,8 @@ name: Smoke (demo mode)
       id: "detail-card-body"
     timeout: 15000
 - takeScreenshot: list-detail
+# Back must reach our app, not a system dialog: check for one first.
+- runFlow: subflows/dismiss-system-anr.yaml
 - pressKey: back
 - extendedWaitUntil:
     notVisible:
@@ -61,12 +85,17 @@ name: Smoke (demo mode)
 
 # Map: opens on the Map with a Maps key, on the Radar without one (fork PRs, local builds without the
 # key). Without a key the Google map can't draw, so only switch to it when it was the opening view.
+- runFlow: subflows/dismiss-system-anr.yaml
 - tapOn:
     id: "tab-map"
-- extendedWaitUntil:
-    visible:
-      id: "map-view-radar"
-    timeout: 30000
+- retry:
+    maxRetries: 3
+    commands:
+      - runFlow: subflows/dismiss-system-anr.yaml
+      - extendedWaitUntil:
+          visible:
+            id: "map-view-radar"
+          timeout: 15000
 - runFlow:
     when:
       notVisible:
@@ -94,6 +123,7 @@ name: Smoke (demo mode)
 - takeScreenshot: map
 
 # Settings opens.
+- runFlow: subflows/dismiss-system-anr.yaml
 - tapOn:
     id: "tab-settings"
 - extendedWaitUntil:

@@ -1,5 +1,5 @@
 /**
- * Pure-TypeScript "upcoming sky events" feed for the List screen's Upcoming section.
+ * Pure-TypeScript "upcoming sky events" feed for the List screen's Events section.
  *
  * A chronological, offline, DETERMINISTIC function of (fromDate, observer): the next equinox/solstice,
  * locally-visible lunar & solar eclipses, outer-planet oppositions, Mercury/Venus greatest elongations

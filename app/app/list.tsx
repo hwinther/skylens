@@ -45,7 +45,7 @@ import { getApiBaseUrl } from "@/api/config";
 
 type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 
-/** Per-kind glyph for an Upcoming row (all drawn in the gold sky family). Names verified against MCI. */
+/** Per-kind glyph for an Events row (all drawn in the gold sky family). Names verified against MCI. */
 const EVENT_ICON: Record<SkyEventKind, IconName> = {
   equinox: "sun-clock",
   solstice: "weather-sunny",
@@ -249,9 +249,10 @@ export default function ListScreen() {
     [radioViews],
   );
 
-  // Upcoming sky events: pure on-device astronomy like the Sky/Radio feeds, but computed once + hourly
-  // (not the spatial 30 s tick) — a chronological "what's next" list (equinoxes, eclipses, oppositions,
-  // supermoons), self-describing display rows (no detail sheet). Observer feeds the eclipse visibility.
+  // Events (upcoming sky events): pure on-device astronomy like the Sky/Radio feeds, but computed once +
+  // hourly (not the spatial 30 s tick) — a chronological "what's next" list (equinoxes, eclipses,
+  // oppositions, supermoons), self-describing display rows (no detail sheet). Observer feeds the
+  // eclipse visibility.
   const { events, computedAt } = useSkyEvents({ observer, enabled: showSkyEvents });
 
   // Aircraft and (toggle-permitted) vessels merged into one list, sorted nearest-first. A per-row
@@ -535,7 +536,7 @@ export default function ListScreen() {
               <ListSectionHeader
                 testID="list-section-events"
                 countTestID="list-events-count"
-                title="Upcoming"
+                title="Events"
                 count={sections.events.count}
                 dotColor={color.entity.sky}
                 expanded={sections.events.expanded}
@@ -640,7 +641,7 @@ const styles = StyleSheet.create({
   satFreq: { color: "#C3A9E0", fontSize: 12, minWidth: 74, textAlign: "right" },
   emptyLine: { color: color.textMuted, fontSize: 13, paddingHorizontal: 16, paddingBottom: 12 },
   notice: { color: color.textDim, fontSize: 12, paddingHorizontal: 16, paddingBottom: 8 },
-  // Upcoming (sky events): a two-line label (title + detail) with a right-aligned date + countdown.
+  // Events (upcoming sky events): a two-line label (title + detail) with a right-aligned date + countdown.
   eventText: { flex: 1 },
   eventTitle: { color: color.text, fontSize: 14, fontWeight: "600" },
   eventDetail: { color: color.textLabel, fontSize: 12, marginTop: 2 },
