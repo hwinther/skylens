@@ -137,7 +137,9 @@ npm run coverage:summary          # unit (../app/coverage) + e2e (monocart-cover
   attribution (ODbL) wherever ports appear.
 - **Hidden routes**: in expo-router 58, `href: null` on a `Tabs.Screen` makes it `hidden`, and hidden
   routes redirect to `/`. To keep a route navigable without a tab button, use `HIDDEN_ROUTE`
-  (`tabBarItemStyle: { display: "none" }`) in `app/_layout.tsx` instead.
+  (`tabBarItemStyle: { display: "none" }`) in `app/_layout.tsx` instead. That only hides the button;
+  `FULL_SCREEN_ROUTE` also hides the bar (`sim`, `onboarding`, `oauth`). `sign-in` keeps the bar on
+  purpose: its own exits are only "sign in" or "switch to demo".
 - **E2E onboarding**: a fresh browser is routed to `/onboarding`. The shared fixture
   (`e2e/tests/fixtures.ts`) marks onboarding done by default; opt out with `test.use({ onboarded: false })`.
 - **E2E coverage**: the image's web export ships external source maps (`expo export --source-maps`,

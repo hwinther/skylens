@@ -1,7 +1,8 @@
 /**
  * Routes without a tab button must stay reachable. expo-router 58 turns `href: null` into a hidden
  * route that redirects to "/", which silently broke first-run onboarding, the sign-in screen and the
- * web OAuth popup's /oauth landing page. _layout.tsx now hides only the tab button.
+ * web OAuth popup's /oauth landing page. _layout.tsx now hides only the tab button (and, on
+ * onboarding and /oauth, the whole tab bar).
  */
 
 import { expect, test } from './fixtures'
@@ -13,10 +14,17 @@ test.describe('first run', () => {
     await page.goto('/')
     await expect(page).toHaveURL(/\/onboarding$/)
     await expect(page.getByText('Welcome to Skylens')).toBeVisible()
+    // No tab bar: leaving through another tab would skip marking onboarding done, so it would come
+    // back on the next launch. Skip / Start are the only ways out.
+    await expect(page.getByRole('tab').filter({ visible: true })).toHaveCount(0)
+    await expect(page.getByTestId('tab-map')).toBeHidden()
 
     await page.getByText('Skip', { exact: true }).click()
     await expect(page).not.toHaveURL(/\/onboarding/)
     await expect(page.getByTestId('status-aircraft-count')).toBeVisible()
+    // The tabs are back once onboarding is done.
+    await expect(page.getByRole('tab').filter({ visible: true })).toHaveCount(4)
+    await expect(page.getByTestId('tab-map')).toBeVisible()
 
     // Done once: a reload stays on the app.
     await page.reload()
@@ -29,12 +37,15 @@ test('the sign-in screen is reachable', async ({ page }) => {
   await page.goto('/sign-in')
   await expect(page).toHaveURL(/\/sign-in$/)
   await expect(page.getByText("Point at the sky. See what's flying.")).toBeVisible()
+  // The tab bar stays here: the screen's own exits are only "sign in" and "continue in demo".
+  await expect(page.getByTestId('tab-settings')).toBeVisible()
 })
 
 test('the OAuth redirect page is reachable', async ({ page }) => {
   await page.goto('/oauth')
   await expect(page).toHaveURL(/\/oauth$/)
   await expect(page.getByText('Completing sign-in…')).toBeVisible()
+  await expect(page.getByRole('tab').filter({ visible: true })).toHaveCount(0)
 })
 
 test('hidden routes have no tab button', async ({ page }) => {
