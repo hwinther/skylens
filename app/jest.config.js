@@ -34,6 +34,8 @@ module.exports = {
   ],
   // jest-junit emits coverage/junit-report.xml on every jest run so the reusable
   // pr-build.yml node job (dorny/test-reporter, jest-junit parser) always finds it.
+  // The PR comment's test summary comes from coverage/json-report.json, written
+  // by the coverage:ci script's --json --outputFile flags.
   reporters: [
     "default",
     ["jest-junit", { outputDirectory: "coverage", outputName: "junit-report.xml" }],
