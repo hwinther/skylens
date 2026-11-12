@@ -34,7 +34,7 @@ ENV EXPO_PUBLIC_FORCE_LIVE=1 \
 RUN npx expo export --platform web --source-maps
 
 # 2) Publish the API -> /app/publish. The SPA is copied into wwwroot BEFORE publish so it's embedded.
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS backend
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS backend
 ARG APP_VERSION=0.0.0-dev
 ARG GIT_SHA=unknown
 WORKDIR /src
