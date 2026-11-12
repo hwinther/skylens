@@ -13,7 +13,7 @@
 
 import { alpha, color } from "@/theme";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ImageBackground, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -278,9 +278,10 @@ export default function ArScreen() {
     <View style={styles.root}>
       {demoMode ? (
         <GestureDetector gesture={demo.gesture}>
-          <ImageBackground source={require("../assets/sky.png")} style={StyleSheet.absoluteFill}>
+          <View style={StyleSheet.absoluteFill}>
+            <Image source={require("../assets/sky.png")} style={StyleSheet.absoluteFill} />
             {overlay}
-          </ImageBackground>
+          </View>
         </GestureDetector>
       ) : Platform.OS === "web" ? (
         // Live on web. On a mobile browser we can do real AR (rear camera + compass/gyro);
