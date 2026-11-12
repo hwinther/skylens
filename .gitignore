@@ -46,4 +46,12 @@ firmware/rotator-esp32/secrets.h
 *.keystore
 !debug.keystore
 
+# Claude Code: local settings, their backups, and agent worktrees
 .claude/settings.local.json
+.claude/settings.local.json.bak-*
+.claude/worktrees/
+
+# Playwright output outside e2e/ (Playwright MCP sessions, runs started from app/)
+.playwright-mcp/
+app/playwright-report/
+app/test-results/

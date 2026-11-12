@@ -283,6 +283,7 @@ export default function SettingsScreen() {
           </Row>
           <Stepper
             label="Elevation mask"
+            testID="settings-sat-mask"
             value={satElevationMaskDeg}
             unit="°"
             step={1}
@@ -334,6 +335,7 @@ export default function SettingsScreen() {
         <Section title="AR calibration">
           <Stepper
             label="Azimuth trim"
+            testID="settings-azimuth-trim"
             value={azimuthTrimDeg}
             unit="°"
             step={1}
@@ -356,6 +358,7 @@ export default function SettingsScreen() {
           </Text>
           <Stepper
             label="Horizontal FOV"
+            testID="settings-hfov"
             value={hFovDeg}
             unit="°"
             step={1}
@@ -366,6 +369,7 @@ export default function SettingsScreen() {
           />
           <Stepper
             label="Radius"
+            testID="settings-radius"
             value={radiusKm}
             unit=" km"
             step={10}
@@ -501,6 +505,7 @@ function Stepper({
   onChange,
   hint,
   presets,
+  testID,
 }: {
   label: string;
   value: number;
@@ -511,6 +516,8 @@ function Stepper({
   onChange: (v: number) => void;
   hint?: string;
   presets?: readonly number[];
+  /** Prefix for the − / + buttons' testIDs (`<testID>-dec`, `<testID>-inc`). */
+  testID?: string;
 }) {
   const clamp = (v: number) => Math.max(min, Math.min(max, v));
   // Press-and-hold to repeat. The interval reads the latest value from a ref (a captured `value` would
@@ -553,14 +560,24 @@ function Stepper({
         {hint && <Text style={styles.hint}>{hint}</Text>}
       </View>
       <View style={styles.stepperControls}>
-        <Pressable style={styles.stepBtn} onPressIn={() => startRepeat(-1)} onPressOut={stop}>
+        <Pressable
+          testID={testID && `${testID}-dec`}
+          style={styles.stepBtn}
+          onPressIn={() => startRepeat(-1)}
+          onPressOut={stop}
+        >
           <Text style={styles.stepBtnText}>−</Text>
         </Pressable>
         <Text style={styles.stepValue}>
           {value}
           {unit}
         </Text>
-        <Pressable style={styles.stepBtn} onPressIn={() => startRepeat(1)} onPressOut={stop}>
+        <Pressable
+          testID={testID && `${testID}-inc`}
+          style={styles.stepBtn}
+          onPressIn={() => startRepeat(1)}
+          onPressOut={stop}
+        >
           <Text style={styles.stepBtnText}>+</Text>
         </Pressable>
       </View>

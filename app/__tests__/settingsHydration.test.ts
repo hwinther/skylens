@@ -46,3 +46,30 @@ test("a returning web user hydrates with their saved onboarding flag", async () 
   expect(store.getState()._hydrated).toBe(true);
   expect(store.getState().onboarded).toBe(true);
 });
+
+test("a Polaris calibration left armed at a force-quit is not re-armed on the next launch", async () => {
+  installLocalStorage({
+    [KEY]: JSON.stringify({ state: { polarisCalibrating: true, azimuthTrimDeg: 3 }, version: 0 }),
+  });
+  const store = await loadStore();
+  expect(store.getState().polarisCalibrating).toBe(false);
+  expect(store.getState().azimuthTrimDeg).toBe(3);
+});
+
+test("calibration and layer choices survive a restart", async () => {
+  installLocalStorage();
+  const first = await loadStore();
+  first.getState().setAzimuthTrim(-7);
+  first.getState().setHFov(70);
+  first.getState().setShowRadioSky(true);
+  first.getState().setOnboarded(true);
+
+  // Same storage, fresh module: what a relaunch sees.
+  const relaunched = await loadStore();
+  expect(relaunched.getState()).toMatchObject({
+    azimuthTrimDeg: -7,
+    hFovDeg: 70,
+    showRadioSky: true,
+    onboarded: true,
+  });
+});
