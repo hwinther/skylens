@@ -98,10 +98,14 @@ function useDismissKeys(visible: boolean, onClose: () => void) {
   );
 }
 
-// Web only: frost the scene behind the translucent surface. Native stays plain translucency (no blur
-// dependency). react-native-web understands backdropFilter; RN's ViewStyle type doesn't list it.
-const webBlur: ViewStyle | null =
-  Platform.OS === "web" ? ({ backdropFilter: "blur(12px)" } as unknown as ViewStyle) : null;
+// Web only: a translucent surface frosted with a backdrop blur, so a hint of the scene shows through.
+// Native has no blur (no extra dependency), and plain translucency lets dense content behind (list
+// rows, map labels) bleed through the text, so native keeps the opaque `card` background.
+// react-native-web understands backdropFilter; RN's ViewStyle type doesn't list it.
+const webSurface: ViewStyle | null =
+  Platform.OS === "web"
+    ? ({ backgroundColor: color.sheetSurface, backdropFilter: "blur(12px)" } as unknown as ViewStyle)
+    : null;
 
 export function Sheet({
   visible,
@@ -173,7 +177,7 @@ export function Sheet({
       accessibilityLabel={label}
       style={[
         styles.card,
-        webBlur,
+        webSurface,
         panel
           ? [styles.panel, { width: layout.width, top: panelTop ?? 0, borderLeftColor: alpha(accent, 0.5) }]
           : [
@@ -213,7 +217,7 @@ const styles = StyleSheet.create({
     // ApiIssueBanner / SignInPrompt (2000), which are alerts and should stay on top.
     zIndex: 1100,
     elevation: 10,
-    backgroundColor: color.sheetSurface,
+    backgroundColor: color.bg, // opaque on native; webSurface makes it translucent + blurred on web
     borderColor: color.surface2,
   },
   compact: {
