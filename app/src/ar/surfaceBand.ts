@@ -14,7 +14,8 @@
  * dependency is the shared aircraft deadReckon, reused for moving ships.
  */
 
-import { deadReckon } from "./smoothing";
+import type { PositionSample } from "./positionTracker";
+import { deadReckon, KNOTS_TO_MPS } from "./smoothing";
 
 /** Maximum downward offset (px) below the horizon a very-near vessel is drawn at. */
 export const BAND_PX = 64;
@@ -74,4 +75,30 @@ export function deadReckonVessel(v: VesselMotion, dtSeconds: number): { lat: num
   }
   const dr = deadReckon({ lat: v.lat, lon: v.lon, alt: 0, gs: sog, trk: cog, vr: 0 }, dtSeconds);
   return { lat: dr.lat, lon: dr.lon };
+}
+
+/**
+ * A ship as a PositionSample for the AR PositionTracker, received at `receivedAtMs` and backdated by its
+ * age (`seen`, seconds since the vessel's last AIS message: VesselDto has no position-only age). Motion
+ * follows the same rule as deadReckonVessel: along cog at sog, or stationary without a positive speed and
+ * a known course. Null without a position.
+ */
+export function vesselMotionSample(
+  v: { lat?: number | null; lon?: number | null; sog?: number | null; cog?: number | null; seen?: number | null },
+  receivedAtMs: number,
+): PositionSample | null {
+  if (v.lat == null || v.lon == null || !Number.isFinite(v.lat) || !Number.isFinite(v.lon)) return null;
+  const sog = v.sog ?? 0;
+  const moving = sog > 0 && v.cog != null && Number.isFinite(v.cog);
+  const seenS = v.seen != null && Number.isFinite(v.seen) ? Math.max(0, v.seen) : 0;
+  return {
+    kind: "vessel",
+    lat: v.lat,
+    lon: v.lon,
+    altM: 0,
+    speedMps: moving ? sog * KNOTS_TO_MPS : 0,
+    headingDeg: moving ? (v.cog as number) : 0,
+    vertMps: 0,
+    timeMs: receivedAtMs - seenS * 1000,
+  };
 }

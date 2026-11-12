@@ -57,6 +57,7 @@ import {
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
 import { buildSatrec, satelliteStateAt } from "@/ar/satellites";
+import { orbitInfo, type OrbitClass } from "@/ar/orbitClass";
 import { useAircraftStore } from "@/state/aircraftStore";
 import { isApiAllowed } from "@/state/authStore";
 import { useVesselStore } from "@/state/vesselStore";
@@ -184,6 +185,8 @@ export default function SimScreen() {
   }, [deviceLook, sensorStatus, requestSensors, stopSensors, recenter]);
   const [error, setError] = useState<string | null>(null);
   const [engineReady, setEngineReady] = useState(false);
+  // The followed satellite's orbit class, from the OMM the session already fetches; null otherwise.
+  const [orbitClass, setOrbitClass] = useState<OrbitClass | null>(null);
 
   const exit = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -249,6 +252,7 @@ export default function SimScreen() {
             .then((detail) => {
               if (cancelled) return;
               satrec = buildSatrec(detail.satellite.omm);
+              setOrbitClass(orbitInfo(detail.satellite.omm)?.class ?? null);
               nameRef.current = detail.satellite.name?.trim() || nameRef.current;
               if (!satrec) setError("This satellite's orbit can't be propagated.");
             })
@@ -513,6 +517,7 @@ export default function SimScreen() {
         widget = null;
         setEngineReady(false);
         setError(null);
+        setOrbitClass(null);
         setHud({ pose: null, name: "", look: LEVEL });
         stop();
       };
@@ -557,7 +562,9 @@ export default function SimScreen() {
         <Text testID="sim-name" style={styles.name}>
           {hud.name || "…"}
         </Text>
-        {pose ? <HudRows kind={target.kind} pose={pose} /> : null}
+        {pose ? (
+          <HudRows kind={target.kind} pose={pose} orbitClass={target.kind === "satellite" ? orbitClass : null} />
+        ) : null}
         <Text testID="sim-status" style={[styles.status, pose?.stale && styles.lost]}>
           {statusText(pose, engineReady, error)}
         </Text>
@@ -615,10 +622,21 @@ function statusText(pose: TrackedPose | null, engineReady: boolean, error: strin
   if (!pose) return "Waiting for position…";
   if (pose.stale) return "Signal lost — holding last position";
   if (!engineReady) return "Loading 3D view…";
-  return pose.ageS < 3 ? "Live" : `Data ${Math.round(pose.ageS)} s old`;
+  if (pose.ageS < 3) return "Live";
+  // A vessel's data can be minutes old before it counts as lost.
+  return pose.ageS < 90 ? `Data ${Math.round(pose.ageS)} s old` : `Data ${Math.round(pose.ageS / 60)} min old`;
 }
 
-function HudRows({ kind, pose }: { kind: SimKind; pose: TrackedPose }) {
+function HudRows({
+  kind,
+  pose,
+  orbitClass,
+}: {
+  kind: SimKind;
+  pose: TrackedPose;
+  /** Shown next to the altitude when following a satellite. */
+  orbitClass?: OrbitClass | null;
+}) {
   const heading = `${Math.round(pose.headingDeg) % 360}°`;
   const knots = `${Math.round(pose.speedMps / KNOTS_TO_MPS)} kt`;
   const rows: [string, string, string][] =
@@ -644,9 +662,21 @@ function HudRows({ kind, pose }: { kind: SimKind; pose: TrackedPose }) {
       {rows.map(([label, value, testID]) => (
         <View key={label} style={styles.row}>
           <Text style={styles.label}>{label}</Text>
-          <Text testID={testID} style={styles.value}>
-            {value}
-          </Text>
+          {testID === "sim-alt" && orbitClass ? (
+            // A sibling, not nested, so sim-alt keeps reading just the altitude.
+            <View style={styles.valueGroup}>
+              <Text testID="sim-orbit-class" style={styles.orbitClass}>
+                {orbitClass}
+              </Text>
+              <Text testID={testID} style={styles.value}>
+                {value}
+              </Text>
+            </View>
+          ) : (
+            <Text testID={testID} style={styles.value}>
+              {value}
+            </Text>
+          )}
         </View>
       ))}
     </View>
@@ -678,6 +708,8 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", justifyContent: "space-between", gap: 16 },
   label: { color: color.textMuted, fontSize: 13, fontWeight: "600" },
   value: { color: color.text, fontSize: 14, fontVariant: ["tabular-nums"] },
+  valueGroup: { flexDirection: "row", alignItems: "baseline", gap: 6 },
+  orbitClass: { color: color.textMuted, fontSize: 12, fontWeight: "700" },
   status: { color: color.textDim, fontSize: 12, marginTop: 8 },
   lost: { color: "#FFB45C" },
   exit: {
