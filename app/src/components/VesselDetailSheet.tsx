@@ -36,9 +36,11 @@ export interface VesselDetailSheetProps {
   onClose: () => void;
   /** Side-panel layout only: offset from the top of the screen (see Sheet). */
   panelTop?: number;
+  /** The AR view's tracker says this ship's signal is lost (src/ar/signalLost): show a status line. */
+  signalLost?: boolean;
 }
 
-export function VesselDetailSheet({ mmsi, vessel, onClose, panelTop }: VesselDetailSheetProps) {
+export function VesselDetailSheet({ mmsi, vessel, onClose, panelTop, signalLost = false }: VesselDetailSheetProps) {
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
   // Without API access (signed out behind real auth) only the live DTO's rows show.
   const apiAllowed = useApiAllowed();
@@ -141,6 +143,7 @@ export function VesselDetailSheet({ mmsi, vessel, onClose, panelTop }: VesselDet
             isAton
               ? [aidTypeLabel(vessel?.aidType), vessel?.virtual ? "Virtual aid" : null, distance]
               : [
+                  signalLost && "Signal lost",
                   moving ? `${vessel!.sog!.toFixed(1)} kn` : navStatus,
                   vessel?.cog != null ? `${Math.round(vessel.cog)}°` : null,
                   distance,
@@ -171,6 +174,11 @@ export function VesselDetailSheet({ mmsi, vessel, onClose, panelTop }: VesselDet
     >
         {/* Scrolling is the card's job now (Sheet wraps the body in a ScrollView). */}
         <View style={styles.scrollContent}>
+          {signalLost && !isAton ? (
+            <Text testID="vessel-detail-signal-lost" style={styles.lost}>
+              Signal lost — showing the last known position
+            </Text>
+          ) : null}
           {loading && <ActivityIndicator color={color.entity.sea} />}
           {error && <Text style={styles.error}>{error}</Text>}
 
@@ -264,6 +272,7 @@ const styles = StyleSheet.create({
   rowLabel: { color: color.textLabel, fontSize: 14 },
   rowValue: { color: color.text, fontSize: 14, fontWeight: "500" },
   error: { color: color.status.error, marginVertical: 8 },
+  lost: { color: color.status.warn, fontSize: 13, fontWeight: "600" },
   empty: { color: color.textLabel, fontSize: 14, paddingVertical: 8 },
   attribution: { color: color.textMuted, fontSize: 11, marginTop: 12 },
 });

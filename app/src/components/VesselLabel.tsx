@@ -10,6 +10,9 @@
  * horizon strip — so a whole-chip target with a generous hitSlop, as aircraft labels have, would mostly
  * produce mis-taps and steal taps from the camera / drag-to-look behind it. The labels are already
  * decluttered (no two overlap), and aircraft labels render on top, so they win where the two meet.
+ *
+ * A ship whose signal is lost (src/ar/signalLost) is drawn like a lost aircraft: dimmed dashed chip,
+ * hollow anchor square, fainter leader, and "lost · 3 min" as the second line. AtoN are never lost.
  */
 
 import { alpha, color } from "@/theme";
@@ -18,6 +21,7 @@ import { memo, type ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { VesselDto } from "@/api/types";
+import { formatAge, lostTag } from "@/ar/signalLost";
 import { iconForVessel } from "./vesselIcon";
 
 export interface VesselLabelProps {
@@ -30,6 +34,8 @@ export interface VesselLabelProps {
   anchorY: number;
   /** Slant range in km, for the range line. */
   rangeKm: number | null;
+  /** Whole seconds since the last position when the signal is lost; null/omitted while it is live. */
+  lostAgeS?: number | null;
   /** Tapping the icon/name opens the vessel's detail sheet. Omit for a display-only label. */
   onPress?: (mmsi: string) => void;
 }
@@ -43,11 +49,14 @@ const NAME_HIT_SLOP = { top: 4, bottom: 4, left: 4, right: 4 };
 function TitleRow({
   mmsi,
   title,
+  status,
   onPress,
   children,
 }: {
   mmsi: string;
   title: string;
+  /** Appended to the accessible label, e.g. "signal lost 3 min ago". */
+  status?: string;
   onPress?: (mmsi: string) => void;
   children: ReactNode;
 }) {
@@ -56,7 +65,7 @@ function TitleRow({
     <Pressable
       testID={`ves-name-${mmsi}`}
       accessibilityRole="button"
-      accessibilityLabel={`Open details for ${title}`}
+      accessibilityLabel={`Open details for ${title}${status ? `, ${status}` : ""}`}
       onPress={() => onPress(mmsi)}
       hitSlop={NAME_HIT_SLOP}
       style={styles.titleRow}
@@ -66,16 +75,22 @@ function TitleRow({
   );
 }
 
-function VesselLabelBase({ vessel, x, y, anchorY, rangeKm, onPress }: VesselLabelProps) {
+function VesselLabelBase({ vessel, x, y, anchorY, rangeKm, lostAgeS = null, onPress }: VesselLabelProps) {
   const { name: iconName, color, tag } = iconForVessel(vessel);
   const isAton = vessel.kind === "aton";
   const isVirtualAton = isAton && !!vessel.virtual;
   const title = vessel.name?.trim() || vessel.mmsi;
   const pushed = Math.abs(y - anchorY) > 1;
+  const lost = !isAton && lostAgeS != null;
+  const status = lost ? `signal lost ${formatAge(lostAgeS)} ago` : undefined;
 
   const leader = pushed ? (
     <View
-      style={[styles.leader, { left: x, top: Math.min(anchorY, y), height: Math.abs(y - anchorY) }]}
+      style={[
+        styles.leader,
+        { left: x, top: Math.min(anchorY, y), height: Math.abs(y - anchorY) },
+        lost && styles.leaderLost,
+      ]}
     />
   ) : null;
 
@@ -114,17 +129,25 @@ function VesselLabelBase({ vessel, x, y, anchorY, rangeKm, onPress }: VesselLabe
   // AIS sog is in knots; only show it while genuinely under way (>0.5 kn), else it's berth noise.
   const moving = vessel.sog != null && vessel.sog > 0.5;
   const sog = moving ? `${vessel.sog!.toFixed(0)} kn` : "";
-  const sub = [range, sog].filter(Boolean).join("  ");
+  const sub = lost ? lostTag(lostAgeS) : [range, sog].filter(Boolean).join("  ");
 
   return (
     <>
       {leader}
       <View
         testID={`ves-label-${vessel.mmsi}`}
-        style={[styles.label, { left: x, top: y, borderColor: color }]}
+        style={[styles.label, { left: x, top: y, borderColor: color }, lost && styles.lost]}
       >
-        <View style={[styles.tick, { backgroundColor: color }]} />
-        <TitleRow mmsi={vessel.mmsi} title={title} onPress={onPress}>
+        {lost ? (
+          <View
+            testID={`ar-ves-lost-${vessel.mmsi}`}
+            accessibilityLabel={`${title}, ${status}`}
+            style={[styles.tick, styles.tickLost, { borderColor: color }]}
+          />
+        ) : (
+          <View style={[styles.tick, { backgroundColor: color }]} />
+        )}
+        <TitleRow mmsi={vessel.mmsi} title={title} status={status} onPress={onPress}>
           <MaterialCommunityIcons
             testID={`ves-icon-${vessel.mmsi}`}
             name={iconName}
@@ -140,7 +163,7 @@ function VesselLabelBase({ vessel, x, y, anchorY, rangeKm, onPress }: VesselLabe
           ) : null}
         </TitleRow>
         {sub ? (
-          <Text style={styles.sub} numberOfLines={1}>
+          <Text style={[styles.sub, lost && styles.subLost]} numberOfLines={1}>
             {sub}
           </Text>
         ) : null}
@@ -179,6 +202,9 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 0,
   },
+  // Signal lost: same treatment as AircraftLabel — dimmed dashed chip, hollow anchor square.
+  lost: { opacity: 0.6, borderStyle: "dashed" },
+  tickLost: { backgroundColor: color.bg, borderWidth: 1.5 },
   // The row is the tap target: let the name ellipsize inside it instead of overflowing the chip.
   titleRow: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", maxWidth: "100%" },
   icon: { marginRight: 3 },
@@ -208,12 +234,14 @@ const styles = StyleSheet.create({
     fontSize: 11,
     ...textHalo,
   },
+  subLost: { color: color.status.warn, fontStyle: "italic" },
   leader: {
     position: "absolute",
     width: 1,
     backgroundColor: alpha(color.entity.sea, 0.7),
     pointerEvents: "none",
   },
+  leaderLost: { backgroundColor: alpha(color.entity.sea, 0.35) },
 });
 
 export const VesselLabel = memo(VesselLabelBase);

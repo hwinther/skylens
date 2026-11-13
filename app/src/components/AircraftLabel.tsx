@@ -2,6 +2,10 @@
  * A single absolutely-positioned aircraft label rendered over the camera preview.
  * Position comes from the projection pipeline (already converted to pixels by the
  * overlay). Tapping it opens the detail sheet.
+ *
+ * A target whose signal is lost (src/ar/signalLost) stays at its last known direction but reads as
+ * stale at a glance: the chip is dimmed with a dashed border, the anchor dot is hollow, the leader is
+ * fainter, and the second line becomes "lost · 45 s".
  */
 
 import { alpha, color } from "@/theme";
@@ -10,6 +14,7 @@ import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { AircraftDto } from "@/api/types";
+import { formatAge, lostTag } from "@/ar/signalLost";
 import { aircraftAccent, iconForCategory } from "./aircraftIcon";
 
 export interface AircraftLabelProps {
@@ -22,16 +27,19 @@ export interface AircraftLabelProps {
   anchorY: number;
   /** Slant range in km, for the second line. */
   rangeKm: number | null;
+  /** Whole seconds since the last position when the signal is lost; null/omitted while it is live. */
+  lostAgeS?: number | null;
   onPress: (hex: string) => void;
 }
 
-function AircraftLabelBase({ aircraft, x, y, anchorY, rangeKm, onPress }: AircraftLabelProps) {
+function AircraftLabelBase({ aircraft, x, y, anchorY, rangeKm, lostAgeS = null, onPress }: AircraftLabelProps) {
   const title = aircraft.flight?.trim() || aircraft.hex.toUpperCase();
   const fl = aircraft.fl != null ? `FL${String(aircraft.fl).padStart(3, "0")}` : "—";
   const range = rangeKm != null ? `${rangeKm.toFixed(1)} km` : "";
   const pushed = Math.abs(y - anchorY) > 1;
   // Military airframes swap the aircraft blue for the military orange and carry a MIL tag.
   const accent = aircraftAccent(aircraft);
+  const lost = lostAgeS != null;
 
   return (
     <>
@@ -43,7 +51,7 @@ function AircraftLabelBase({ aircraft, x, y, anchorY, rangeKm, onPress }: Aircra
               left: x,
               top: Math.min(anchorY, y),
               height: Math.abs(y - anchorY),
-              backgroundColor: alpha(accent, 0.7),
+              backgroundColor: alpha(accent, lost ? 0.35 : 0.7),
             },
           ]}
         />
@@ -51,10 +59,15 @@ function AircraftLabelBase({ aircraft, x, y, anchorY, rangeKm, onPress }: Aircra
       <Pressable
         testID={`ac-label-${aircraft.hex}`}
         onPress={() => onPress(aircraft.hex)}
-        style={[styles.label, { left: x, top: y, borderColor: accent }]}
+        style={[styles.label, { left: x, top: y, borderColor: accent }, lost && styles.lost]}
         hitSlop={8}
+        accessibilityLabel={lost ? `${title}, signal lost ${formatAge(lostAgeS)} ago` : undefined}
       >
-        <View style={[styles.tick, { backgroundColor: alpha(accent, 0.95) }]} />
+        {lost ? (
+          <View testID={`ar-ac-lost-${aircraft.hex}`} style={[styles.tick, styles.tickLost, { borderColor: accent }]} />
+        ) : (
+          <View style={[styles.tick, { backgroundColor: alpha(accent, 0.95) }]} />
+        )}
         <View style={styles.titleRow}>
           <MaterialCommunityIcons
             testID={`ac-icon-${aircraft.hex}`}
@@ -72,10 +85,16 @@ function AircraftLabelBase({ aircraft, x, y, anchorY, rangeKm, onPress }: Aircra
             </Text>
           ) : null}
         </View>
-        <Text style={styles.sub} numberOfLines={1}>
-          {fl}
-          {range ? `  ${range}` : ""}
-        </Text>
+        {lost ? (
+          <Text style={[styles.sub, styles.subLost]} numberOfLines={1}>
+            {lostTag(lostAgeS)}
+          </Text>
+        ) : (
+          <Text style={styles.sub} numberOfLines={1}>
+            {fl}
+            {range ? `  ${range}` : ""}
+          </Text>
+        )}
       </Pressable>
     </>
   );
@@ -102,6 +121,9 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: alpha(color.entity.air, 0.95),
   },
+  // Signal lost: dimmed, dashed chip with a hollow anchor dot (shape, not just colour, carries it).
+  lost: { opacity: 0.6, borderStyle: "dashed" },
+  tickLost: { backgroundColor: color.bg, borderWidth: 1.5 },
   titleRow: { flexDirection: "row", alignItems: "center" },
   // Same badge shape as the vessel class tag (VesselLabel).
   milTag: {
@@ -125,6 +147,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     ...textHalo,
   },
+  subLost: { color: color.status.warn, fontStyle: "italic" },
   leader: {
     position: "absolute",
     width: 1,

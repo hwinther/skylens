@@ -58,6 +58,7 @@ import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
 import { buildSatrec, satelliteStateAt } from "@/ar/satellites";
 import { orbitInfo, type OrbitClass } from "@/ar/orbitClass";
+import { formatAge, LIVE_AGE_S } from "@/ar/signalLost";
 import { useAircraftStore } from "@/state/aircraftStore";
 import { isApiAllowed } from "@/state/authStore";
 import { useVesselStore } from "@/state/vesselStore";
@@ -632,9 +633,9 @@ function statusText(pose: TrackedPose | null, engineReady: boolean, error: strin
   if (!pose) return "Waiting for position…";
   if (pose.stale) return "Signal lost — holding last position";
   if (!engineReady) return "Loading 3D view…";
-  if (pose.ageS < 3) return "Live";
+  if (pose.ageS < LIVE_AGE_S) return "Live";
   // A vessel's data can be minutes old before it counts as lost.
-  return pose.ageS < 90 ? `Data ${Math.round(pose.ageS)} s old` : `Data ${Math.round(pose.ageS / 60)} min old`;
+  return `Data ${formatAge(pose.ageS)} old`;
 }
 
 function HudRows({

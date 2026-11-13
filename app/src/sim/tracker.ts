@@ -10,7 +10,8 @@
  */
 
 import { angleDiff, normalizeAzimuth } from "@/ar/geo";
-import { trackLimits, TrackedPosition, wrapLon, type TrackPoint } from "@/ar/positionTracker";
+import { TrackedPosition, wrapLon, type TrackPoint } from "@/ar/positionTracker";
+import { isSignalLost, sampleAgeS } from "@/ar/signalLost";
 import { clampToTerrain, pitchFor, type SimPose, type SimSample } from "./simPose";
 
 export { BLEND_MS, MOVING_MPS, trackLimits } from "@/ar/positionTracker";
@@ -58,7 +59,7 @@ export class SimTracker {
       this.heading == null ? s.headingDeg : normalizeAzimuth(this.heading + a * angleDiff(s.headingDeg, this.heading));
     this.pitch = this.pitch == null ? targetPitch : this.pitch + a * (targetPitch - this.pitch);
 
-    const ageS = Math.max(0, (nowMs - s.timeMs) / 1000);
+    const ageS = sampleAgeS(s, nowMs);
     return {
       lat,
       lon: wrapLon(lon),
@@ -67,7 +68,7 @@ export class SimTracker {
       pitchDeg: this.pitch,
       speedMps: s.speedMps,
       ageS,
-      stale: ageS > trackLimits(s.kind, s.speedMps).staleAfterS,
+      stale: isSignalLost(s, nowMs),
     };
   }
 }

@@ -28,9 +28,11 @@ export interface DetailSheetProps {
   onClose: () => void;
   /** Side-panel layout only: offset from the top of the screen (see Sheet). */
   panelTop?: number;
+  /** The AR view's tracker says this aircraft's signal is lost (src/ar/signalLost): show a status line. */
+  signalLost?: boolean;
 }
 
-export function DetailSheet({ hex, client, onClose, panelTop }: DetailSheetProps) {
+export function DetailSheet({ hex, client, onClose, panelTop, signalLost = false }: DetailSheetProps) {
   const [detail, setDetail] = useState<AircraftDetail | null>(null);
   const [route, setRoute] = useState<RouteResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -114,6 +116,7 @@ export function DetailSheet({ hex, client, onClose, panelTop }: DetailSheetProps
       summary={
         <SheetSummary
           parts={[
+            signalLost && "Signal lost",
             detail?.metadata?.typeCode,
             state?.alt != null ? `${state.alt.toLocaleString()} ft` : null,
             state?.gs != null ? `${Math.round(state.gs)} kt` : null,
@@ -144,6 +147,11 @@ export function DetailSheet({ hex, client, onClose, panelTop }: DetailSheetProps
         ) : null
       }
     >
+        {signalLost && (
+          <Text testID="detail-signal-lost" style={styles.lost}>
+            Signal lost — showing the last known position
+          </Text>
+        )}
         {error && <Text style={styles.error}>{error}</Text>}
         {ready && (
           <>
@@ -217,6 +225,7 @@ const styles = StyleSheet.create({
   rowLabel: { color: color.textLabel, fontSize: 14 },
   rowValue: { color: color.text, fontSize: 14, fontWeight: "500" },
   error: { color: color.status.error, marginVertical: 8 },
+  lost: { color: color.status.warn, fontSize: 13, fontWeight: "600", marginBottom: 6 },
   hint: { color: color.textMuted, fontSize: 12, marginTop: 12 },
   routeBtn: {
     marginTop: 16,
