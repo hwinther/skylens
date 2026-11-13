@@ -82,6 +82,26 @@ describe("ArScreen", () => {
     expect(within(screen.getByTestId("detail-card")).getByText("NOR1")).toBeOnTheScreen();
   });
 
+  it("opens the card on a tap but not when the press turns into a drag-to-look", async () => {
+    liveWithPosition();
+    seedAircraft([NORTH]);
+    await renderAr();
+    await frames();
+    const label = screen.getByTestId("ac-label-north1");
+    const at = (pageX: number, pageY: number) => ({ nativeEvent: { pageX, pageY } });
+
+    // Pressed on the label, dragged 60 px to turn the view, released (still over the label: it moves
+    // with the view). That was a drag, not a tap.
+    await fireEvent(label, "pressIn", at(100, 200));
+    await fireEvent(label, "press", at(160, 200));
+    expect(screen.queryByTestId("detail-card")).not.toBeOnTheScreen();
+
+    // A tap that wobbles a few px is still a tap.
+    await fireEvent(label, "pressIn", at(100, 200));
+    await fireEvent(label, "press", at(104, 203));
+    expect(within(screen.getByTestId("detail-card")).getByText("NOR1")).toBeOnTheScreen();
+  });
+
   it("drops a label when its aircraft leaves the feed", async () => {
     liveWithPosition();
     seedAircraft([NORTH]);

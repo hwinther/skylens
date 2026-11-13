@@ -11,65 +11,8 @@
  *   named landmark turns up while turning; the match itself is unit-tested in app/__tests__.
  */
 
+import { dragView, freePoint, openArAtHorizon } from './arView'
 import { expect, type Page, test } from './fixtures'
-
-/**
- * A point on the row at height `y` that belongs to the bare view: identify's long-press catcher, not a
- * label. Airport labels sit right on the horizon and replayed aircraft drift across the sky; they are
- * tap targets above the catcher, so a hold on one never reaches identify, and a drag that starts on one
- * can end in a click that opens its detail card (which hides the identify card). Where they are depends
- * on the replay's timing, so search outward from the middle for a free spot, with a margin around it.
- *
- * The overlay redraws at ~20 fps, so right after a drag the labels can still be where the old pose put
- * them. Only trust a pick once the overlay has caught up: the compass marks and airport labels are fixed
- * on the sky, so their positions stop changing exactly when the drawn pose matches the dragged one.
- */
-async function freePoint(page: Page, y: number): Promise<{ x: number; y: number }> {
-  let previousLayout: string | null = null
-  let x: number | null = null
-  await expect(async () => {
-    const sample = await page.evaluate(
-      async ({ y, margin }) => {
-        // Sample after the overlay has had at least two more draws (it runs at ~20 fps).
-        const t0 = performance.now()
-        await new Promise<void>((done) => {
-          const frame = () => (performance.now() - t0 >= 120 ? done() : requestAnimationFrame(frame))
-          requestAnimationFrame(frame)
-        })
-        const layout = [...document.querySelectorAll('[data-testid^="compass-"], [data-testid^="ar-airport-"]')]
-          .map((el) => {
-            const r = el.getBoundingClientRect()
-            return `${el.getAttribute('data-testid')}@${Math.round(r.left)},${Math.round(r.top)}`
-          })
-          .sort()
-          .join(';')
-        const owner = (px: number, py: number) =>
-          document.elementFromPoint(px, py)?.closest('[data-testid]')?.getAttribute('data-testid')
-        const around: [number, number][] = [
-          [0, 0],
-          [-margin, 0],
-          [margin, 0],
-          [0, -margin],
-          [0, margin],
-        ]
-        const free = (px: number) => around.every(([dx, dy]) => owner(px + dx, y + dy) === 'ar-identify-touch')
-        const mid = window.innerWidth / 2
-        for (let d = 0; d < mid - margin; d += 8) {
-          if (free(mid + d)) return { layout, x: mid + d }
-          if (free(mid - d)) return { layout, x: mid - d }
-        }
-        return { layout, x: null }
-      },
-      { y, margin: 24 },
-    )
-    const settled = sample.layout === previousLayout
-    previousLayout = sample.layout
-    x = sample.x
-    expect(settled, 'the overlay should have caught up with the pose').toBe(true)
-    expect(x, `some stretch of the row at y=${y} should be free of labels`).not.toBeNull()
-  }).toPass({ timeout: 10_000, intervals: [0] })
-  return { x: x!, y }
-}
 
 /**
  * Hold the primary button still until the long-press result shows, then release. Any card already open
@@ -120,23 +63,10 @@ test('viewfinder toggle fetches the landmarks once and shows the reticle', async
 })
 
 test('press-and-hold on the horizon names a landmark with a laser beam, and closes', async ({ page }) => {
-  await page.goto('/')
-  await expect(page.getByTestId('ar-identify-toggle')).toBeVisible({ timeout: 30_000 })
-
+  await openArAtHorizon(page)
   const box = (await page.locator('body').boundingBox())!
   const cy = box.y + box.height / 2
-  // Drag-to-look from a free point on row `y` (see freePoint) by (dx, dy).
-  const drag = async (y: number, dx: number, dy: number) => {
-    const from = await freePoint(page, y)
-    await page.mouse.move(from.x, from.y)
-    await page.mouse.down()
-    await page.mouse.move(Math.max(1, from.x + dx), from.y + dy, { steps: 12 })
-    await page.mouse.up()
-  }
-  // Bring the horizon toward the middle of the view (the start pose looks 20° up).
-  await drag(cy - 60, 0, 120)
   const horizon = page.getByTestId('ar-horizon')
-  await expect(horizon).toBeVisible()
 
   const name = page.getByTestId('ar-identify-name')
   let found = ''
@@ -155,7 +85,7 @@ test('press-and-hold on the horizon names a landmark with a laser beam, and clos
     if (!/^Nothing named/.test(text)) found = text
     else {
       await page.getByTestId('ar-identify-close').click()
-      await drag(cy, -160, 0)
+      await dragView(page, cy, -160, 0)
     }
   }
   /* eslint-enable playwright/no-conditional-in-test */

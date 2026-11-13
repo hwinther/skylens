@@ -18,11 +18,12 @@
 import { alpha, color } from "@/theme";
 import { textHalo } from "./textHalo";
 import { memo, type ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { VesselDto } from "@/api/types";
 import { formatAge, lostTag } from "@/ar/signalLost";
 import { iconForVessel } from "./vesselIcon";
+import { LabelPressable } from "./LabelPressable";
 
 export interface VesselLabelProps {
   vessel: VesselDto;
@@ -62,7 +63,7 @@ function TitleRow({
 }) {
   if (!onPress) return <View style={styles.titleRow}>{children}</View>;
   return (
-    <Pressable
+    <LabelPressable
       testID={`ves-name-${mmsi}`}
       accessibilityRole="button"
       accessibilityLabel={`Open details for ${title}${status ? `, ${status}` : ""}`}
@@ -71,7 +72,7 @@ function TitleRow({
       style={styles.titleRow}
     >
       {children}
-    </Pressable>
+    </LabelPressable>
   );
 }
 

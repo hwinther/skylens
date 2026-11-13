@@ -11,11 +11,12 @@
 import { alpha, color } from "@/theme";
 import { textHalo } from "./textHalo";
 import { memo } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { AircraftDto } from "@/api/types";
 import { formatAge, lostTag } from "@/ar/signalLost";
 import { aircraftAccent, iconForCategory } from "./aircraftIcon";
+import { LabelPressable } from "./LabelPressable";
 
 export interface AircraftLabelProps {
   aircraft: AircraftDto;
@@ -56,7 +57,7 @@ function AircraftLabelBase({ aircraft, x, y, anchorY, rangeKm, lostAgeS = null, 
           ]}
         />
       )}
-      <Pressable
+      <LabelPressable
         testID={`ac-label-${aircraft.hex}`}
         onPress={() => onPress(aircraft.hex)}
         style={[styles.label, { left: x, top: y, borderColor: accent }, lost && styles.lost]}
@@ -95,7 +96,7 @@ function AircraftLabelBase({ aircraft, x, y, anchorY, rangeKm, lostAgeS = null, 
             {range ? `  ${range}` : ""}
           </Text>
         )}
-      </Pressable>
+      </LabelPressable>
     </>
   );
 }

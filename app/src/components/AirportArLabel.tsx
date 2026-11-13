@@ -11,10 +11,11 @@
 
 import { alpha, color } from "@/theme";
 import { memo } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { AirportDto } from "@/api/types";
 import { AIRPORT_COLOR, AIRPORT_GLYPH, airportShortLabel } from "./webmap/airportStyle";
+import { LabelPressable } from "./LabelPressable";
 
 export interface AirportArLabelProps {
   airport: AirportDto;
@@ -40,7 +41,7 @@ function AirportArLabelBase({ airport, x, y, anchorY, onPress }: AirportArLabelP
           ]}
         />
       )}
-      <Pressable
+      <LabelPressable
         testID={`ar-airport-${airport.ident}`}
         onPress={() => onPress(airport.ident)}
         style={[styles.label, { left: x, top: y }]}
@@ -57,7 +58,7 @@ function AirportArLabelBase({ airport, x, y, anchorY, onPress }: AirportArLabelP
         <Text style={styles.title} numberOfLines={1}>
           {airportShortLabel(airport)}
         </Text>
-      </Pressable>
+      </LabelPressable>
     </>
   );
 }

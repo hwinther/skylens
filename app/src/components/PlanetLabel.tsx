@@ -10,9 +10,10 @@
 
 import { alpha, color } from "@/theme";
 import { memo } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { planetDotSize, type PlanetView } from "@/ar";
+import { LabelPressable } from "./LabelPressable";
 
 /** MaterialCommunityIcons glyph for each body: sun, moon, or a filled dot for the planets. */
 function glyphForBody(body: string): keyof typeof MaterialCommunityIcons.glyphMap {
@@ -48,7 +49,7 @@ function PlanetLabelBase({ planet, x, y, anchorY, onPress }: PlanetLabelProps) {
           ]}
         />
       )}
-      <Pressable
+      <LabelPressable
         testID={`planet-label-${planet.body}`}
         onPress={() => onPress(planet.body)}
         style={[styles.label, { left: x, top: y }]}
@@ -72,7 +73,7 @@ function PlanetLabelBase({ planet, x, y, anchorY, onPress }: PlanetLabelProps) {
             {mag}
           </Text>
         ) : null}
-      </Pressable>
+      </LabelPressable>
     </>
   );
 }
