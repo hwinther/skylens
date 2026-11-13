@@ -37,7 +37,8 @@ export function ListSectionHeader({
       onPress={onToggle}
       role="button"
       aria-expanded={expanded}
-      aria-label={`${title}, ${count}, ${expanded ? "collapse" : "expand"}`}
+      // No aria-label: the name is the visible heading ("Traffic (7)", plus the breakdown), as axe's
+      // label-content-name-mismatch wants; aria-expanded already tells whether it collapses or expands.
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}
     >
       <View style={[styles.dot, { backgroundColor: dotColor }]} />
