@@ -5,6 +5,8 @@
  * app (listFilter.test.ts, ListFilter.native.test.tsx); this proves the web wiring end to end.
  */
 
+import { expectAccessible } from '@wshno/playwright-config'
+
 import { expect, test } from './fixtures'
 
 test('the filter chips and section headings persist across a reload', async ({ page }) => {
@@ -43,4 +45,11 @@ test('the filter chips and section headings persist across a reload', async ({ p
   await page.getByTestId('list-section-traffic').click()
   await expect(aircraftRows.first()).toBeVisible({ timeout: 30_000 })
   await expect(shipRows).toHaveCount(0)
+})
+
+// axe (WCAG 2.x A/AA) on the list with the replayed traffic in it: fails on serious or critical violations.
+test('the list is accessible', async ({ page }) => {
+  await page.goto('/list')
+  await expect(page.locator('[data-testid^="list-ac-"]').first()).toBeVisible({ timeout: 30_000 })
+  await expectAccessible(page)
 })

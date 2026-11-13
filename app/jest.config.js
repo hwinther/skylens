@@ -51,11 +51,14 @@ module.exports = {
       transformIgnorePatterns,
     },
   ],
+  // Unit tests own the logic (src/: state, ar, sim, api, components); the screens (expo-router's
+  // app/ and src/screens/) are the e2e suite's, which measures them. The mocks don't count either side
+  // (e2e/playwright.ci.config.ts leaves them out too).
   collectCoverageFrom: [
     "src/**/*.{ts,tsx}",
-    "app/**/*.tsx",
     "!src/**/*.d.ts",
     "!src/mock/**",
+    "!src/screens/**",
   ],
   // Jest's istanbul cobertura reporter writes coverage/cobertura-coverage.xml so
   // the reusable pr-build.yml node job (irongut/CodeCoverageSummary) always finds it.

@@ -47,8 +47,9 @@ export default definePlaywrightConfig({
         entryFilter: (entry) => entry.url.startsWith(`${ORIGIN}/_expo/static/js/`),
         // Metro's project-root source paths (/src/..., /app/...) become app/src/... and app/app/...,
         // the same paths the unit report gets in the coverage summary; node_modules (Leaflet, RN Web)
-        // drops out.
-        layout: { root: 'app', sourceDirs: ['src', 'app'] },
+        // drops out. The mocks don't count, as in the unit coverage (app/jest.config.js); the screens
+        // (app/app, src/screens) do here, since they are this suite's to cover.
+        layout: { root: 'app', sourceDirs: ['src', 'app'], exclude: /^app\/src\/mock\// },
       },
     }),
   ],
