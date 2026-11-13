@@ -6,7 +6,7 @@
 # PLAYWRIGHT_CONFIG_VERSION must equal @wshno/playwright-config in package-lock.json, so the image's
 # browser matches the suite's Playwright; pr-e2e.yml reads it from the lock file.
 
-ARG PLAYWRIGHT_CONFIG_VERSION=0.4.0
+ARG PLAYWRIGHT_CONFIG_VERSION=0.5.0
 FROM ghcr.io/wshno/playwright-config:${PLAYWRIGHT_CONFIG_VERSION}
 
 WORKDIR /e2e

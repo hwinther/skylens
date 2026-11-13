@@ -182,72 +182,27 @@ jobs:
          "E2E_IMAGE":"${{ needs.e2e-image.outputs.image }}"}
 
   # Unit + e2e line coverage, kept apart from ci.yml's unit-test comment: its own job summary and
-  # sticky PR comment. Re-runs jest with coverage (ci.yml's run lives in another workflow) and merges
-  # its lcov with the e2e-coverage artifact (e2e/scripts/coverage-summary.mjs, approximate: istanbul
-  # vs V8 line accounting). Informational only; nothing gates on it.
+  # sticky PR comment. On builds of main the unit side is the unit job's quality-node artifact; pull
+  # requests (whose unit tests run in ci.yml) re-run jest with coverage. Merged with the e2e-coverage
+  # artifact by @wshno/playwright-config's wshno-coverage-summary (approximate: istanbul vs V8 line
+  # accounting). Informational only; nothing gates on it.
   coverage-summary:
-    needs: [e2e]
+    needs: [unit, e2e]
     if: ${{ !cancelled() && needs.e2e.result != 'skipped' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
     permissions:
       contents: read
       pull-requests: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up Node
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "26.x"
-          cache: npm
-          cache-dependency-path: app/package-lock.json
-
-      - name: Unit coverage (jest)
-        working-directory: app
-        run: |
-          set -euo pipefail
-          npm ci --no-audit --no-fund
-          # A failing unit test is ci.yml's to report; the summary still uses whatever lcov jest wrote.
-          npm run coverage:ci || echo "::warning::jest exited non-zero; see ci.yml for the unit results"
-
-      - name: Download e2e coverage
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        continue-on-error: true
-        with:
-          name: e2e-coverage
-          path: e2e/monocart-coverage
-
-      - name: Merge and summarise
-        id: summary
-        env:
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          out="${RUNNER_TEMP}/coverage-summary.md"
-          node e2e/scripts/coverage-summary.mjs --unit app/coverage/lcov.info --e2e e2e/monocart-coverage/lcov.info > "$out"
-          {
-            echo
-            echo "E2E coverage report (V8 html, lcov, cobertura): [the \`e2e-coverage\` artifact](${RUN_URL}#artifacts)."
-          } >> "$out"
-          cat "$out" >> "$GITHUB_STEP_SUMMARY"
-          {
-            echo "markdown<<__COVERAGE_SUMMARY__"
-            cat "$out"
-            echo "__COVERAGE_SUMMARY__"
-          } >> "$GITHUB_OUTPUT"
-
-      # Same-repo PRs only: fork and Dependabot PRs get a read-only token (the job summary still has it).
-      - name: Post or update the coverage sticky comment
-        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' }}
-        uses: hwinther/reusable-workflows/.github/actions/sticky-pr-comment@5ba6e5a72dec8dcd121cc864279889bb2fa6ed73 # v2.31.0
-        with:
-          github_token: ${{ github.token }}
-          comment_identifier: skylens-coverage-combined
-          comment_content: ${{ steps.summary.outputs.markdown }}
+    uses: hwinther/reusable-workflows/.github/workflows/e2e-coverage-summary.yml@aadc90a4c71886ade7ae0418d9fdca5a94c4197e # v2.34.0
+    with:
+      source_root: app
+      source_dirs: src,app
+      # jest-config parity: collectCoverageFrom in app/jest.config.js leaves out the demo feed.
+      exclude: ^app/src/mock/
+      unit_label: Unit (jest)
+      unit_coverage_command: npm run coverage:ci
+      unit_working_directory: app
+      node_version: "26.x"
+      comment_identifier: skylens-coverage-combined
 
   push:
     needs: [build, scan, e2e]

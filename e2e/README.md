@@ -47,9 +47,10 @@ API_IMAGE=... docker compose -f docker-compose.e2e.yml --profile e2e run --rm pl
 
 ## Coverage (container mode)
 
-`playwright.ci.config.ts` adds `monocart-reporter` after the shared CI reporters, and
-`tests/fixtures.ts` records V8 JS coverage of each test's `page` (`resetOnNavigation: false`) whenever
-that reporter is configured, so plain `npm test` (source mode) collects nothing. Extra pages such as
+`playwright.ci.config.ts` adds `monocartReporter()` from `@wshno/playwright-config` after the shared
+CI reporters, and `tests/fixtures.ts` merges in its `coverageTest`, which records V8 JS coverage of
+each test's `page` (`resetOnNavigation: false`) whenever that reporter is configured, so plain
+`npm test` (source mode) collects nothing. Extra pages such as
 the OAuth popup are not recorded. The image's web export ships external source maps
 (`expo export --source-maps`), which the reporter fetches from the app to map the bundle back to
 `app/src/**` and `app/app/**`; node_modules (Leaflet, RN Web) and the Cesium runtime under `/cesium/`
@@ -58,12 +59,12 @@ are filtered out. Output: `monocart-coverage/` (`index.html` V8 report, `lcov.in
 `playwright` service mounts `monocart-coverage/` back to the host.
 
 In CI the reusable workflow uploads it as the `e2e-coverage` artifact (`coverage_paths_json`), and the
-`coverage-summary` job in `pr-e2e.yml` merges it with jest's `app/coverage/lcov.info`:
+`coverage-summary` job in `pr-e2e.yml` (reusable-workflows' `e2e-coverage-summary.yml`) merges it
+with jest's coverage. Locally, with the package's `wshno-coverage-summary`:
 
 ```bash
 cd app && npm run coverage:ci && cd ../e2e
 npm run coverage:summary          # Markdown: Unit (jest), E2E (Playwright), Combined + top e2e files
-npm run test:scripts              # node --test for the merge logic
 ```
 
 The merge is per file and line (covered if either side covers the line) and approximate: istanbul
