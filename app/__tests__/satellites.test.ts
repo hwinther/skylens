@@ -28,6 +28,7 @@ import {
   nextPass,
   normalizeLon,
   orbitalPeriodMinutes,
+  overheadSatellites,
   propagateAll,
   RATE_SAMPLE_S,
   satGroupsFromSettings,
@@ -166,6 +167,20 @@ describe("propagateAll — ISS reference pass over Oslo (self-derived pins)", ()
     // Self-derived pin: the ISS is over central Europe (~51.77°N, ~7.69°E) at this instant.
     expect(v.subLat).toBeCloseTo(51.7665, 0); // ±0.5°
     expect(v.subLon).toBeCloseTo(7.6907, 0);
+  });
+
+  it("carries the height (altKm) of the same geodetic reduction — ISS ~420 km", () => {
+    const v = propagateAll(buildSatrecs([issDto()]), observer, date)[0];
+    expect(v.altKm).toBeDefined();
+    expect(v.altKm!).toBeGreaterThan(380);
+    expect(v.altKm!).toBeLessThan(460);
+  });
+
+  it("orders the Overhead set highest first without touching the input", () => {
+    const mk = (id: number, el: number) => ({ ...propagateAll(buildSatrecs([issDto()]), observer, date)[0], noradId: id, elevationDeg: el });
+    const input = [mk(1, 10), mk(2, 70), mk(3, 35)];
+    expect(overheadSatellites(input).map((v) => v.noradId)).toEqual([2, 3, 1]);
+    expect(input.map((v) => v.noradId)).toEqual([1, 2, 3]);
   });
 
   it("carries az/el angular rates that self-consistently finite-difference two propagations", () => {

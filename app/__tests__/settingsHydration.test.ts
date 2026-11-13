@@ -127,3 +127,14 @@ test("the cockpit layer filter survives a restart; unknown or missing layers are
   installLocalStorage({ [KEY]: JSON.stringify({ state: { onboarded: true }, version: 0 }) });
   expect((await loadStore()).getState().simHiddenLayers).toEqual([]);
 });
+
+test("the map satellites layer defaults on, and a saved choice (only a boolean) is kept", async () => {
+  installLocalStorage({ [KEY]: JSON.stringify({ state: { onboarded: true }, version: 0 }) });
+  expect((await loadStore()).getState().showMapSatellites).toBe(true);
+
+  installLocalStorage({ [KEY]: JSON.stringify({ state: { showMapSatellites: false }, version: 0 }) });
+  expect((await loadStore()).getState().showMapSatellites).toBe(false);
+
+  installLocalStorage({ [KEY]: JSON.stringify({ state: { showMapSatellites: "nope" }, version: 0 }) });
+  expect((await loadStore()).getState().showMapSatellites).toBe(true);
+});

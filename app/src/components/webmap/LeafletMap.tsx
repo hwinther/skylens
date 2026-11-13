@@ -6,7 +6,7 @@
 
 import { color } from "@/theme";
 import "leaflet/dist/leaflet.css";
-import { useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import L from "leaflet";
 import {
   CircleMarker,
@@ -48,6 +48,8 @@ import {
   zoneStyle,
 } from "./fishingStyle";
 import type { Observer } from "./relative";
+import { SAT_LABEL_MIN_ZOOM, type MapSatellite } from "./satelliteLayer";
+import type { Footprint } from "@/ar";
 
 export interface LeafletMapProps {
   aircraft: AircraftDto[];
@@ -77,6 +79,12 @@ export interface LeafletMapProps {
   trackKey?: number | null;
   /** Clear the current track (clear chip + tapping the sub-point marker). */
   onClearTrack?: () => void;
+  /** Overhead satellites at their sub-satellite points (the satellites layer); empty = layer off. */
+  satellites?: MapSatellite[];
+  /** Tap handler for a satellite marker (opens the satellite detail card). */
+  onSelectSatellite?: (noradId: number) => void;
+  /** Coverage footprint of the one selected satellite, or null. */
+  satelliteFootprint?: Footprint | null;
   /** Draw a short predicted-track (course/heading) leader ahead of moving aircraft & ships. */
   showCourseVectors?: boolean;
   /** "Show on map" target to centre on (and ring), or null. */
@@ -206,6 +214,121 @@ const satelliteIcon: L.DivIcon = (() => {
     iconAnchor: [11, 11],
   });
 })();
+
+// Overhead-satellite markers: the same violet glyph plus a short name label. The label is hidden below
+// SAT_LABEL_MIN_ZOOM by one stylesheet rule keyed on a map-container attribute (SatLabelZoom), so a
+// zoom change never rebuilds the icons. Icons are cached per satellite + label: a 1 Hz position update
+// only moves the marker (setLatLng), it never re-creates its DOM.
+const SAT_LABEL_CLASS = "skylens-sat-label";
+const SAT_LABELS_ATTR = "data-sat-labels";
+const satIconCache = new Map<string, L.DivIcon>();
+function satMarkerIcon(noradId: number, labelText: string): L.DivIcon {
+  const key = `${noradId}|${labelText}`;
+  const cached = satIconCache.get(key);
+  if (cached) return cached;
+  const code = glyphMap["satellite-variant"];
+  const glyph = code != null ? String.fromCodePoint(code) : "";
+  const label = labelText.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+  const icon = L.divIcon({
+    className: "",
+    html:
+      `<span data-testid="map-sat-${noradId}" aria-hidden="true" style="font-family:'${iconFont}';font-size:20px;line-height:20px;color:${color.entity.orbit};text-shadow:0 0 3px #000">${glyph}</span>` +
+      `<span class="${SAT_LABEL_CLASS}" style="position:absolute;left:22px;top:2px;white-space:nowrap;font:600 11px/16px system-ui,sans-serif;color:${color.entity.orbit};text-shadow:0 0 3px #000,0 0 2px #000">${label}</span>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+  });
+  satIconCache.set(key, icon);
+  return icon;
+}
+
+/** Inject the one rule that hides satellite labels while the map is zoomed out (once per page). */
+function ensureSatLabelStyle() {
+  if (typeof document === "undefined" || document.getElementById("skylens-sat-label-style")) return;
+  const style = document.createElement("style");
+  style.id = "skylens-sat-label-style";
+  style.textContent = `.leaflet-container[${SAT_LABELS_ATTR}="off"] .${SAT_LABEL_CLASS}{display:none}`;
+  document.head.appendChild(style);
+}
+
+/** Flags the map container with whether satellite labels show at the current zoom. */
+function SatLabelZoom() {
+  const map = useMap();
+  useEffect(() => {
+    ensureSatLabelStyle();
+    const el = map.getContainer();
+    const update = () => el.setAttribute(SAT_LABELS_ATTR, map.getZoom() >= SAT_LABEL_MIN_ZOOM ? "on" : "off");
+    update();
+    map.on("zoomend", update);
+    return () => {
+      map.off("zoomend", update);
+    };
+  }, [map]);
+  return null;
+}
+
+/**
+ * One overhead satellite. Memoised on primitive props so a map re-render (aircraft at 1 Hz) skips it
+ * unless it moved, and its icon/handlers keep their identity (a move is a setLatLng, no new DOM).
+ */
+const SatelliteMarker = memo(function SatelliteMarker({
+  noradId,
+  name,
+  label,
+  lat,
+  lon,
+  onSelect,
+}: {
+  noradId: number;
+  name: string;
+  label: string;
+  lat: number;
+  lon: number;
+  onSelect?: (noradId: number) => void;
+}) {
+  const markerRef = useRef<L.Marker | null>(null);
+  const handlers = useMemo(() => ({ click: () => onSelect?.(noradId) }), [onSelect, noradId]);
+  // Leaflet makes an interactive marker a focusable role=button; give it a spoken name.
+  useEffect(() => {
+    markerRef.current?.getElement()?.setAttribute("aria-label", `Satellite ${name}`);
+  }, [name]);
+  return (
+    <Marker
+      ref={markerRef}
+      position={[lat, lon]}
+      icon={satMarkerIcon(noradId, label)}
+      title={name}
+      eventHandlers={handlers}
+    />
+  );
+});
+
+/**
+ * Coverage footprint of the selected satellite: a very light fill (no stroke, so the antimeridian /
+ * pole-cap clip edges stay invisible) under a thin outline of the circle. Not interactive, so it never
+ * swallows a tap meant for the map or a marker.
+ */
+function SatelliteFootprint({ fp }: { fp: Footprint }) {
+  return (
+    <>
+      {fp.polygons.map((ring, i) => (
+        <Polygon
+          key={`sat-fp-fill-${i}`}
+          positions={ring}
+          interactive={false}
+          pathOptions={{ stroke: false, fillColor: color.entity.orbit, fillOpacity: 0.08 }}
+        />
+      ))}
+      {fp.outline.map((line, i) => (
+        <Polyline
+          key={`sat-fp-line-${i}`}
+          positions={line}
+          interactive={false}
+          pathOptions={{ color: color.entity.orbit, weight: 1, opacity: 0.7 }}
+        />
+      ))}
+    </>
+  );
+}
 
 // Lost/ghost-gear marker: the same MCI-font divIcon path as the traffic markers, in hazard orange.
 const lostGearIcon: L.DivIcon = (() => {
@@ -428,6 +551,9 @@ export function LeafletMap({
   trackName = null,
   trackKey = null,
   onClearTrack,
+  satellites = [],
+  onSelectSatellite,
+  satelliteFootprint = null,
   showCourseVectors = false,
   focus = null,
   focusSeq = 0,
@@ -464,6 +590,8 @@ export function LeafletMap({
       {/* Airport reference layer under the traffic markers (runways + steel-blue class-sized markers). */}
       <Airports airports={airports} onSelectAirport={onSelectAirport} />
       <Ports ports={ports} />
+      {/* Selected satellite's coverage footprint: faint, under every marker. */}
+      {satelliteFootprint ? <SatelliteFootprint fp={satelliteFootprint} /> : null}
       <Marker position={[observer.lat, observer.lon]} icon={observerIcon} />
       {/* Focus ring under the traffic markers, so the target's own marker stays tappable. */}
       {focus?.position ? (
@@ -527,6 +655,18 @@ export function LeafletMap({
           pathOptions={{ color: color.entity.orbit, weight: 2.5, opacity: 0.9 }}
         />
       ))}
+      {/* Overhead satellites at their sub-satellite points (tap → satellite card). */}
+      {satellites.map((sat) => (
+        <SatelliteMarker
+          key={`sat-${sat.noradId}`}
+          noradId={sat.noradId}
+          name={sat.name}
+          label={sat.label}
+          lat={sat.lat}
+          lon={sat.lon}
+          onSelect={onSelectSatellite}
+        />
+      ))}
       {trackSubPoint ? (
         <Marker
           position={trackSubPoint}
@@ -537,6 +677,7 @@ export function LeafletMap({
           <Popup>{trackName ?? "Satellite"}</Popup>
         </Marker>
       ) : null}
+      <SatLabelZoom />
       <FitBounds points={points} />
       <FitTrack points={trackPoints} trackKey={trackKey} />
       <FocusController target={focus} seq={focusSeq} following={following} onUserPan={onUserPan} />

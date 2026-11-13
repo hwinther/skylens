@@ -48,6 +48,8 @@ interface SettingsState {
   showPorts: boolean;
   /** Draw the orbital (satellite) pass in the AR overlay. */
   showSatellites: boolean;
+  /** Draw the overhead satellites (sub-satellite points) on the geographic Map. Needs showSatellites. */
+  showMapSatellites: boolean;
   /** Include the crewed "stations" + "amateur" satellite groups. */
   satAmateurStations: boolean;
   /** Include the "weather" satellite group. */
@@ -93,6 +95,7 @@ interface SettingsState {
   setShowSmallAirfields: (on: boolean) => void;
   setShowPorts: (on: boolean) => void;
   setShowSatellites: (on: boolean) => void;
+  setShowMapSatellites: (on: boolean) => void;
   setSatAmateurStations: (on: boolean) => void;
   setSatWeather: (on: boolean) => void;
   setSatGnss: (on: boolean) => void;
@@ -137,6 +140,8 @@ export const useSettingsStore = create<SettingsState>()(
       // Ports are baked reference data like airports, so on by default.
       showPorts: true,
       showSatellites: true,
+      // The Map's satellites layer: the List's Overhead set at their sub-satellite points.
+      showMapSatellites: true,
       satAmateurStations: true,
       satWeather: true,
       satGnss: true,
@@ -172,6 +177,7 @@ export const useSettingsStore = create<SettingsState>()(
       setShowSmallAirfields: (showSmallAirfields) => set({ showSmallAirfields }),
       setShowPorts: (showPorts) => set({ showPorts }),
       setShowSatellites: (showSatellites) => set({ showSatellites }),
+      setShowMapSatellites: (showMapSatellites) => set({ showMapSatellites }),
       setSatAmateurStations: (satAmateurStations) => set({ satAmateurStations }),
       setSatWeather: (satWeather) => set({ satWeather }),
       setSatGnss: (satGnss) => set({ satGnss }),
@@ -204,6 +210,9 @@ export const useSettingsStore = create<SettingsState>()(
           listHiddenKinds: sanitizeIds(p.listHiddenKinds, LIST_KINDS),
           listCollapsedSections: sanitizeIds(p.listCollapsedSections, LIST_SECTIONS),
           simHiddenLayers: sanitizeIds(p.simHiddenLayers, SIM_LAYERS),
+          // Added later: older settings lack it (→ the default), and a non-boolean is ignored.
+          showMapSatellites:
+            typeof p.showMapSatellites === "boolean" ? p.showMapSatellites : current.showMapSatellites,
         };
       },
       // Flip the hydration flag once persisted settings load, so the onboarding gate can wait for it

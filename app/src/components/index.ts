@@ -24,6 +24,7 @@ export * from "./useDemoPose";
 export * from "./useLiveFeed";
 export * from "./useObserverLocation";
 export * from "./useSatellites";
+export * from "./useOverheadSatellites";
 export * from "./useSatelliteGroundTrack";
 export * from "./usePlanets";
 export * from "./useRadioSky";

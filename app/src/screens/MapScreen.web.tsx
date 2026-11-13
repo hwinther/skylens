@@ -16,12 +16,20 @@ import {
   DetailSheet,
   AircraftRadar,
   AirportDetailSheet,
+  SatelliteDetailSheet,
   VesselDetailSheet,
   useAirports,
+  useOverheadSatellites,
   usePorts,
   useFishingLayers,
   useSatelliteGroundTrack,
 } from "@/components";
+import {
+  footprintSatellite,
+  mapSatellites,
+  satelliteFootprint,
+  showTrackedMarker,
+} from "@/components/webmap/satelliteLayer";
 import { MapViewToggle } from "@/components/webmap/MapViewToggle";
 import { useMapViewMode } from "@/components/webmap/useMapViewMode";
 import { LeafletMap } from "@/components/webmap/LeafletMap";
@@ -59,11 +67,15 @@ export default function MapScreen() {
   const selectedHex = detail.idOf("aircraft");
   const selectedMmsi = detail.idOf("vessel");
   const selectedAirportIdent = detail.idOf("airport");
+  const selectedSat = detail.idOf("satellite");
+  const selectedNoradId = selectedSat != null ? Number(selectedSat) : null;
   const {
     aircraft: setSelectedHex,
     vessel: setSelectedMmsi,
     airport: setSelectedAirportIdent,
+    satellite: setSelectedSat,
   } = detail.set;
+  const selectSatellite = useCallback((id: number) => setSelectedSat(String(id)), [setSelectedSat]);
   // While a side-panel card is open, right-edge controls move left by its width.
   const cardRightInset = useSheetRightInset(detail.open);
   // "Show on map" from a detail sheet: useMapViewMode snaps to the Map, then LeafletMap centres on and
@@ -105,6 +117,21 @@ export default function MapScreen() {
   );
   // Ports: static reference data like the airports, map view only (the radar stays traffic-focused).
   const { ports } = usePorts({ client, observer, enabled: showPorts });
+  // Satellites layer: exactly the List's Overhead set (same hook), each at its sub-satellite point,
+  // re-placed at the hook's 1 Hz tick. One footprint, for the open card's satellite (else the tracked one).
+  const showMapSatellites = useSettingsStore((s) => s.showMapSatellites);
+  const sats = useOverheadSatellites({ client, observer, enabled: showMapSatellites });
+  const satMarkers = useMemo(
+    () => (view === "map" ? mapSatellites(sats.overhead, showMapSatellites) : []),
+    [view, sats.overhead, showMapSatellites],
+  );
+  const satFootprint = useMemo(
+    () =>
+      view === "map" && showMapSatellites
+        ? satelliteFootprint(footprintSatellite(selectedNoradId, track.trackedNoradId, sats.byNoradId))
+        : null,
+    [view, showMapSatellites, selectedNoradId, track.trackedNoradId, sats.byNoradId],
+  );
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -137,10 +164,13 @@ export default function MapScreen() {
             onSelectAirport={setSelectedAirportIdent}
             ports={ports}
             trackSegments={trackSegments}
-            trackSubPoint={trackSubPoint}
+            trackSubPoint={showTrackedMarker(track.trackedNoradId, satMarkers) ? trackSubPoint : null}
             trackName={track.name}
             trackKey={track.trackedNoradId}
             onClearTrack={track.clear}
+            satellites={satMarkers}
+            onSelectSatellite={selectSatellite}
+            satelliteFootprint={satFootprint}
             showCourseVectors={showCourseVectors}
             focus={target}
             focusSeq={focusSeq}
@@ -182,6 +212,13 @@ export default function MapScreen() {
               : undefined
           }
           onClose={() => setSelectedAirportIdent(null)}
+        />
+        <SatelliteDetailSheet
+          noradId={selectedNoradId}
+          view={selectedNoradId != null ? sats.byNoradId.get(selectedNoradId) : undefined}
+          observer={observer}
+          elevationMaskDeg={sats.elevationMaskDeg}
+          onClose={() => setSelectedSat(null)}
         />
       </View>
     </SafeAreaView>

@@ -8,6 +8,7 @@ export * from "./declutter";
 export * from "./skyDeclutter";
 export * from "./surfaceBand";
 export * from "./satellites";
+export * from "./footprint";
 export * from "./planets";
 export * from "./radioSky";
 export * from "./polaris";
