@@ -48,6 +48,12 @@ dropbox ANR/crash entries, and `sim-diag.txt`: every `SkylensSim` line (native s
 webview's console as `chromium` `[INFO:CONSOLE…]`, and the flow's own) from the per-flow device logcat
 and `maestro.log`; its tail is also printed in the job log.
 
+`scripts/maestro-summary.mjs` turns that output into the job summary (result, flows table; for a
+failure the failing step and the ones before it, ANRs/crashes/app deaths from logcat, the globe
+diagnostics), and on PRs a separate job posts it as the sticky `skylens-maestro` comment. Try it on a
+downloaded artifact with `node .maestro/scripts/maestro-summary.mjs <maestro-output-dir>`; its tests
+(fixtures cut from real failing runs) run with `npm run test:scripts`, in CI as part of the app's node job.
+
 ## System dialogs
 
 On a freshly booted CI emulator another app can go ANR ("Pixel Launcher isn't responding") and its

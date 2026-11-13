@@ -1,0 +1,4 @@
+--------- beginning of events
+11-13 21:15:16.308   143   143 I snet_event_log: [121035042,-1,]
+11-13 21:15:39.027   535   956 I am_wtf  : [0,1045,com.android.networkstack.process,680050253,SystemServiceRegistry,No service published for: ethernet]
+11-13 21:15:59.011   535   594 I am_kill : [0,3738,com.android.intentresolver,0,change com.android.intentresolver]

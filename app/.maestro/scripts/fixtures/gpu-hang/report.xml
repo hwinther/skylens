@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<testsuites>
+  <testsuite name="Test Suite" device="test" tests="2" failures="1" time="403.116" timestamp="2026-11-13T20:41:31">
+    <testcase id="Cockpit view (demo mode)" name="Cockpit view (demo mode)" classname="Cockpit view (demo mode)" file=".maestro/cockpit.yaml" time="255.517" timestamp="2026-11-13T20:41:31" status="ERROR">
+      <failure>Element not found: Id matching regex: sim-filter</failure>
+    </testcase>
+    <testcase id="Smoke (demo mode)" name="Smoke (demo mode)" classname="Smoke (demo mode)" file=".maestro/smoke.yaml" time="147.54" timestamp="2026-11-13T20:45:47" status="SUCCESS"/>
+  </testsuite>
+</testsuites>
