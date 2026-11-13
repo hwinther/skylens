@@ -65,7 +65,6 @@ cd e2e
 npm install
 npm test                          # source mode: starts backend (5099) + expo web (8081)
 npm run test:ci                   # container mode against docker-compose.e2e.yml (+ JS coverage)
-npm run test:scripts              # node --test for scripts/coverage-summary.mjs
 npm run coverage:summary          # unit (../app/coverage) + e2e (monocart-coverage) lcov -> Markdown
 ```
 
@@ -150,11 +149,12 @@ npm run coverage:summary          # unit (../app/coverage) + e2e (monocart-cover
   (`e2e/tests/fixtures.ts`) marks onboarding done by default; opt out with `test.use({ onboarded: false })`.
 - **E2E coverage**: the image's web export ships external source maps (`expo export --source-maps`,
   served from wwwroot like the chunks). In container mode (`playwright.ci.config.ts`) the fixture
-  (`e2e/tests/fixtures.ts`) records each test page's V8 JS coverage and `monocart-reporter` maps it
-  back to `app/src` / `app/app` (filters drop node_modules and `/cesium/`) into `e2e/monocart-coverage/`
-  (v8 html, cobertura, lcov). `pr-e2e.yml` uploads it as the `e2e-coverage` artifact, and its
-  `coverage-summary` job re-runs jest coverage and posts Unit / E2E / Combined line coverage
-  (`e2e/scripts/coverage-summary.mjs`, approximate: istanbul vs V8 lines) as a job summary and its own
+  (`e2e/tests/fixtures.ts`, `coverageTest` from `@wshno/playwright-config`) records each test page's
+  V8 JS coverage and `monocartReporter()` maps it back to `app/src` / `app/app` (filters drop
+  node_modules and `/cesium/`) into `e2e/monocart-coverage/` (v8 html, cobertura, lcov). `pr-e2e.yml`
+  uploads it as the `e2e-coverage` artifact, and its `coverage-summary` job (reusable-workflows'
+  `e2e-coverage-summary.yml`; unit side from the `unit` job on main, a jest re-run on PRs) posts
+  Unit / E2E / Combined line coverage (approximate: istanbul vs V8 lines) as a job summary and its own
   sticky PR comment, separate from ci.yml's unit-test comment. Plain `npm test` collects nothing.
 - E2E relies on stable `testID`s (`status-aircraft-count`, `map-aircraft-count`, `map-ac-<hex>`,
   `sim-*`); keep them when touching those components.
