@@ -192,12 +192,11 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    uses: hwinther/reusable-workflows/.github/workflows/e2e-coverage-summary.yml@aadc90a4c71886ade7ae0418d9fdca5a94c4197e # v2.34.0
+    uses: hwinther/reusable-workflows/.github/workflows/e2e-coverage-summary.yml@f55297593d7ac787485fedaf3cb83b63030bc629 # v2.36.0
     with:
       source_root: app
       source_dirs: src,app
       # jest-config parity: collectCoverageFrom in app/jest.config.js leaves out the demo feed.
-      exclude: ^app/src/mock/
       unit_label: Unit (jest)
       unit_coverage_command: npm run coverage:ci
       unit_working_directory: app

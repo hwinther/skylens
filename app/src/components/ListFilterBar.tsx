@@ -35,7 +35,8 @@ export function ListFilterBar({ chips, onToggle }: ListFilterBarProps) {
           role="button"
           aria-pressed={c.shown}
           accessibilityState={{ selected: c.shown }}
-          aria-label={`${c.label}, ${c.count}`}
+          // No aria-label: the name is the visible label and count ("Air 7"), as axe's
+          // label-content-name-mismatch wants (a label "Air, 7" didn't contain the visible text).
           style={({ pressed }) => [
             styles.chip,
             c.shown
