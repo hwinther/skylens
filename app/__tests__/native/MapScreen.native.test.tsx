@@ -14,7 +14,17 @@ import MapScreen from "@/screens/MapScreen";
 import { isMapAvailable } from "@/components/webmap/mapAvailable";
 import { useMapFocusStore } from "@/state/mapFocusStore";
 import { useSatelliteTrackStore } from "@/state/satelliteTrackStore";
-import { aircraft, resetStores, seedAircraft } from "./fixtures";
+import { useSettingsStore } from "@/state/settingsStore";
+import { useAuthStore } from "@/state/authStore";
+import {
+  aircraft,
+  backendJson,
+  ISS_DTO,
+  ISS_PASS_TIME,
+  resetStores,
+  routeFetch,
+  seedAircraft,
+} from "./fixtures";
 
 jest.mock("@/components/webmap/mapAvailable", () => ({ isMapAvailable: jest.fn(() => true) }));
 const mapAvailable = jest.mocked(isMapAvailable);
@@ -106,6 +116,80 @@ describe("MapScreen (native)", () => {
 
     await act(async () => useMapFocusStore.getState().setFocus({ kind: "aircraft", hex: "abc123" }));
     expect(onMap()).toBe(false);
+  });
+});
+
+/**
+ * Satellites layer: the real useSatellites chain (routed GET /api/satellites → SGP4) at a pinned ISS
+ * pass over the demo home, so the ISS is "Overhead" exactly as the List would show it.
+ */
+describe("MapScreen (native) — satellites layer", () => {
+  const SAT_DETAIL = { satellite: ISS_DTO, transmitters: [] };
+
+  beforeEach(() => {
+    resetStores();
+    mapAvailable.mockReturnValue(true);
+    jest.useFakeTimers({ now: ISS_PASS_TIME });
+    useAuthStore.setState({ authRequired: false });
+    useSettingsStore.setState({ showSatellites: true, showMapSatellites: true });
+    routeFetch({
+      "/api/satellites": () => backendJson({ tleAgeSeconds: 3600, satellites: [ISS_DTO] }),
+      "/api/satellites/25544": () => backendJson(SAT_DETAIL),
+    });
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  async function renderMap() {
+    await render(<MapScreen />);
+    await act(async () => {}); // the satellites fetch resolves, the first tick places them
+  }
+
+  it("draws the overhead satellites at their sub-satellite points", async () => {
+    await renderMap();
+    expect(screen.getByTestId("map-sat-25544")).toBeOnTheScreen();
+    expect(screen.queryByTestId("map-sat-footprint")).not.toBeOnTheScreen();
+  });
+
+  it("opens the satellite card on a tap and draws that satellite's footprint", async () => {
+    await renderMap();
+    await fireEvent.press(screen.getByTestId("map-sat-25544"));
+    await act(async () => {});
+
+    expect(screen.getByTestId("sat-detail-title")).toHaveTextContent("ISS (ZARYA)");
+    expect(screen.getAllByTestId("map-sat-footprint").length).toBeGreaterThan(0);
+
+    // Closing the card drops the footprint again.
+    await fireEvent.press(screen.getByTestId("detail-card-close"));
+    expect(screen.queryByTestId("map-sat-footprint")).not.toBeOnTheScreen();
+  });
+
+  it("hides the layer (and its footprint) when switched off in Settings", async () => {
+    await renderMap();
+    expect(screen.getByTestId("map-sat-25544")).toBeOnTheScreen();
+
+    await act(async () => useSettingsStore.getState().setShowMapSatellites(false));
+    expect(screen.queryByTestId("map-sat-25544")).not.toBeOnTheScreen();
+
+    // The master satellites switch turns it off too.
+    await act(async () => useSettingsStore.setState({ showMapSatellites: true, showSatellites: false }));
+    expect(screen.queryByTestId("map-sat-25544")).not.toBeOnTheScreen();
+  });
+
+  it("draws a tracked overhead satellite once, with its footprint", async () => {
+    await renderMap();
+    await act(async () => useSatelliteTrackStore.getState().setTracked(25544));
+    await act(async () => {});
+
+    expect(screen.getAllByTestId("map-sat-25544")).toHaveLength(1);
+    expect(screen.queryByTestId("map-sat-track-point")).not.toBeOnTheScreen();
+    expect(screen.getAllByTestId("map-sat-footprint").length).toBeGreaterThan(0);
+
+    // Layer off: the ground track's own marker comes back.
+    await act(async () => useSettingsStore.getState().setShowMapSatellites(false));
+    expect(screen.getByTestId("map-sat-track-point")).toBeOnTheScreen();
+    expect(screen.queryByTestId("map-sat-footprint")).not.toBeOnTheScreen();
   });
 });
 

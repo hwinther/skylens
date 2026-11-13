@@ -42,6 +42,7 @@ export default function SettingsScreen() {
     showSmallAirfields,
     showPorts,
     showSatellites,
+    showMapSatellites,
     satAmateurStations,
     satWeather,
     satGnss,
@@ -64,6 +65,7 @@ export default function SettingsScreen() {
     setShowSmallAirfields,
     setShowPorts,
     setShowSatellites,
+    setShowMapSatellites,
     setSatAmateurStations,
     setSatWeather,
     setSatGnss,
@@ -272,6 +274,14 @@ export default function SettingsScreen() {
               onValueChange={setShowSatellites}
             />
           </Row>
+          <Row label="On the map">
+            <Switch
+              testID="settings-show-map-satellites"
+              value={showSatellites && showMapSatellites}
+              disabled={!showSatellites}
+              onValueChange={setShowMapSatellites}
+            />
+          </Row>
           <Row label="Amateur + stations">
             <Switch value={satAmateurStations} onValueChange={setSatAmateurStations} />
           </Row>
@@ -291,6 +301,10 @@ export default function SettingsScreen() {
             max={15}
             onChange={setSatElevationMaskDeg}
           />
+          <Text style={styles.hint}>
+            On the map, the satellites above your horizon (the Overhead set from the List) show at the point on
+            the ground directly beneath them; tap one for its card and its coverage footprint.
+          </Text>
         </Section>
 
         <Section title="Sky">

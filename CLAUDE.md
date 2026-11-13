@@ -115,7 +115,12 @@ npm run coverage:summary          # unit (../app/coverage) + e2e (monocart-cover
 - **Map tab** opens on the geographic map; Radar is the second toggle (`useMapViewMode` in
   `src/components/webmap/`, shared by both Map screens). On Android the map needs a Google Maps key:
   `app.config.js` sets `extra.hasMapsKey` (boolean only), and without it the tab opens on Radar
-  (`isMapAvailable`). E2E that wants blips must click `map-view-radar` first.
+  (`isMapAvailable`). E2E that wants blips must click `map-view-radar` first. The geographic map's
+  satellites layer (`showMapSatellites`, Settings `settings-show-map-satellites`, needs `showSatellites`)
+  draws exactly the List's Overhead set (shared `useOverheadSatellites`) at sub-satellite points
+  (`map-sat-<norad>`), re-placed at the 1 Hz satellite tick; a tap opens the satellite card. One
+  coverage footprint (pure `src/ar/footprint.ts`) for the open card's satellite, else the tracked one;
+  policy in `webmap/satelliteLayer.ts`. The Radar plots no satellites.
 - **Demo mode** (`src/mock/`) replays `recorded-aircraft.json` with a drag-to-look pose, so the AR
   overlay works on an emulator or desktop with no feed.
 - **Signal lost** (`src/ar/signalLost.ts`): the one definition of a stale target, from the per-kind

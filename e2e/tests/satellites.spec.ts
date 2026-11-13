@@ -79,3 +79,25 @@ test('satellite detail sheet shows transmitters', async ({ page }) => {
   const empty = page.getByTestId('sat-detail-empty')
   await expect(tx0.or(empty)).toBeVisible({ timeout: 15_000 })
 })
+
+test('map shows the overhead satellites, and a marker opens the satellite card', async ({ page }) => {
+  // The Map tab opens on the geographic (Leaflet) map. Its satellites layer (on by default) draws the
+  // same Overhead set as the List — here the always-up MEO GNSS fixture satellites — at their
+  // sub-satellite points, each a divIcon carrying data-testid="map-sat-<noradId>".
+  await page.goto('/map')
+  await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 15_000 })
+
+  const marker = page.getByTestId(/^map-sat-\d+$/).first()
+  // Attached, not visible: a MEO sub-point is thousands of km from the observer, outside the initial
+  // (zoomed-in) viewport, but Leaflet keeps every marker in the DOM.
+  await expect(marker).toBeAttached({ timeout: 30_000 })
+  const testId = (await marker.getAttribute('data-testid')) ?? ''
+  const noradId = testId.replace('map-sat-', '')
+  expect(Number(noradId), 'map satellite markers are keyed map-sat-<noradId>').toBeGreaterThan(0)
+
+  // Off-screen, so no pointer can reach it: dispatch the click, which bubbles to the marker's icon
+  // element exactly like a tap (Leaflet resolves the target by walking up from the event target).
+  await marker.dispatchEvent('click')
+  await expect(page.getByTestId('sat-detail-title')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText(`#${noradId}`)).toBeVisible()
+})
