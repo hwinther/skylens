@@ -125,17 +125,32 @@ npm run coverage:summary          # unit (../app/coverage) + e2e (monocart-cover
   and the AR overlay both use it; AR dims lost aircraft/ships (dashed chip, hollow anchor
   `ar-ac-lost-<hex>` / `ar-ves-lost-<mmsi>`, "lost · 45 s", hollow edge arrow) and reports them to the
   AR screen's detail card. Satellites are propagated from TLEs and are never "lost".
-- **Simulator / cockpit view** (`/sim`, web only for now): `src/screens/SimScreen.web.tsx` renders a
-  Cesium globe (Esri World Imagery + terrain) with the camera on the followed aircraft/vessel/satellite.
-  Cesium is NOT bundled by Metro: `scripts/copy-cesium.mjs` (postinstall) copies its prebuilt runtime
-  to `public/cesium/` (gitignored), and `src/sim/loadCesium.ts` loads it with a `<script>` tag. Pose math
-  lives in pure-TS `src/sim/` (jest-tested). Following works by re-centring the hub subscription on the
-  target (`simStore` → `_layout.tsx`), not by any new backend call. Esri hosts are allowed in the CSP.
-  Map aids: `src/components/SimMinimap.tsx` (Leaflet inset, web only) and airport + port labels drawn as
-  Cesium `LabelCollection`/`PointPrimitiveCollection` from `/api/airports` and `/api/ports`; the policy
-  (zoom, ranges, refetch) is pure TS in `src/sim/overlay.ts`. Looking around (drag, or "Pan/tilt" with
-  the phone's DeviceOrientation via `useWebArSensors`) is an offset from the direction of travel; a
-  "straight ahead" marker and Recenter keep it findable (`src/sim/look.ts`).
+- **Simulator / cockpit view** (`/sim`, web + Android): a Cesium globe (Esri World Imagery + terrain)
+  with the camera on the followed aircraft/vessel/satellite. The scene (camera, forward marker, label
+  layers, drag-to-look) is imperative, shared code in `src/sim/simGlobe.ts`; the HUD is
+  `src/components/SimHud.tsx`. Web: `src/screens/SimScreen.web.tsx`. Android: `src/screens/SimScreen.tsx`
+  (native HUD/buttons/loading + failure states/back button) around `src/components/SimGlobeView.tsx`, an
+  Expo DOM component (`"use dom"`, @expo/dom-webview, separate JS context): it gets the latest sample /
+  satellite OMM as JSON props, fetches labels through the `loadOverlay` native action (API + auth stay
+  native, no token in the webview) and reports back via `onReady`/`onFailed`/`onImagery`/`onLook`/
+  `onDiagnostic` (native testIDs `sim-globe-loading|ready|failed`). Globe health (tile counts, WebGL
+  renderer, worker + pixel probes, page errors) is counted in pure-TS `src/sim/globeDiag.ts`, logged with
+  the prefix `SkylensSim` (logcat) and, in builds with `EXPO_PUBLIC_SIM_DIAG=1` (the Maestro CI APK),
+  put on a hidden `sim-globe-diag` node; its `imageryVerdict` drives the "Map imagery unavailable
+  (reason)" note. Cesium is NOT bundled by Metro:
+  `scripts/copy-cesium.mjs` (postinstall) copies its prebuilt runtime to `public/cesium/` (gitignored),
+  and `src/sim/loadCesium.ts` loads it with a `<script>` tag from `cesiumBaseUrl(EXPO_BASE_URL)`: `/cesium/`
+  on the web, and in a release APK `www.bundle/cesium/` next to the DOM page, because Expo's embed export
+  copies all of `public/` into the APK's assets once the app has a DOM component (~13 MB raw, ~6 MB
+  compressed; keep other big files out of `public/`). Pose math lives in pure-TS `src/sim/` (jest-tested).
+  Following works by re-centring the hub subscription on the target (`simStore` → `_layout.tsx`), not by
+  any new backend call. Esri hosts are allowed in the CSP. Map aids: `src/components/SimMinimap.tsx`
+  (Leaflet inset, web only; Android has a "Map" button) and airport + port labels drawn as Cesium
+  `LabelCollection`/`PointPrimitiveCollection` from `/api/airports` and `/api/ports`; the policy (zoom,
+  ranges, refetch, label items) is pure TS in `src/sim/overlay.ts`. Looking around (drag, or on the web
+  "Pan/tilt" with the phone's DeviceOrientation via `useWebArSensors`) is an offset from the direction of
+  travel; a "straight ahead" marker and Recenter keep it findable (`src/sim/look.ts`). Maestro covers the
+  Android screen in `app/.maestro/cockpit.yaml` (globe state screenshot-only, see its README).
 - **Ports layer** (`GET /api/ports`, `PortDbService`): an offline file committed at
   `data/ports/ports.csv.gz`, built by `node data/ports/extract-osm-ports.mjs [--wpi UpdatedPub150.csv]`:
   OpenStreetMap (Overpass) for Norway + the NGA World Port Index elsewhere. Refresh by re-running the

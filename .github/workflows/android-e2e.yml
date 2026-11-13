@@ -78,6 +78,9 @@ jobs:
           # The embedded Expo config (extra.hasMapsKey) is generated during the Gradle build, so the
           # key is needed here too, not just at prebuild.
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          # Inlined into the JS bundle (built inside this Gradle task): the cockpit view puts its globe
+          # diagnostics on a hidden `sim-globe-diag` node that the Maestro flow reads (src/sim/globeDiag.ts).
+          EXPO_PUBLIC_SIM_DIAG: "1"
         run: |
           chmod +x gradlew
           ./gradlew :app:assembleRelease --no-daemon -PreactNativeArchitectures=x86_64
@@ -124,6 +127,9 @@ jobs:
           #  - wait-for-broadcast-idle: let the BOOT_COMPLETED fan-out settle before the test starts.
           #  - logcat -G 16M (the emulator sets 2M, which had rotated out everything before the flow's
           #    first command) and no `logcat -c`, so the dump keeps boot; `events` has am_anr/am_crash.
+          #  - sim-diag.txt: the cockpit globe's "SkylensSim" lines (native, webview console, Maestro) from
+          #    Maestro's per-flow device logcat (logd can prune the app's lines from the final dump) and
+          #    maestro.log; the tail is printed to the job log.
           script: |
             mkdir -p "$MAESTRO_OUT"
             adb shell settings put global hide_error_dialogs 1
@@ -135,6 +141,8 @@ jobs:
             maestro test --format junit --output "$MAESTRO_OUT/report.xml" --test-output-dir "$MAESTRO_OUT/artifacts" --debug-output "$MAESTRO_OUT/debug" .maestro || echo "$?" > "$MAESTRO_OUT/maestro-exit-code"
             adb exec-out screencap -p > "$MAESTRO_OUT/post-test-screen.png" || true
             adb logcat -d -b main,system,crash,events > "$MAESTRO_OUT/logcat.txt" || true
+            { grep -rh SkylensSim "$MAESTRO_OUT/artifacts"; grep -h SkylensSim "$MAESTRO_OUT/logcat.txt"; } > "$MAESTRO_OUT/sim-diag.txt" || true
+            tail -n 40 "$MAESTRO_OUT/sim-diag.txt" || true
             adb shell dumpsys activity activities > "$MAESTRO_OUT/dumpsys-activities.txt" || true
             for t in system_app_anr data_app_anr system_app_crash data_app_crash; do echo "=== dropbox $t"; adb shell dumpsys dropbox --print "$t"; done > "$MAESTRO_OUT/dropbox-anr-crash.txt" 2>&1 || true
             test ! -s "$MAESTRO_OUT/maestro-exit-code" || { echo "::error::Maestro flows failed (exit $(cat "$MAESTRO_OUT/maestro-exit-code"))"; exit 1; }

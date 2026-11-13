@@ -4,8 +4,27 @@
  * of Cesium / Leaflet / React so jest runs it anywhere.
  */
 
-import type { PortKind } from "@/api/types";
-import type { SimKind } from "./simPose";
+import type { AirportDto, PortDto, PortKind } from "@/api/types";
+import { airportShortLabel } from "@/components/webmap/airportStyle";
+import { portTitle } from "@/components/webmap/portStyle";
+import { FEET_TO_M, type SimKind } from "./simPose";
+
+/**
+ * One labelled point in the 3D scene (airport or port). Plain JSON, so it also crosses the native →
+ * DOM-component bridge on Android (the native screen fetches, the webview draws).
+ */
+export interface OverlayItem {
+  lat: number;
+  lon: number;
+  altM: number;
+  /** Empty → point only. */
+  label: string;
+  rangeM: number;
+  pixelSize: number;
+}
+
+/** The two labelled-point layers of the 3D view. */
+export type OverlayLayerKind = "airports" | "ports";
 
 /**
  * Minimap zoom (Leaflet / slippy-map levels). Low and slow → close in; cruise altitude → the region;
@@ -78,6 +97,39 @@ export function showsAirportOverlay(kind: SimKind): boolean {
 /** Same rule for the ports overlay. */
 export function showsPortOverlay(kind: SimKind): boolean {
   return kind !== "satellite";
+}
+
+/** Airports from GET /api/airports as 3D labels; classes without a label range are left out. */
+export function airportOverlayItems(airports: readonly AirportDto[]): OverlayItem[] {
+  const items: OverlayItem[] = [];
+  for (const a of airports) {
+    const rangeM = airportLabelRangeM(a.type);
+    if (rangeM == null) continue;
+    items.push({
+      lat: a.lat,
+      lon: a.lon,
+      // Field elevation + a little, so the marker sits on the runway, not under the terrain.
+      altM: (a.elevationFt ?? 0) * FEET_TO_M + 20,
+      label: airportShortLabel(a),
+      rangeM,
+      pixelSize: a.type === "large_airport" ? 9 : 6,
+    });
+  }
+  return items;
+}
+
+/** Ports from GET /api/ports as 3D labels. */
+export function portOverlayItems(ports: readonly PortDto[]): OverlayItem[] {
+  return ports.map((p) => ({
+    lat: p.lat,
+    lon: p.lon,
+    altM: 8, // quay level
+    // Unnamed quays and marinas get a dot only ("Marina" forty times along a fjord is noise); an
+    // unnamed commercial port is still a landmark, so it keeps its kind as the label.
+    label: p.name?.trim() || (p.kind === "port" ? portTitle(p) : ""),
+    rangeM: portLabelRangeM(p.kind),
+    pixelSize: p.kind === "port" ? 8 : 5,
+  }));
 }
 
 /** Great-circle distance in km (haversine), for the refetch check. */

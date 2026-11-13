@@ -182,10 +182,11 @@ beforeEach(() => {
     mockMode: false,
   });
   // The app's own dev-only traces ("[skylens] hub connecting …", "[skylens] satellites gate …") log
-  // under jest because __DEV__ is true there. Keep them out of the test output; anything else logs.
+  // under jest because __DEV__ is true there, and the cockpit view logs its globe diagnostics
+  // ("SkylensSim …", for logcat). Keep them out of the test output; anything else logs.
   const log = console.log;
   jest.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
-    if (typeof args[0] === "string" && args[0].startsWith("[skylens]")) return;
+    if (typeof args[0] === "string" && /^(\[skylens\]|SkylensSim )/.test(args[0])) return;
     log(...args);
   });
   jest.spyOn(globalThis, "fetch").mockImplementation((input) =>

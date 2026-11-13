@@ -9,7 +9,9 @@ import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { ApiClient } from "@/api/client";
 import { DetailSheet } from "@/components/DetailSheet";
 import { SatelliteDetailSheet } from "@/components/SatelliteDetailSheet";
+import { router } from "expo-router";
 import { useAuthStore } from "@/state/authStore";
+import { useSimStore } from "@/state/simStore";
 import type { SatelliteView } from "@/ar";
 import { aircraft, backendJson, resetStores, routeFetch, seedAircraft } from "./fixtures";
 
@@ -96,6 +98,17 @@ describe("DetailSheet (aircraft)", () => {
     expect(screen.getByText(`GET /api/aircraft/${HEX} → 500`)).toBeOnTheScreen();
     expect(screen.getByText("SAS123")).toBeOnTheScreen();
     expect(screen.getByTestId("detail-show-on-map")).toBeOnTheScreen();
+  });
+
+  it("offers the cockpit view on Android and opens it for this aircraft", async () => {
+    const onClose = jest.fn();
+    await render(<DetailSheet hex={HEX} client={client} onClose={onClose} />);
+    await act(async () => {});
+
+    await fireEvent.press(screen.getByTestId("detail-cockpit"));
+    expect(useSimStore.getState().target).toEqual({ kind: "aircraft", id: HEX });
+    expect(onClose).toHaveBeenCalled();
+    expect(router.push).toHaveBeenCalledWith({ pathname: "/sim", params: { kind: "aircraft", id: HEX } });
   });
 });
 
