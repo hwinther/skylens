@@ -177,7 +177,8 @@ npm run coverage:summary          # unit (../app/coverage) + e2e (monocart-cover
   emulator (onboarding Skip → AR → List + detail card → Map or Radar → Settings; how to run it locally
   in `app/.maestro/README.md`). `.github/workflows/android-e2e.yml` builds an x86_64 `assembleRelease`
   (template debug signing, JS embedded) and runs it on an API 34 `google_apis` emulator nightly, on
-  dispatch, and on PRs labelled `mobile-e2e`. It selects by testID (Android resource-id), incl. the tab
+  dispatch, and on PRs labelled `mobile-e2e`; it caches Gradle (setup-gradle) and the NDK C++ compile
+  (ccache), written from main only. It selects by testID (Android resource-id), incl. the tab
   buttons `tab-ar|map|list|settings` (`tabBarButtonTestID`), `onboarding-skip`, `status-source`
   (DEMO/LIVE badge), `list-ac-<hex>`, `detail-card*`, `map-view-*`, `radar`, `settings-demo-mode`.
 
@@ -209,4 +210,5 @@ Releases are tag-driven (`tag-and-release.yml`, or push `vX.Y.Z`). `container.ym
 via Flux and supplies the namespace, network policies, Secret, and substitution variables. Ingress is
 Traefik on `skylens.wsh.no`; the JWT is validated in-app (no forward-auth). PRs labelled
 `deploy-feature` get a preview deployment (Development mode, replayed fixtures). The Android app is
-sideloaded (`android-build.yml`); Play setup is in `docs/google-play-setup.md`.
+sideloaded (`android-build.yml`, an uncached signed AAB with arm64-v8a + armeabi-v7a only); Play
+setup is in `docs/google-play-setup.md`.
