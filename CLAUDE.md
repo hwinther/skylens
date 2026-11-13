@@ -160,7 +160,7 @@ npm run coverage:summary          # unit (../app/coverage) + e2e (monocart-cover
   card already knows (free cached read on open or the user tapping the paid Route button). On Android these
   cross the webview as slim props (`traffic`, `layers`, `cameraMode`, `destination`, `targetKey`) and the
   `onPick` action. Maestro covers the Android screen in `app/.maestro/cockpit.yaml` (globe state
-  screenshot-only, see its README).
+  screenshot-only; the outside view is never switched on there, it hung the CI emulator's GPU; see its README).
 - **Ports layer** (`GET /api/ports`, `PortDbService`): an offline file committed at
   `data/ports/ports.csv.gz`, built by `node data/ports/extract-osm-ports.mjs [--wpi UpdatedPub150.csv]`:
   OpenStreetMap (Overpass) for Norway + the NGA World Port Index elsewhere. Refresh by re-running the

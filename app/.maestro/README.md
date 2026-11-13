@@ -17,7 +17,9 @@ aircraft's position with the HUD top left and Exit / Map top right; "Map imagery
 `maestro.log`: `SkylensSim globe = <its accessibility label>` and, in the CI build
 (`EXPO_PUBLIC_SIM_DIAG=1`), `SkylensSim diag = gl=…|tex=…|wk=…|img=req/ok/fail|ter=req/ok/fail|q=…|fr=…|ff=…|px=r,g,b|blk=…|err=…|last=…`
 (keys in `src/sim/globeDiag.ts`). It is its own file so a globe problem fails as its own flow and
-never makes the smoke steps flaky.
+never makes the smoke steps flaky. Before leaving it checks the card, the Layers filter and that the
+`sim-camera-toggle` is there, but never switches the outside view on: on the software-GL CI emulator
+that hung the emulator's GPU (ANRs, app killed); Playwright and jest cover the toggle.
 
 ## Run locally
 
