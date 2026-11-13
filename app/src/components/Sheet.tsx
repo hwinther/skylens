@@ -7,8 +7,9 @@
  *
  * Layout (see sheetLayout.ts, the pure policy):
  *  - narrow windows: a compact card at the bottom. Collapsed it shows `header` + a one-line `summary`
- *    (+ `actions`); tap the card, its handle or the chevron to expand to the full `children`, capped
- *    at `maxHeightPct` and scrolling inside.
+ *    (+ `actions`); tap the card's head or the chevron to expand to the full `children`, capped at
+ *    `maxHeightPct` and scrolling inside. There is deliberately no grab handle: the card has no drag
+ *    gesture, so a handle bar would promise one; the chevron shows the state.
  *  - wide windows (SIDE_PANEL_BREAKPOINT+): a SIDE_PANEL_WIDTH panel docked right, always expanded.
  *
  * Dismiss: the close button, Escape on web, the hardware back button on Android. Both listeners are
@@ -135,7 +136,6 @@ export function Sheet({
 
   const headInner = (
     <>
-      {layout.showToggle ? <View style={styles.handle} /> : null}
       <View style={styles.headRow}>
         <View style={styles.headContent}>{header}</View>
         {layout.showToggle ? (
@@ -188,7 +188,7 @@ export function Sheet({
       ]}
     >
       {layout.showToggle ? (
-        // The whole head (handle, header, summary) is a tap target for expand/collapse. It stays out
+        // The whole head (header, summary) is a tap target for expand/collapse. It stays out
         // of the tab order and the accessibility tree: the chevron is the labelled button for that.
         <Pressable onPress={toggle} accessible={false} focusable={false} style={styles.head}>
           {headInner}
@@ -226,7 +226,9 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderTopWidth: 2,
     paddingHorizontal: 16,
-    paddingTop: 6,
+    // With the 2 px accent top border this matches the side panel's 12 px; the head row's 32 px icon
+    // buttons add a little air around the title, so it neither crowds the edge nor looks top-heavy.
+    paddingTop: 10,
     paddingBottom: 12,
   },
   panel: {
@@ -238,14 +240,6 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   head: {},
-  handle: {
-    alignSelf: "center",
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: color.handle,
-    marginBottom: 6,
-  },
   headRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   headContent: { flex: 1, minWidth: 0 },
   iconButton: {

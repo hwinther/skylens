@@ -10,8 +10,14 @@ import { alpha, color } from "@/theme";
 import { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import {
+  AIRCRAFT_LABEL_BOX,
+  AIRPORT_LABEL_HEIGHT_PX,
   declutter,
+  declutterLayers,
   effectiveHFovDeg,
+  estimateLabelWidth,
+  ONE_LINE_LABEL_HEIGHT_PX,
+  TWO_LINE_LABEL_HEIGHT_PX,
   extrapolateView,
   GROUP_PRIORITY,
   lookAngles,
@@ -21,13 +27,16 @@ import {
   VESSEL_DISTANCE_CAP_KM,
   VESSEL_RENDER_CAP,
   type CameraPose,
+  type ClusterChip,
   type EclipticPoint,
   type GeoPoint,
+  type PlacedLabel,
   type PlanetView,
   type ProjectionConfig,
   type RadioTargetView,
   type SatelliteView,
   type ScreenLabel,
+  type SizedLabel,
 } from "@/ar";
 import type { AircraftDto, AirportDto, VesselDto } from "@/api/types";
 import { AircraftLabel } from "./AircraftLabel";
@@ -36,12 +45,19 @@ import { SatelliteLabel } from "./SatelliteLabel";
 import { PlanetLabel } from "./PlanetLabel";
 import { RadioLabel } from "./RadioLabel";
 import { AirportArLabel } from "./AirportArLabel";
-import { airportArPriority } from "./webmap/airportStyle";
+import { airportArPriority, airportShortLabel } from "./webmap/airportStyle";
 import { PositionTracker, type TrackPoint } from "@/ar/positionTracker";
+import { lostAgeS } from "@/ar/signalLost";
 import { aircraftSample } from "@/sim/simPose";
 
 const aircraftId = (ac: AircraftDto) => ac.hex;
 const vesselId = (v: VesselDto) => v.mmsi;
+
+/** Ids of the aircraft (hex) and vessels (MMSI) whose signal is lost (src/ar/signalLost). */
+export interface SignalLostIds {
+  aircraft: readonly string[];
+  vessels: readonly string[];
+}
 
 export interface ArOverlayProps {
   aircraft: AircraftDto[];
@@ -85,6 +101,8 @@ export interface ArOverlayProps {
   onSelectSatellite?: (noradId: number) => void;
   /** Tapping a vessel label's icon/name; omitted → vessel labels stay display-only. */
   onSelectVessel?: (mmsi: string) => void;
+  /** Called when the set of signal-lost aircraft/vessels changes (for the detail card's status line). */
+  onSignalLost?: (lost: SignalLostIds) => void;
   /** Airports (already filtered by the small-airfields toggle) for the fixed-infrastructure pass. */
   airports?: AirportDto[];
   /** Draw the airports pass. */
@@ -102,11 +120,14 @@ interface RenderLabel {
   y: number;
   anchorY: number;
   rangeKm: number | null;
+  /** Whole seconds since the last position when the signal is lost, else null. */
+  lostAgeS: number | null;
 }
 
 interface RenderArrow {
   hex: string;
   bearingDeg: number;
+  lost: boolean;
 }
 
 interface RenderVessel {
@@ -115,6 +136,7 @@ interface RenderVessel {
   y: number;
   anchorY: number;
   rangeKm: number;
+  lostAgeS: number | null;
 }
 
 interface RenderSatellite {
@@ -173,6 +195,23 @@ const noopSelectPlanet = (_body: string) => {};
 const noopSelectRadio = (_key: string) => {};
 const noopSelectAirport = (_ident: string) => {};
 
+/** Keep the rendered labels that were placed, moved to their decluttered y (anchor kept for the leader). */
+function applyPlacement<T extends { y: number; anchorY: number }>(
+  render: T[],
+  placed: PlacedLabel[],
+  idOf: (l: T) => string,
+): T[] {
+  const byId = new Map(placed.map((p) => [p.id, p]));
+  const out: T[] = [];
+  for (const l of render) {
+    const p = byId.get(idOf(l));
+    if (p) out.push({ ...l, y: p.y, anchorY: p.anchorY });
+  }
+  return out;
+}
+
+const toClusterMark = (c: ClusterChip): ClusterMark => ({ x: c.x, y: c.y, count: c.count });
+
 interface CardinalMark {
   label: string;
   x: number;
@@ -214,6 +253,7 @@ export function ArOverlay({
   onSelect,
   onSelectSatellite,
   onSelectVessel,
+  onSignalLost,
   showHorizon = false,
 }: ArOverlayProps) {
   const { width, height } = useWindowDimensions();
@@ -296,9 +336,17 @@ export function ArOverlay({
     showEclipticRef.current = showEcliptic;
   }, [aircraft, hFovDeg, showHorizon, vessels, showShips, showAton, satellites, satellitesSampledAt, showSatellites, planets, showPlanets, radioTargets, showRadioSky, airports, showAirports, ecliptic, showEcliptic]);
 
+  // The signal-lost callback lives in its own ref so the rAF loop never restarts for it.
+  const onSignalLostRef = useRef(onSignalLost);
+  useEffect(() => {
+    onSignalLostRef.current = onSignalLost;
+  }, [onSignalLost]);
+
   useEffect(() => {
     let raf = 0;
     let lastRun = 0;
+    // Last reported signal-lost set, so onSignalLost only fires when it changes.
+    let lostKey = "";
     // Cap the overlay's heavy work (reprojecting N aircraft + declutter + the label-tree
     // re-render) at ~20 fps. The rAF keeps firing at display rate, but doing all that 60x/s
     // pins the JS thread the moment planes are present — starving touch handling and the pose
@@ -328,11 +376,15 @@ export function ArOverlay({
       const nextLabels: RenderLabel[] = [];
       const nextArrows: RenderArrow[] = [];
       const screenLabels: ScreenLabel[] = [];
+      const lostAircraft: string[] = [];
+      const lostVessels: string[] = [];
 
       if (observer) {
         for (const ac of aircraftRef.current) {
           // Unknown to the tracker = no position in the snapshot.
           if (!aircraftTracker.positionAt(ac.hex, nowMs, pos)) continue;
+          const acLostAgeS = lostAgeS(aircraftTracker.sampleOf(ac.hex), nowMs);
+          if (acLostAgeS != null) lostAircraft.push(ac.hex);
           const angles = lookAngles(observer, pos);
           const proj = project(
             { azimuth: angles.azimuth, elevation: angles.elevation },
@@ -354,9 +406,10 @@ export function ArOverlay({
               y: py,
               anchorY: py,
               rangeKm: angles.slantRange / 1000,
+              lostAgeS: acLostAgeS,
             });
           } else if (proj.arrowBearingDeg != null) {
-            nextArrows.push({ hex: ac.hex, bearingDeg: proj.arrowBearingDeg });
+            nextArrows.push({ hex: ac.hex, bearingDeg: proj.arrowBearingDeg, lost: acLostAgeS != null });
           }
         }
       }
@@ -381,7 +434,7 @@ export function ArOverlay({
       // label placement is completely untouched. Off-screen vessels get no edge arrow — the band is
       // dense and side arrows would just be horizon noise (aircraft keep theirs).
       if (observer && (showShipsRef.current || showAtonRef.current)) {
-        const cand: { v: VesselDto; azimuth: number; distKm: number }[] = [];
+        const cand: { v: VesselDto; azimuth: number; distKm: number; lostAgeS: number | null }[] = [];
         for (const v of vesselsRef.current) {
           if (v.lat == null || v.lon == null) continue;
           const isAton = v.kind === "aton";
@@ -393,11 +446,13 @@ export function ArOverlay({
           } else if (!vesselTracker.positionAt(v.mmsi, nowMs, pos)) {
             continue;
           }
+          const vLostAgeS = isAton ? null : lostAgeS(vesselTracker.sampleOf(v.mmsi), nowMs);
+          if (vLostAgeS != null) lostVessels.push(v.mmsi);
           pos.alt = 0;
           const a = lookAngles(observer, pos);
           const distKm = a.slantRange / 1000;
           if (distKm > VESSEL_DISTANCE_CAP_KM) continue;
-          cand.push({ v, azimuth: a.azimuth, distKm });
+          cand.push({ v, azimuth: a.azimuth, distKm, lostAgeS: vLostAgeS });
         }
         // Nearest-first, then hard-cap before the (O(n²)) projection + declutter work.
         cand.sort((p, q) => p.distKm - q.distKm);
@@ -412,7 +467,7 @@ export function ArOverlay({
           const horizonPy = height / 2 - (proj.yNdc * height) / 2;
           const py = horizonPy + surfaceBandOffset(c.distKm);
           vScreenLabels.push({ id: c.v.mmsi, x: px, y: py, priority: 1 / Math.max(c.distKm, 0.1) });
-          vRender.push({ vessel: c.v, x: px, y: py, anchorY: py, rangeKm: c.distKm });
+          vRender.push({ vessel: c.v, x: px, y: py, anchorY: py, rangeKm: c.distKm, lostAgeS: c.lostAgeS });
         }
 
         if (vRender.length === 0) {
@@ -435,16 +490,22 @@ export function ArOverlay({
         setVesselClusters(NO_CLUSTERS);
       }
 
+      const nextLostKey = `${lostAircraft.join(",")}|${lostVessels.join(",")}`;
+      if (nextLostKey !== lostKey) {
+        lostKey = nextLostKey;
+        onSignalLostRef.current?.({ aircraft: lostAircraft, vessels: lostVessels });
+      }
+
       // --- Airports pass: fixed ground infrastructure at their true az/el ---
       // Airports sit at ground level, so — unlike the vessel band's forced horizon — we keep each one's
       // REAL elevation (lat/lon + field elevation through the same look-angle math as aircraft). At
-      // distance that places them on or just under the horizon; we never elevation-mask them. Own
-      // declutter pass so aircraft/vessel/satellite placement is untouched; the busier classes (large >
-      // medium) keep their un-pushed spot. No edge arrows — off-screen airports simply don't draw. The
-      // set is already filtered by the small-airfields toggle upstream, so this just projects what it's given.
+      // distance that places them on or just under the horizon; we never elevation-mask them. Placed in
+      // the joint sky declutter below (last layer); the busier classes (large > medium) keep their
+      // un-pushed spot. No edge arrows — off-screen airports simply don't draw. The set is already
+      // filtered by the small-airfields toggle upstream, so this just projects what it's given.
+      const aScreenLabels: SizedLabel[] = [];
+      const aRender: RenderAirport[] = [];
       if (observer && showAirportsRef.current && airportsRef.current.length) {
-        const aScreenLabels: ScreenLabel[] = [];
-        const aRender: RenderAirport[] = [];
         for (const ap of airportsRef.current) {
           const alt = (ap.elevationFt ?? 0) * 0.3048; // ft → m; unknown elevation → sea level
           const angles = lookAngles(observer, { lat: ap.lat, lon: ap.lon, alt });
@@ -452,41 +513,29 @@ export function ArOverlay({
           if (!proj.onScreen) continue;
           const px = (proj.xNdc * width) / 2 + width / 2;
           const py = height / 2 - (proj.yNdc * height) / 2;
-          aScreenLabels.push({ id: ap.ident, x: px, y: py, priority: airportArPriority(ap.type) });
+          aScreenLabels.push({
+            id: ap.ident,
+            x: px,
+            y: py,
+            priority: airportArPriority(ap.type),
+            width: estimateLabelWidth([airportShortLabel(ap)], { charPx: 6.5, chromePx: 27, maxWidth: 120 }),
+            height: AIRPORT_LABEL_HEIGHT_PX,
+          });
           aRender.push({ airport: ap, x: px, y: py, anchorY: py });
         }
-
-        if (aRender.length === 0) {
-          setAirportLabels(NO_AIRPORTS_RENDER);
-          setAirportClusters(NO_CLUSTERS);
-        } else {
-          const { placed: aPlaced, clusters: aChips } = declutter(aScreenLabels);
-          const aById = new Map(aPlaced.map((p) => [p.id, p]));
-          const aDecluttered = aRender
-            .filter((l) => aById.has(l.airport.ident))
-            .map((l) => {
-              const p = aById.get(l.airport.ident)!;
-              return { ...l, y: p.y, anchorY: p.anchorY };
-            });
-          setAirportLabels(aDecluttered);
-          setAirportClusters(aChips.map((c) => ({ x: c.x, y: c.y, count: c.count })));
-        }
-      } else {
-        setAirportLabels(NO_AIRPORTS_RENDER);
-        setAirportClusters(NO_CLUSTERS);
       }
 
       // --- Orbital pass: satellites at their precomputed az/el, extrapolated to "now" ---
       // useSatellites already ran SGP4 + the look-angle transforms at 1 Hz. Rather than re-project the
       // fixed az/el (which visibly steps once a second for a fast LEO), we extrapolate each view by its
       // carried angular rates over the sample age — one glide instead of a stutter. The age is clamped
-      // inside extrapolateView so a stalled tick can't fling labels. Own declutter pass so aircraft/
-      // vessel placement is untouched; priority keeps stations above GNSS, then higher elevation. No
-      // edge arrows — off-screen satellites simply don't draw.
+      // inside extrapolateView so a stalled tick can't fling labels. Placed in the joint sky declutter
+      // below; priority keeps stations above GNSS, then higher elevation. No edge arrows — off-screen
+      // satellites simply don't draw.
+      const sScreenLabels: SizedLabel[] = [];
+      const sRender: RenderSatellite[] = [];
       if (showSatellitesRef.current && satellitesRef.current.length) {
         const satAgeS = Math.max(0, (Date.now() - satellitesSampledAtRef.current) / 1000);
-        const sScreenLabels: ScreenLabel[] = [];
-        const sRender: RenderSatellite[] = [];
         for (const s of satellitesRef.current) {
           const { azimuthDeg, elevationDeg } = extrapolateView(s, satAgeS);
           const proj = project({ azimuth: azimuthDeg, elevation: elevationDeg }, pose, config);
@@ -496,98 +545,87 @@ export function ArOverlay({
           // Higher priority = keeps its un-pushed spot: stations first (−GROUP_PRIORITY), then the
           // higher-in-the-sky within a group as the tiebreak.
           const priority = -(GROUP_PRIORITY[s.group] ?? 99) * 1000 + s.elevationDeg;
-          sScreenLabels.push({ id: String(s.noradId), x: px, y: py, priority });
+          const title = s.name.trim() || String(s.noradId);
+          const sub = s.freqSummary ? `00°  ${s.freqSummary}` : "00°";
+          sScreenLabels.push({
+            id: String(s.noradId),
+            x: px,
+            y: py,
+            priority,
+            width: estimateLabelWidth([title, sub], { maxWidth: 170 }),
+            height: TWO_LINE_LABEL_HEIGHT_PX,
+          });
           sRender.push({ satellite: s, x: px, y: py, anchorY: py });
         }
-
-        if (sRender.length === 0) {
-          setSatLabels(NO_SATELLITES);
-          setSatClusters(NO_CLUSTERS);
-        } else {
-          const { placed: sPlaced, clusters: sChips } = declutter(sScreenLabels);
-          const sById = new Map(sPlaced.map((p) => [p.id, p]));
-          const sDecluttered = sRender
-            .filter((l) => sById.has(String(l.satellite.noradId)))
-            .map((l) => {
-              const p = sById.get(String(l.satellite.noradId))!;
-              return { ...l, y: p.y, anchorY: p.anchorY };
-            });
-          setSatLabels(sDecluttered);
-          setSatClusters(sChips.map((c) => ({ x: c.x, y: c.y, count: c.count })));
-        }
-      } else {
-        setSatLabels(NO_SATELLITES);
-        setSatClusters(NO_CLUSTERS);
       }
 
       // --- Sky pass: Solar-System bodies at their computed az/el (usePlanets recomputes at 30 s) ---
-      // Real elevation, projected like satellites (not the vessel horizon band). Own declutter pass so
-      // aircraft/vessel/satellite placement is untouched; brighter (lower-magnitude) bodies keep the spot.
+      // Real elevation, projected like satellites (not the vessel horizon band). Placed first in the
+      // joint sky declutter below; brighter (lower-magnitude) bodies keep the spot.
+      const pScreenLabels: SizedLabel[] = [];
+      const pRender: RenderPlanet[] = [];
       if (showPlanetsRef.current && planetsRef.current.length) {
-        const pScreenLabels: ScreenLabel[] = [];
-        const pRender: RenderPlanet[] = [];
         for (const p of planetsRef.current) {
           const proj = project({ azimuth: p.azimuthDeg, elevation: p.elevationDeg }, pose, config);
           if (!proj.onScreen) continue;
           const px = (proj.xNdc * width) / 2 + width / 2;
           const py = height / 2 - (proj.yNdc * height) / 2;
-          pScreenLabels.push({ id: p.body, x: px, y: py, priority: -(p.magnitude ?? 10) });
+          pScreenLabels.push({
+            id: p.body,
+            x: px,
+            y: py,
+            priority: -(p.magnitude ?? 10),
+            width: estimateLabelWidth([p.name.trim() || p.body], { maxWidth: 150 }),
+            height: p.magnitude != null ? TWO_LINE_LABEL_HEIGHT_PX : ONE_LINE_LABEL_HEIGHT_PX,
+          });
           pRender.push({ planet: p, x: px, y: py, anchorY: py });
         }
-        if (pRender.length === 0) {
-          setPlanetLabels(NO_PLANETS);
-          setPlanetClusters(NO_CLUSTERS);
-        } else {
-          const { placed: pPlaced, clusters: pChips } = declutter(pScreenLabels);
-          const pById = new Map(pPlaced.map((pl) => [pl.id, pl]));
-          const pDecluttered = pRender
-            .filter((l) => pById.has(l.planet.body))
-            .map((l) => {
-              const pl = pById.get(l.planet.body)!;
-              return { ...l, y: pl.y, anchorY: pl.anchorY };
-            });
-          setPlanetLabels(pDecluttered);
-          setPlanetClusters(pChips.map((c) => ({ x: c.x, y: c.y, count: c.count })));
-        }
-      } else {
-        setPlanetLabels(NO_PLANETS);
-        setPlanetClusters(NO_CLUSTERS);
       }
 
       // --- Radio pass: fixed hydrogen-line sources at their computed az/el (useRadioSky, 30 s) ---
       // Same real-elevation projection as the planets pass (the caller passes only above-horizon
-      // targets, so no elevation mask here). Own declutter pass so the other classes are untouched;
-      // higher-in-the-sky keeps its un-pushed spot (all four sources are of similar interest).
+      // targets, so no elevation mask here). Placed in the joint sky declutter below; higher-in-the-sky
+      // keeps its un-pushed spot (all four sources are of similar interest).
+      const rScreenLabels: SizedLabel[] = [];
+      const rRender: RenderRadio[] = [];
       if (showRadioSkyRef.current && radioTargetsRef.current.length) {
-        const rScreenLabels: ScreenLabel[] = [];
-        const rRender: RenderRadio[] = [];
         for (const t of radioTargetsRef.current) {
           const proj = project({ azimuth: t.azimuthDeg, elevation: t.elevationDeg }, pose, config);
           if (!proj.onScreen) continue;
           const px = (proj.xNdc * width) / 2 + width / 2;
           const py = height / 2 - (proj.yNdc * height) / 2;
-          rScreenLabels.push({ id: t.key, x: px, y: py, priority: t.elevationDeg });
+          rScreenLabels.push({
+            id: t.key,
+            x: px,
+            y: py,
+            priority: t.elevationDeg,
+            width: estimateLabelWidth([t.short.trim() || t.name.trim() || t.key], { maxWidth: 150 }),
+            height: ONE_LINE_LABEL_HEIGHT_PX,
+          });
           rRender.push({ target: t, x: px, y: py, anchorY: py });
         }
-        if (rRender.length === 0) {
-          setRadioLabels(NO_RADIO);
-          setRadioClusters(NO_CLUSTERS);
-        } else {
-          const { placed: rPlaced, clusters: rChips } = declutter(rScreenLabels);
-          const rById = new Map(rPlaced.map((rl) => [rl.id, rl]));
-          const rDecluttered = rRender
-            .filter((l) => rById.has(l.target.key))
-            .map((l) => {
-              const rl = rById.get(l.target.key)!;
-              return { ...l, y: rl.y, anchorY: rl.anchorY };
-            });
-          setRadioLabels(rDecluttered);
-          setRadioClusters(rChips.map((c) => ({ x: c.x, y: c.y, count: c.count })));
-        }
-      } else {
-        setRadioLabels(NO_RADIO);
-        setRadioClusters(NO_CLUSTERS);
       }
+
+      // --- Joint sky declutter: planets > satellites > radio > airports, around the aircraft ---
+      // Placed as sized boxes in one pass so two-line chips stack without overlapping and kinds never
+      // sit on each other. The aircraft labels (placed above, untouched) are fixed obstacles, so no
+      // sky label covers one; an earlier layer is never pushed by a later one.
+      const [pRes, sRes, rRes, aRes] = declutterLayers(
+        [pScreenLabels, sScreenLabels, rScreenLabels, aScreenLabels],
+        decluttered.map((l) => ({ x: l.x, y: l.y, ...AIRCRAFT_LABEL_BOX })),
+      );
+      setPlanetLabels(pRender.length ? applyPlacement(pRender, pRes.placed, (l) => l.planet.body) : NO_PLANETS);
+      setPlanetClusters(pRes.clusters.length ? pRes.clusters.map(toClusterMark) : NO_CLUSTERS);
+      setSatLabels(
+        sRender.length ? applyPlacement(sRender, sRes.placed, (l) => String(l.satellite.noradId)) : NO_SATELLITES,
+      );
+      setSatClusters(sRes.clusters.length ? sRes.clusters.map(toClusterMark) : NO_CLUSTERS);
+      setRadioLabels(rRender.length ? applyPlacement(rRender, rRes.placed, (l) => l.target.key) : NO_RADIO);
+      setRadioClusters(rRes.clusters.length ? rRes.clusters.map(toClusterMark) : NO_CLUSTERS);
+      setAirportLabels(
+        aRender.length ? applyPlacement(aRender, aRes.placed, (l) => l.airport.ident) : NO_AIRPORTS_RENDER,
+      );
+      setAirportClusters(aRes.clusters.length ? aRes.clusters.map(toClusterMark) : NO_CLUSTERS);
 
       // --- Ecliptic arc: the faint great-circle the planets ride, as on-screen dots ---
       if (showEclipticRef.current && eclipticRef.current.length) {
@@ -674,6 +712,7 @@ export function ArOverlay({
           y={v.y}
           anchorY={v.anchorY}
           rangeKm={v.rangeKm}
+          lostAgeS={v.lostAgeS}
           onPress={onSelectVessel}
         />
       ))}
@@ -738,6 +777,7 @@ export function ArOverlay({
           y={l.y}
           anchorY={l.anchorY}
           rangeKm={l.rangeKm}
+          lostAgeS={l.lostAgeS}
           onPress={onSelect}
         />
       ))}
@@ -752,7 +792,14 @@ export function ArOverlay({
           testID={`ac-arrow-${a.hex}`}
           style={[styles.arrow, arrowPosition(a.bearingDeg, width, height)]}
         >
-          <Text style={styles.arrowText}>▲</Text>
+          {a.lost ? (
+            // Signal lost: a hollow, dimmed arrow, like the label's hollow anchor dot.
+            <Text testID={`ar-ac-arrow-lost-${a.hex}`} style={[styles.arrowText, styles.arrowTextLost]}>
+              △
+            </Text>
+          ) : (
+            <Text style={styles.arrowText}>▲</Text>
+          )}
         </View>
       ))}
     </View>
@@ -880,4 +927,5 @@ const styles = StyleSheet.create({
   },
   arrow: { position: "absolute", width: 24, height: 24, alignItems: "center", justifyContent: "center", pointerEvents: "none" },
   arrowText: { color: alpha(color.entity.air, 0.9), fontSize: 18 },
+  arrowTextLost: { color: alpha(color.entity.air, 0.45) },
 });

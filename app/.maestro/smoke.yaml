@@ -14,8 +14,10 @@ name: Smoke (demo mode)
     clearState: true
     permissions:
       all: allow
-# Whatever is on screen right after launch (a system dialog that was already up shows here).
-- takeScreenshot: launched
+# No screenshot right after launchApp: the app isn't in the foreground yet, so it only ever caught the
+# launcher. The first one, `onboarding`, is taken once the app's first element is visible. A system
+# dialog that blocks the app still shows up: the failing wait leaves its screenshot and view hierarchy
+# in the debug output, and CI also captures the device screen after the run.
 
 # Fresh state routes to onboarding; Skip finishes it in demo mode. Cold start of a release build on a
 # CI emulator (software GPU): on the first run the activity was displayed ~2 s and React Native

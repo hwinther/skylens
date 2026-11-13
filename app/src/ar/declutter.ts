@@ -124,7 +124,7 @@ export function declutter(
 }
 
 /** Group collapsed labels into cluster chips by x-column proximity. */
-function buildClusters(collapsed: ScreenLabel[], columnWidthPx: number): ClusterChip[] {
+export function buildClusters(collapsed: ScreenLabel[], columnWidthPx: number): ClusterChip[] {
   const chips: ClusterChip[] = [];
   const remaining = [...collapsed].sort((a, b) => a.x - b.x);
 

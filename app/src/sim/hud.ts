@@ -2,6 +2,7 @@
  * The cockpit HUD's text, shared by the web and Android screens. Pure (no React), so jest runs it.
  */
 
+import { formatAge, LIVE_AGE_S } from "@/ar/signalLost";
 import { KNOTS_TO_MPS } from "@/ar/smoothing";
 import { FEET_TO_M, type SimKind } from "./simPose";
 import type { TrackedPose } from "./tracker";
@@ -12,9 +13,9 @@ export function statusText(pose: TrackedPose | null, engineReady: boolean, error
   if (!pose) return "Waiting for position…";
   if (pose.stale) return "Signal lost — holding last position";
   if (!engineReady) return "Loading 3D view…";
-  if (pose.ageS < 3) return "Live";
+  if (pose.ageS < LIVE_AGE_S) return "Live";
   // A vessel's data can be minutes old before it counts as lost.
-  return pose.ageS < 90 ? `Data ${Math.round(pose.ageS)} s old` : `Data ${Math.round(pose.ageS / 60)} min old`;
+  return `Data ${formatAge(pose.ageS)} old`;
 }
 
 /** One HUD row: label, value, testID. */

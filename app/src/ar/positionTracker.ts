@@ -44,7 +44,7 @@ export const SATELLITE_STALE_AFTER_S = 15;
 export const SATELLITE_MAX_EXTRAPOLATE_S = 30;
 
 export interface TrackLimits {
-  /** After this many seconds without a new position the simulator HUD shows "Signal lost". */
+  /** After this many seconds without a new position the signal counts as lost (signalLost.ts). */
   readonly staleAfterS: number;
   /** Dead reckoning stops this many seconds after the position was true. */
   readonly maxExtrapolateS: number;
@@ -265,6 +265,11 @@ export class PositionTracker<T extends PositionSample = PositionSample> {
     for (const [id, entry] of this.entries) {
       if (entry.gen !== gen) this.entries.delete(id);
     }
+  }
+
+  /** The sample in effect for `id` (after the repeated-position rule), or null for an unknown id. */
+  sampleOf(id: string): T | null {
+    return this.entries.get(id)?.track.sample ?? null;
   }
 
   /** Writes `id`'s smoothed position at `nowMs` into `out` (lon wrapped). False for an unknown id. */
