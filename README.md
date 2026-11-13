@@ -72,4 +72,5 @@ with Google Play internal testing later.
 ## Attribution
 
 Orbital data courtesy of [CelesTrak](https://celestrak.org/). Satellite transmitter data from the
-[SatNOGS DB](https://db.satnogs.org/) (CC BY-SA). AIS/ADS-B from local receivers.
+[SatNOGS DB](https://db.satnogs.org/) (CC BY-SA). AIS/ADS-B from local receivers. Peak and place
+names for AR identify from [GeoNames](https://www.geonames.org/) (CC BY 4.0).

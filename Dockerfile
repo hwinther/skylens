@@ -107,6 +107,10 @@ ENV Airports__FrequenciesPath=/app/data/airport-frequencies.csv.gz
 # over appsettings.Development.json, so preview/e2e containers (Development) load it too.
 COPY data/ports/ports.csv.gz /app/data/ports.csv.gz
 ENV Ports__PortsPath=/app/data/ports.csv.gz
+# Landmarks for AR identify (GeoNames peaks + populated places, CC BY 4.0), committed by
+# data/landmarks/extract-geonames-landmarks.mjs. Same env-var override as the ports.
+COPY data/landmarks/landmarks.csv.gz /app/data/landmarks.csv.gz
+ENV Landmarks__LandmarksPath=/app/data/landmarks.csv.gz
 # Public ADS-B capture replayed by Mqtt__Replay + Mqtt__ReplayFile in preview/e2e envs (never in prod;
 # replay is gated on Development). ADS-B is broadcast data, so committing/baking the capture is fine.
 COPY backend/tests/Api.Tests/fixtures/aircraft.json /app/fixtures/aircraft.json

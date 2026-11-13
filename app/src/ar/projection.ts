@@ -139,6 +139,45 @@ export function project(
   return { xNdc, yNdc, onScreen, arrowBearingDeg, behind };
 }
 
+/**
+ * The inverse of `project()` for an on-screen point: which look-angles sit under NDC (x, y) at this
+ * pose. Undoes the roll, then the per-axis tangent mapping, so `unproject(project(t))` returns `t` for
+ * any target in front of the camera. Used by AR identify to turn a finger position into a ray.
+ */
+export function unproject(
+  xNdc: number,
+  yNdc: number,
+  pose: CameraPose,
+  config: ProjectionConfig = DEFAULT_PROJECTION_CONFIG,
+): ProjectionInput {
+  // applyRoll rotates by −roll on screen; rotate back by +roll.
+  const r = deg2rad(pose.roll);
+  const c = Math.cos(r);
+  const s = Math.sin(r);
+  const x = xNdc * c - yNdc * s;
+  const y = xNdc * s + yNdc * c;
+
+  const tanHalfH = Math.tan(deg2rad(config.hFovDeg / 2));
+  // Same vertical half-angle as project(): tan(halfV) = tan(halfH) / aspect.
+  const tanHalfV = tanHalfH / Math.max(config.aspect, 1e-6);
+  const dAz = rad2degSafe(Math.atan(x * tanHalfH));
+  const dEl = rad2degSafe(Math.atan(y * tanHalfV));
+  return {
+    azimuth: normalizeAzimuth(pose.azimuth + dAz),
+    elevation: Math.max(-90, Math.min(90, pose.elevation + dEl)),
+  };
+}
+
+/** Pixel position in a width x height view → NDC (the inverse of the overlay's pixel mapping). */
+export function screenToNdc(
+  px: number,
+  py: number,
+  width: number,
+  height: number,
+): { xNdc: number; yNdc: number } {
+  return { xNdc: (px - width / 2) / (width / 2), yNdc: (height / 2 - py) / (height / 2) };
+}
+
 /** Angular great-circle distance (deg) of a target offset (dAz, dEl) from bore. */
 function greatCircleAngle(dAzDeg: number, dElDeg: number): number {
   const dAz = deg2rad(dAzDeg);
