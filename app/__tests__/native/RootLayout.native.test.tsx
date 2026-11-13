@@ -8,10 +8,12 @@
  * the probe, token store, stores, useLiveFeed and SignInPrompt run for real.
  */
 import { act, render, screen } from "@testing-library/react-native";
+import { AppState, type AppStateStatus } from "react-native";
+import * as AuthSession from "expo-auth-session";
 import { router } from "expo-router";
 import RootLayout from "../../app/_layout";
 import { createAircraftHubConnection } from "@/api/signalr";
-import { clearTokens, setTokens } from "@/auth/tokenStore";
+import { clearTokens, getTokensSync, setTokens } from "@/auth/tokenStore";
 import { useAuthStore } from "@/state/authStore";
 import { useSettingsStore } from "@/state/settingsStore";
 import { resetStores } from "./fixtures";
@@ -136,5 +138,105 @@ describe("RootLayout", () => {
     meAnswers(401);
     await renderLayout();
     expect(router.replace).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Native resume: Android pauses JS timers in the background, so the layout refreshes an expired
+ * token the moment the app is back in front (AppState "active"), and a session the IdP ended while
+ * the app was away shows as signed out with the reason.
+ */
+describe("RootLayout on resume", () => {
+  const auth = jest.mocked(AuthSession);
+  let appStateListeners: ((s: AppStateStatus) => void)[];
+
+  /** The OS moves the app to the background and back. */
+  async function backgroundAndResume() {
+    await act(async () => appStateListeners.forEach((l) => l("background")));
+    await act(async () => appStateListeners.forEach((l) => l("active")));
+    await act(async () => {});
+  }
+
+  beforeEach(async () => {
+    resetStores();
+    await clearTokens();
+    useAuthStore.setState({ status: "unknown", authRequired: null });
+    useSettingsStore.setState({ _hydrated: true, onboarded: true });
+    createHub.mockImplementation(() => new FakeHub().asConnection());
+    appStateListeners = [];
+    jest.spyOn(AppState, "addEventListener").mockImplementation((_type, listener) => {
+      appStateListeners.push(listener as (s: AppStateStatus) => void);
+      return { remove: jest.fn() } as unknown as ReturnType<typeof AppState.addEventListener>;
+    });
+    auth.fetchDiscoveryAsync.mockResolvedValue({ tokenEndpoint: "https://idp.test/token" } as AuthSession.DiscoveryDocument);
+    jest.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  it("refreshes an expired token when the app returns to the foreground", async () => {
+    await setTokens({ accessToken: "stale", refreshToken: "rt-fake", idToken: null, expiresAt: Date.now() - 1_000 });
+    auth.refreshAsync.mockResolvedValue({ accessToken: "fresh", expiresIn: 3600 } as AuthSession.TokenResponse);
+    meAnswers(401);
+    await renderLayout();
+    expect(auth.refreshAsync).not.toHaveBeenCalled();
+
+    await backgroundAndResume();
+
+    expect(auth.refreshAsync).toHaveBeenCalledTimes(1);
+    expect(getTokensSync()).toMatchObject({ accessToken: "fresh", refreshToken: "rt-fake" });
+    expect(useAuthStore.getState().status).toBe("authenticated");
+  });
+
+  it("does not refresh a token that is still valid", async () => {
+    await setTokens({ accessToken: "good", refreshToken: "rt-fake", idToken: null, expiresAt: Date.now() + 3_600_000 });
+    meAnswers(401);
+    await renderLayout();
+
+    await backgroundAndResume();
+
+    expect(auth.refreshAsync).not.toHaveBeenCalled();
+  });
+
+  it("shows signed out with the reason when the IdP ended the session meanwhile", async () => {
+    await setTokens({ accessToken: "stale", refreshToken: "rt-revoked", idToken: null, expiresAt: Date.now() - 1_000 });
+    auth.refreshAsync.mockRejectedValue(Object.assign(new Error("revoked"), { code: "invalid_grant" }));
+    meAnswers(401);
+    useSettingsStore.setState({ demoMode: false });
+    await renderLayout();
+    expect(screen.queryByTestId("signin-prompt")).not.toBeOnTheScreen();
+
+    await backgroundAndResume();
+
+    expect(getTokensSync()).toBeNull();
+    expect(useAuthStore.getState().status).toBe("unauthenticated");
+    expect(screen.getByTestId("signin-prompt")).toBeOnTheScreen();
+    expect(screen.getByTestId("signin-prompt-error")).toHaveTextContent("Your session has ended. Sign in again.");
+  });
+
+  it("keeps the session when the phone is still offline on resume", async () => {
+    await setTokens({ accessToken: "stale", refreshToken: "rt-fake", idToken: null, expiresAt: Date.now() - 1_000 });
+    auth.refreshAsync.mockRejectedValue(new TypeError("Network request failed"));
+    meAnswers(401);
+    useSettingsStore.setState({ demoMode: false });
+    await renderLayout();
+
+    await backgroundAndResume();
+
+    expect(auth.refreshAsync).toHaveBeenCalledTimes(1);
+    expect(useAuthStore.getState().status).toBe("authenticated");
+    expect(getTokensSync()).toMatchObject({ refreshToken: "rt-fake" });
+    expect(screen.queryByTestId("signin-prompt")).not.toBeOnTheScreen();
+  });
+
+  it("makes no API call but the anonymous probe while signed out behind auth", async () => {
+    meAnswers(401);
+    useSettingsStore.setState({ demoMode: false });
+    await renderLayout();
+    await backgroundAndResume();
+
+    const urls = jest.mocked(globalThis.fetch).mock.calls.map(([u]) => String(u));
+    expect(urls.length).toBeGreaterThan(0);
+    expect(urls.every((u) => u.endsWith("/api/me"))).toBe(true);
+    expect(createHub).not.toHaveBeenCalled();
+    expect(auth.refreshAsync).not.toHaveBeenCalled();
   });
 });

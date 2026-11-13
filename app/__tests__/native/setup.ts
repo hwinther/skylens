@@ -146,10 +146,11 @@ jest.mock("expo-secure-store", () => {
 
 // expo-auth-session: the OIDC edge. By default the IdP discovery never settles and no PKCE request is
 // built, so nothing reaches auth.wsh.no; useAuth's tests drive these per test (defaults reset below).
+// AuthRequest is the class useAuth builds one PKCE request per attempt from.
 jest.mock("expo-auth-session", () => ({
   makeRedirectUri: () => "skylens://oauth",
   fetchDiscoveryAsync: jest.fn(),
-  useAuthRequest: jest.fn(),
+  AuthRequest: jest.fn(),
   exchangeCodeAsync: jest.fn(),
   refreshAsync: jest.fn(),
 }));
@@ -176,7 +177,14 @@ beforeEach(() => {
     ] as unknown as ReturnType<typeof useCameraPermissions>);
   const auth = jest.mocked(AuthSession);
   auth.fetchDiscoveryAsync.mockImplementation(() => new Promise(() => {}));
-  auth.useAuthRequest.mockImplementation(() => [null, null, jest.fn()]);
+  // A request whose authorization URL never finishes building (only reached once discovery loads).
+  auth.AuthRequest.mockImplementation(
+    () =>
+      ({
+        makeAuthUrlAsync: () => new Promise(() => {}),
+        promptAsync: jest.fn(),
+      }) as unknown as AuthSession.AuthRequest,
+  );
   auth.exchangeCodeAsync.mockRejectedValue(new Error("exchangeCodeAsync not set up in this test"));
   auth.refreshAsync.mockRejectedValue(new Error("refreshAsync not set up in this test"));
   // Signed out behind real auth: every API caller is gated off, so no REST call or hub connection.
