@@ -276,6 +276,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/landmarks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["Landmarks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -404,6 +420,27 @@ export interface components {
             destinationIcao?: string | null;
             destinationName?: string | null;
             source?: string | null;
+        };
+        "Skylens.Api.Enrichment.LandmarkDto": {
+            id?: string | null;
+            kind?: string | null;
+            name?: string | null;
+            /** Format: double */
+            lat?: number;
+            /** Format: double */
+            lon?: number;
+            /** Format: int32 */
+            elevationM?: number | null;
+            /** Format: int32 */
+            population?: number | null;
+            /** Format: double */
+            isolationKm?: number | null;
+        };
+        "Skylens.Api.Enrichment.LandmarksResponse": {
+            /** Format: date-time */
+            fetchedAt?: string;
+            landmarks?: components["schemas"]["Skylens.Api.Enrichment.LandmarkDto"][] | null;
+            attribution?: string | null;
         };
         "Skylens.Api.Enrichment.LostGear": {
             toolTypeCode?: string | null;
@@ -999,6 +1036,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Skylens.Api.Enrichment.PortsResponse"];
+                };
+            };
+        };
+    };
+    Landmarks: {
+        parameters: {
+            query: {
+                lat: number;
+                lon: number;
+                radiusKm?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Skylens.Api.Enrichment.LandmarksResponse"];
                 };
             };
         };

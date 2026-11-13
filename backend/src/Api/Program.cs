@@ -37,6 +37,7 @@ builder.Services.AddOptions<AeroApiOptions>().Bind(configuration.GetSection(Aero
 builder.Services.AddOptions<AircraftDbOptions>().Bind(configuration.GetSection(AircraftDbOptions.SectionName));
 builder.Services.AddOptions<AirportsOptions>().Bind(configuration.GetSection(AirportsOptions.SectionName));
 builder.Services.AddOptions<PortsOptions>().Bind(configuration.GetSection(PortsOptions.SectionName));
+builder.Services.AddOptions<LandmarksOptions>().Bind(configuration.GetSection(LandmarksOptions.SectionName));
 builder.Services.AddOptions<BarentsWatchOptions>().Bind(configuration.GetSection(BarentsWatchOptions.SectionName));
 builder.Services.AddOptions<FiskInfoOptions>().Bind(configuration.GetSection(FiskInfoOptions.SectionName));
 builder.Services.AddOptions<SatellitesOptions>().Bind(configuration.GetSection(SatellitesOptions.SectionName));
@@ -186,6 +187,10 @@ builder.Services.AddHostedService(static sp => sp.GetRequiredService<AirportDbSe
 // Offline ports DB (OpenStreetMap for Norway + NGA World Port Index for the rest of the world).
 builder.Services.AddSingleton<PortDbService>();
 builder.Services.AddHostedService(static sp => sp.GetRequiredService<PortDbService>());
+
+// Offline landmarks gazetteer (GeoNames peaks + populated places) for the AR identify feature.
+builder.Services.AddSingleton<LandmarkDbService>();
+builder.Services.AddHostedService(static sp => sp.GetRequiredService<LandmarkDbService>());
 
 // Per-provider budgets: ADSBx monthly, AeroAPI/adsb.lol daily. Keyed so the clients pull the right one.
 builder.Services.AddKeyedSingleton("adsbx", static (sp, _) =>
