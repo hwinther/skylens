@@ -1,0 +1,5 @@
+          "scriptString" : "${console.log('SkylensSim diag = ' + maestro.copiedText)}",
+20:44:08.283 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Run ${console.log('SkylensSim diag = ' + maestro.copiedText)} RUNNING
+20:43:56.838 [ INFO] maestro.orchestra.Orchestra.executeCommands$lambda$26$lambda$24: JsConsole: SkylensSim globe = 3D globe ready, imagery failed
+20:44:08.310 [ INFO] maestro.orchestra.Orchestra.executeCommands$lambda$26$lambda$24: JsConsole: SkylensSim diag = gl=webgl2 Android Emulator OpenGL ES Translator (Google SwiftShader)|tex=4096|wk=ok|img=116/110/0|ter=36/36/0|q=17|fr=56|ff=248|px=0,0,0|blk=7|err=0|last=-
+11-13 20:43:26.191 I/chromium( 5209): [INFO:CONSOLE(146)] "SkylensSim gl=webgl2 Android Emulator OpenGL ES Translator (Google SwiftShader)|tex=4096|wk=ok|img=16/0/0|ter=1/1/0|q=1|fr=16|ff=248|px=-|blk=0|err=0|last=-", source: file:///android_asset/www.bundle/_expo/static/js/web/entry-ea5af19944a6e1cc57f30c164b8aa945.js (146)

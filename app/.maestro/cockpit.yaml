@@ -1,5 +1,6 @@
 # Cockpit view (simulator) flow for the release APK in demo mode: onboarding Skip -> List -> first
-# aircraft's detail card -> "Cockpit view" -> wait for the 3D globe -> screenshot -> hardware back.
+# aircraft's detail card -> "Cockpit view" -> card, outside-view toggle present, Layers filter -> wait
+# for the 3D globe -> screenshot -> hardware back (closes the card, then leaves).
 # A separate file from smoke.yaml so a globe problem shows up as its own failing flow and never makes
 # the smoke steps flaky. Run with `maestro test .maestro` from app/ (README.md); CI runs every
 # top-level flow in .github/workflows/android-e2e.yml.
@@ -87,6 +88,68 @@ name: Cockpit view (demo mode)
     path: cockpit-opened
     optional: true
 
+# The cockpit controls, by testID only (native UI outside the webview, so no globe pixels involved):
+# the followed aircraft's card is open (collapsed), the outside-view toggle is there, the Layers filter
+# unfolds and folds again. Checked straight after the screen opens, before the globe starts streaming
+# imagery: on the software-GL CI emulator the streaming globe stalls the app's UI thread for 5-17 s at
+# a time, and while it does UiAutomator gets the app's window without its views ("Null child", "Active
+# window root not found"), so a lookup can miss an element that is on screen (run 43507610368:
+# `tapOn sim-filter` saw no app views for 40 s). Hence also the long waits and the retry blocks, whose
+# steps are safe to repeat (the filter is only tapped when it is in the wrong state).
+# Since then the globe stops rendering when a software renderer draws only black (globeDiag.ts
+# shouldPauseRendering; diag `paused=1`), which should end the stalls a few seconds after the first
+# tiles; the flow does not depend on it (a faster runner may draw the scene).
+# The outside view is only asserted, never switched on here: on the CI emulator turning it on hung the
+# emulator's GPU ("stuck fence" ANRs in System UI and then the app, whose process died). The toggle is
+# exercised by the Playwright cockpit test and jest instead.
+- extendedWaitUntil:
+    visible:
+      id: "detail-card"
+    timeout: 30000
+- extendedWaitUntil:
+    visible:
+      id: "sim-camera-toggle"
+    timeout: 30000
+- runFlow: subflows/dismiss-system-anr.yaml
+- retry:
+    maxRetries: 3
+    commands:
+      - extendedWaitUntil:
+          visible:
+            id: "sim-filter"
+          timeout: 45000
+      - runFlow:
+          when:
+            notVisible:
+              id: "sim-filter-panel"
+          commands:
+            - tapOn:
+                id: "sim-filter"
+      - extendedWaitUntil:
+          visible:
+            id: "sim-filter-aircraft"
+          timeout: 30000
+- assertVisible:
+    id: "sim-filter-ferries"
+# Layers unfolded next to the HUD: the HUD must stop left of the control column (src/sim/layout.ts).
+- takeScreenshot:
+    path: cockpit-controls
+    optional: true
+- retry:
+    maxRetries: 3
+    commands:
+      - runFlow:
+          when:
+            visible:
+              id: "sim-filter-panel"
+          commands:
+            - tapOn:
+                id: "sim-filter"
+      - extendedWaitUntil:
+          notVisible:
+            id: "sim-filter-panel"
+          timeout: 30000
+
 # The globe: rendered its first frame or gave up (the screen itself times out after 60 s). Optional,
 # see the header. Then, if it is up, give the imagery a while to stream in before the screenshot.
 - extendedWaitUntil:
@@ -124,13 +187,19 @@ name: Cockpit view (demo mode)
           optional: true
       - evalScript: "${console.log('SkylensSim diag = ' + maestro.copiedText)}"
 
-# Hardware back leaves the cockpit view (back to the List, where the tab bar is shown again).
+# Hardware back: the first press closes the card, the second leaves the cockpit view (back to the
+# List, where the tab bar is shown again).
 - runFlow: subflows/dismiss-system-anr.yaml
 - pressKey: back
 - extendedWaitUntil:
     visible:
+      id: "sim-details"
+    timeout: 45000
+- pressKey: back
+- extendedWaitUntil:
+    visible:
       id: "tab-list"
-    timeout: 15000
+    timeout: 45000
 - takeScreenshot:
     path: cockpit-closed
     optional: true

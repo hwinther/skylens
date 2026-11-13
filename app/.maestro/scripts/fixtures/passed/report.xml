@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<testsuites>
+  <testsuite name="Test Suite" device="test" tests="2" failures="0" time="331.196" timestamp="2026-11-13T21:16:23">
+    <testcase id="Cockpit view (demo mode)" name="Cockpit view (demo mode)" classname="Cockpit view (demo mode)" file=".maestro/cockpit.yaml" time="208.404" timestamp="2026-11-13T21:16:23" status="SUCCESS"/>
+    <testcase id="Smoke (demo mode)" name="Smoke (demo mode)" classname="Smoke (demo mode)" file=".maestro/smoke.yaml" time="122.709" timestamp="2026-11-13T21:19:52" status="SUCCESS"/>
+  </testsuite>
+</testsuites>

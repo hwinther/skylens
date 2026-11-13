@@ -2,6 +2,9 @@
  * Simulator (cockpit view): from a detail sheet, "Cockpit view" opens /sim, Cesium starts a WebGL globe,
  * and the HUD follows the target with live numbers.
  *
+ * The cockpit extras (card, Layers filter, outside view) are asserted by testID and ARIA state; picking
+ * traffic in the scene needs pixels/WebGL picking, so it is covered by the jest tests, not here.
+ *
  * Asserts on the HUD and the canvas, not on pixels: headless Chromium renders WebGL in software and the
  * Esri tiles need internet access, so imagery may or may not arrive. The CSP guard still fails the spec
  * if Cesium (script, workers, styles) or the Esri hosts break the policy in container mode.
@@ -128,6 +131,62 @@ test('looking around shows where straight ahead is, and Recenter snaps back', as
   await page.getByTestId('sim-recenter').click()
   await expect(page.getByTestId('sim-recenter')).toHaveCount(0)
   await expect(forward).toHaveAttribute('data-onscreen', 'true')
+})
+
+test('the cockpit card shows the followed aircraft, closes, and Details brings it back', async ({ page }) => {
+  await openAircraftCockpit(page)
+  const card = page.getByTestId('detail-card')
+  await expect(card).toBeVisible()
+  // The followed aircraft: its title, no "Cockpit view" (it is what is shown) and no "Follow this".
+  await expect(page.getByTestId('detail-title')).not.toHaveText('', { timeout: 15_000 })
+  await expect(page.getByTestId('detail-cockpit')).toHaveCount(0)
+  await expect(page.getByTestId('sim-follow')).toHaveCount(0)
+
+  // Closing it offers Details to bring it back.
+  await page.getByTestId('detail-card-close').click()
+  await expect(card).toHaveCount(0)
+  await page.getByTestId('sim-details').click()
+  await expect(card).toBeVisible()
+})
+
+test('the Layers filter unfolds, toggles a layer and remembers it', async ({ page }) => {
+  await openAircraftCockpit(page)
+  const button = page.getByTestId('sim-filter')
+  await expect(button).toHaveAttribute('aria-expanded', 'false')
+  await button.click()
+  await expect(button).toHaveAttribute('aria-expanded', 'true')
+
+  const ferries = page.getByTestId('sim-filter-ferries')
+  await expect(ferries).toHaveAttribute('role', 'button')
+  await expect(ferries).toHaveAttribute('aria-pressed', 'true')
+  await ferries.click()
+  await expect(ferries).toHaveAttribute('aria-pressed', 'false')
+  await expect(button).toContainText('1 hidden')
+
+  // Persisted in the settings (like the List filter).
+  const stored = await page.evaluate(() => localStorage.getItem('skylens.settings.v1') ?? '')
+  expect(JSON.parse(stored).state.simHiddenLayers).toEqual(['ferries'])
+})
+
+test('the outside view toggles and keeps Recenter working', async ({ page }) => {
+  await openAircraftCockpit(page)
+  const toggle = page.getByTestId('sim-camera-toggle')
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByTestId('sim-view')).toHaveAttribute('data-camera', 'chase')
+
+  await page.getByTestId('sim-view').evaluate((el) => {
+    const send = (type: string, x: number) =>
+      el.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: 300, pointerId: 1, bubbles: true }))
+    send('pointerdown', 700)
+    for (let x = 640; x >= 300; x -= 40) send('pointermove', x)
+    send('pointerup', 300)
+  })
+  await expect(page.getByTestId('sim-look-offset')).toHaveText(/\d° right/)
+  await page.getByTestId('sim-recenter').click()
+  await expect(page.getByTestId('sim-recenter')).toHaveCount(0)
+  await expect(page.getByTestId('sim-view')).toHaveAttribute('data-camera', 'chase')
 })
 
 test.describe('on a phone', () => {

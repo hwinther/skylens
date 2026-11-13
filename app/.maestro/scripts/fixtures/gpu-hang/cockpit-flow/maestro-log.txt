@@ -1,0 +1,47 @@
+20:41:32.222 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Define variables RUNNING
+20:41:32.227 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Apply configuration RUNNING
+20:41:32.227 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Launch app "no.wsh.skylens" with clear state RUNNING
+20:41:33.502 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Retry 3 times RUNNING
+20:41:33.511 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Run subflows/dismiss-system-anr.yaml RUNNING
+20:41:33.516 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Apply configuration RUNNING
+20:41:33.518 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Run flow when "(?!Skylens\b).+ isn.t responding", id: android:id/alertTitle is visible RUNNING
+20:41:40.805 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Assert that id: onboarding-skip is visible RUNNING
+20:41:41.057 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Tap on id: onboarding-skip RUNNING
+20:42:08.798 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Retry 3 times RUNNING
+20:42:08.800 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Run subflows/dismiss-system-anr.yaml RUNNING
+20:42:08.801 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Apply configuration RUNNING
+20:42:08.801 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Run flow when "(?!Skylens\b).+ isn.t responding", id: android:id/alertTitle is visible RUNNING
+20:42:18.405 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Assert that "[1-9][0-9]* ac", id: status-aircraft-count is visible RUNNING
+20:42:19.584 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Run subflows/dismiss-system-anr.yaml RUNNING
+20:42:19.584 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Apply configuration RUNNING
+20:42:19.585 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Run flow when "(?!Skylens\b).+ isn.t responding", id: android:id/alertTitle is visible RUNNING
+20:42:22.822 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Tap on id: tab-list RUNNING
+20:42:54.200 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Retry 3 times RUNNING
+20:42:54.200 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Run subflows/dismiss-system-anr.yaml RUNNING
+20:42:54.200 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Apply configuration RUNNING
+20:42:54.201 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Run flow when "(?!Skylens\b).+ isn.t responding", id: android:id/alertTitle is visible RUNNING
+20:43:02.186 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Assert that id: list-ac-.* is visible RUNNING
+20:43:02.452 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Tap on id: list-ac-.*, Index: 0 RUNNING
+20:43:12.241 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Assert that id: detail-cockpit is visible RUNNING
+20:43:12.495 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Tap on id: detail-cockpit RUNNING
+20:43:27.828 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Assert that id: sim-screen is visible RUNNING
+20:43:28.509 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Assert that id: sim-exit is visible RUNNING
+20:43:29.531 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Assert that id: sim-name is visible RUNNING
+20:43:29.628 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Take screenshot cockpit-opened RUNNING
+20:43:37.748 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Assert that (Optional) id: sim-globe-(ready|failed) is visible RUNNING
+20:43:40.009 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Run flow when id: sim-globe-ready is visible RUNNING
+20:43:43.819 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Assert that (Optional) ".*imagery (loaded|failed).*", id: sim-globe-ready is visible RUNNING
+20:43:49.306 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Take screenshot cockpit RUNNING
+20:43:52.183 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Copy text from element with id: sim-globe-(loading|ready|failed) RUNNING
+20:43:55.282 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Run ${console.log('SkylensSim globe = ' + maestro.copiedText)} RUNNING
+20:43:56.845 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Run flow when id: sim-globe-diag is visible RUNNING
+20:44:04.172 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Copy text from element with id: sim-globe-diag RUNNING
+20:44:08.283 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Run ${console.log('SkylensSim diag = ' + maestro.copiedText)} RUNNING
+20:44:08.313 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Assert that id: detail-card is visible RUNNING
+20:44:11.696 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Run subflows/dismiss-system-anr.yaml RUNNING
+20:44:11.697 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Apply configuration RUNNING
+20:44:11.697 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Run flow when "(?!Skylens\b).+ isn.t responding", id: android:id/alertTitle is visible RUNNING
+20:44:24.330 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Tap on id: sim-camera-toggle RUNNING
+20:45:28.376 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandStart: Tap on id: sim-filter RUNNING
+20:45:45.599 [ERROR] maestro.orchestra.Orchestra.executeCommands: [Command execution] CommandFailed: Element not found: Id matching regex: sim-filter
+20:45:46.630 [ INFO] maestro.cli.runner.CliConsoleListener.onCommandFinished: Tap on id: sim-filter FAILED

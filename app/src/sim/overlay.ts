@@ -7,7 +7,18 @@
 import type { AirportDto, PortDto, PortKind } from "@/api/types";
 import { airportShortLabel } from "@/components/webmap/airportStyle";
 import { portTitle } from "@/components/webmap/portStyle";
+import { color } from "@/theme";
 import { FEET_TO_M, type SimKind } from "./simPose";
+
+/**
+ * Which filter group an overlay point belongs to (the cockpit filter, ./layers.ts). Ferry quays are
+ * split from the other ports: /api/ports tags each place with its OSM/WPI kind, and along the coast
+ * the many ferry quays were hard to tell from the harbours.
+ */
+export type OverlayGroup = "airports" | "ports" | "ferries";
+
+/** Ferry quays' points and label text in the 3D view (the other ports keep PORT_COLOR + white). */
+export const FERRY_COLOR = color.ferry;
 
 /**
  * One labelled point in the 3D scene (airport or port). Plain JSON, so it also crosses the native →
@@ -21,6 +32,25 @@ export interface OverlayItem {
   label: string;
   rangeM: number;
   pixelSize: number;
+  /** Filter group (shown/hidden as one). */
+  group: OverlayGroup;
+  /** CSS colour for the point and label text; the layer's colour + white text when absent. */
+  color?: string;
+}
+
+/**
+ * A named reference place behind the labels, kept by the screen (not the globe) for the HUD's
+ * "nearest airport / port" line and to find the destination airport of a known route. Slim and
+ * plain JSON, from the same fetch as the labels: no extra calls.
+ */
+export interface OverlayPlace {
+  kind: "airport" | "port" | "ferry";
+  /** Airport ident (ICAO for most), or "" for ports. */
+  code: string;
+  name: string;
+  lat: number;
+  lon: number;
+  altM: number;
 }
 
 /** The two labelled-point layers of the 3D view. */
@@ -113,12 +143,45 @@ export function airportOverlayItems(airports: readonly AirportDto[]): OverlayIte
       label: airportShortLabel(a),
       rangeM,
       pixelSize: a.type === "large_airport" ? 9 : 6,
+      group: "airports",
     });
   }
   return items;
 }
 
-/** Ports from GET /api/ports as 3D labels. */
+/** Airports as reference places (the labelled classes only: no heliports or seaplane bases). */
+export function airportPlaces(airports: readonly AirportDto[]): OverlayPlace[] {
+  const places: OverlayPlace[] = [];
+  for (const a of airports) {
+    if (airportLabelRangeM(a.type) == null) continue;
+    places.push({
+      kind: "airport",
+      code: a.ident,
+      name: a.name,
+      lat: a.lat,
+      lon: a.lon,
+      altM: (a.elevationFt ?? 0) * FEET_TO_M,
+    });
+  }
+  return places;
+}
+
+/** Ports as reference places; ferry quays keep their own kind. */
+export function portPlaces(ports: readonly PortDto[]): OverlayPlace[] {
+  return ports.map((p) => ({
+    kind: p.kind === "ferry" ? "ferry" : "port",
+    code: "",
+    name: portTitle(p),
+    lat: p.lat,
+    lon: p.lon,
+    altM: 0,
+  }));
+}
+
+/**
+ * Ports from GET /api/ports as 3D labels. Ferry quays go to their own filter group and are drawn in
+ * FERRY_COLOR (point and label text), so they read apart from the harbours, marinas and ports.
+ */
 export function portOverlayItems(ports: readonly PortDto[]): OverlayItem[] {
   return ports.map((p) => ({
     lat: p.lat,
@@ -129,14 +192,26 @@ export function portOverlayItems(ports: readonly PortDto[]): OverlayItem[] {
     label: p.name?.trim() || (p.kind === "port" ? portTitle(p) : ""),
     rangeM: portLabelRangeM(p.kind),
     pixelSize: p.kind === "port" ? 8 : 5,
+    ...(p.kind === "ferry" ? { group: "ferries" as const, color: FERRY_COLOR } : { group: "ports" as const }),
   }));
 }
 
-/** Great-circle distance in km (haversine), for the refetch check. */
+/** Great-circle distance in km (haversine), for the refetch check and the traffic / nearest-place ranges. */
 export function distanceKm(aLat: number, aLon: number, bLat: number, bLon: number): number {
   const toRad = (d: number) => (d * Math.PI) / 180;
   const dLat = toRad(bLat - aLat);
   const dLon = toRad(bLon - aLon);
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLon / 2) ** 2;
   return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/** Initial great-circle bearing from a to b, degrees true [0, 360). */
+export function bearingDeg(aLat: number, aLon: number, bLat: number, bLon: number): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const p1 = toRad(aLat);
+  const p2 = toRad(bLat);
+  const dl = toRad(bLon - aLon);
+  const y = Math.sin(dl) * Math.cos(p2);
+  const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+  return (((Math.atan2(y, x) * 180) / Math.PI) % 360 + 360) % 360;
 }

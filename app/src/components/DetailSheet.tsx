@@ -9,7 +9,7 @@
  */
 
 import { color } from "@/theme";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { awaySourceCredit, creditText } from "./awaySource";
 import { Sheet, sheetActionStyle, SheetSummary } from "./Sheet";
@@ -30,9 +30,30 @@ export interface DetailSheetProps {
   panelTop?: number;
   /** The AR view's tracker says this aircraft's signal is lost (src/ar/signalLost): show a status line. */
   signalLost?: boolean;
+  /**
+   * Replaces the "Cockpit view" action (the cockpit view passes its own "Follow this", or null for the
+   * aircraft it already follows). Undefined keeps the default.
+   */
+  cockpitAction?: ReactNode;
+  /** Measure the summary's distance from here instead of the observer (the cockpit's followed object). */
+  relativeTo?: { lat: number; lon: number } | null;
+  /**
+   * A route became known for `hex`: the free cached read on open, or the user's own tap on the paid
+   * "Route" button. Never triggers a fetch itself (the cockpit view draws the route line from it).
+   */
+  onRoute?: (hex: string, route: RouteResponse) => void;
 }
 
-export function DetailSheet({ hex, client, onClose, panelTop, signalLost = false }: DetailSheetProps) {
+export function DetailSheet({
+  hex,
+  client,
+  onClose,
+  panelTop,
+  signalLost = false,
+  cockpitAction,
+  relativeTo,
+  onRoute,
+}: DetailSheetProps) {
   const [detail, setDetail] = useState<AircraftDetail | null>(null);
   const [route, setRoute] = useState<RouteResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -47,6 +68,14 @@ export function DetailSheet({ hex, client, onClose, panelTop, signalLost = false
   const apiAllowed = useApiAllowed();
   // Distance in the collapsed summary, measured from the same observer the List uses.
   const observer = useObserver();
+  const origin = relativeTo ?? observer;
+  // Read from async callbacks: the latest callback, and the hex the card shows now.
+  const onRouteRef = useRef(onRoute);
+  const hexRef = useRef(hex);
+  useEffect(() => {
+    onRouteRef.current = onRoute;
+    hexRef.current = hex;
+  });
 
   useEffect(() => {
     setDetail(null);
@@ -69,7 +98,9 @@ export function DetailSheet({ hex, client, onClose, panelTop, signalLost = false
     // Show a route immediately if the backend already has it cached (free — no AeroAPI spend). The
     // "Route" button below still triggers the paid first-fetch for anything not yet cached.
     client.aircraftRouteCached(hex).then((r) => {
-      if (!cancelled && r) setRoute(r);
+      if (cancelled || !r) return;
+      setRoute(r);
+      onRouteRef.current?.(hex, r);
     });
     return () => {
       cancelled = true;
@@ -78,10 +109,16 @@ export function DetailSheet({ hex, client, onClose, panelTop, signalLost = false
 
   const loadRoute = () => {
     if (!hex) return;
+    const forHex = hex;
     setRouteLoading(true);
     client
-      .aircraftRoute(hex)
-      .then(setRoute)
+      .aircraftRoute(forHex)
+      .then((r) => {
+        // The card may show another aircraft by now: that one's route is not this.
+        if (hexRef.current !== forHex) return;
+        setRoute(r);
+        onRouteRef.current?.(forHex, r);
+      })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : "Route failed"))
       .finally(() => setRouteLoading(false));
   };
@@ -90,7 +127,7 @@ export function DetailSheet({ hex, client, onClose, panelTop, signalLost = false
   const title =
     state?.flight?.trim() || (state?.hex ?? detail?.metadata?.hex ?? hex ?? "").toUpperCase();
   const positioned = hex != null && state?.lat != null && state?.lon != null;
-  const rel = positioned ? relativePosition(observer, state!.lat!, state!.lon!) : null;
+  const rel = positioned ? relativePosition(origin, state!.lat!, state!.lon!) : null;
 
   return (
     <Sheet
@@ -136,13 +173,17 @@ export function DetailSheet({ hex, client, onClose, panelTop, signalLost = false
               onClose={onClose}
               style={sheetActionStyle}
             />
-            <SimulatorButton
-              testID="detail-cockpit"
-              target={{ kind: "aircraft", id: hex }}
-              accent={color.entity.air}
-              onClose={onClose}
-              style={sheetActionStyle}
-            />
+            {cockpitAction !== undefined ? (
+              cockpitAction
+            ) : (
+              <SimulatorButton
+                testID="detail-cockpit"
+                target={{ kind: "aircraft", id: hex }}
+                accent={color.entity.air}
+                onClose={onClose}
+                style={sheetActionStyle}
+              />
+            )}
           </>
         ) : null
       }

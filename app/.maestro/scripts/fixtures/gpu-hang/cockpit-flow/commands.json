@@ -1,0 +1,175 @@
+[
+  {
+    "command": {
+      "applyConfigurationCommand": {
+        "config": {
+          "appId": "no.wsh.skylens",
+          "name": "Cockpit view (demo mode)"
+        },
+        "optional": false
+      }
+    },
+    "metadata": {
+      "status": "COMPLETED",
+      "timestamp": 1794602492227,
+      "duration": 0,
+      "sequenceNumber": 1,
+      "depth": 0
+    }
+  },
+  {
+    "command": {
+      "launchAppCommand": {
+        "appId": "no.wsh.skylens",
+        "clearState": true,
+        "permissions": {
+          "all": "allow"
+        },
+        "optional": false
+      }
+    },
+    "metadata": {
+      "status": "COMPLETED",
+      "timestamp": 1794602492227,
+      "duration": 1270,
+      "sequenceNumber": 2,
+      "depth": 0
+    }
+  },
+  {
+    "command": {
+      "evalScriptCommand": {
+        "scriptString": "${console.log('SkylensSim diag = ' + maestro.copiedText)}",
+        "optional": false
+      }
+    },
+    "metadata": {
+      "status": "COMPLETED",
+      "timestamp": 1794602648283,
+      "duration": 30,
+      "sequenceNumber": 38,
+      "depth": 1
+    }
+  },
+  {
+    "command": {
+      "assertConditionCommand": {
+        "condition": {
+          "visible": {
+            "idRegex": "detail-card",
+            "optional": false
+          }
+        },
+        "optional": false
+      }
+    },
+    "metadata": {
+      "status": "COMPLETED",
+      "timestamp": 1794602648313,
+      "duration": 3383,
+      "sequenceNumber": 39,
+      "depth": 0
+    }
+  },
+  {
+    "command": {
+      "runFlowCommand": {
+        "sourceDescription": "subflows/dismiss-system-anr.yaml",
+        "config": {
+          "appId": "no.wsh.skylens"
+        },
+        "optional": false
+      }
+    },
+    "metadata": {
+      "status": "COMPLETED",
+      "timestamp": 1794602651696,
+      "duration": 12632,
+      "sequenceNumber": 40,
+      "depth": 0
+    }
+  },
+  {
+    "command": {
+      "applyConfigurationCommand": {
+        "config": {
+          "appId": "no.wsh.skylens"
+        },
+        "optional": false
+      }
+    },
+    "metadata": {
+      "status": "COMPLETED",
+      "timestamp": 1794602651697,
+      "duration": 0,
+      "sequenceNumber": 41,
+      "depth": 1
+    }
+  },
+  {
+    "command": {
+      "runFlowCommand": {
+        "condition": {
+          "visible": {
+            "textRegex": "(?!Skylens\\b).+ isn.t responding",
+            "idRegex": "android:id/alertTitle",
+            "optional": false
+          }
+        },
+        "optional": false
+      }
+    },
+    "metadata": {
+      "status": "SKIPPED",
+      "timestamp": 1794602651697,
+      "duration": 12630,
+      "sequenceNumber": 42,
+      "depth": 1
+    }
+  },
+  {
+    "command": {
+      "tapOnElement": {
+        "selector": {
+          "idRegex": "sim-camera-toggle",
+          "optional": false
+        },
+        "retryIfNoChange": false,
+        "waitUntilVisible": false,
+        "longPress": false,
+        "optional": false
+      }
+    },
+    "metadata": {
+      "status": "COMPLETED",
+      "timestamp": 1794602664329,
+      "duration": 64047,
+      "sequenceNumber": 43,
+      "depth": 0
+    }
+  },
+  {
+    "command": {
+      "tapOnElement": {
+        "selector": {
+          "idRegex": "sim-filter",
+          "optional": false
+        },
+        "retryIfNoChange": false,
+        "waitUntilVisible": false,
+        "longPress": false,
+        "optional": false
+      }
+    },
+    "metadata": {
+      "status": "FAILED",
+      "timestamp": 1794602728376,
+      "duration": 17223,
+      "error": {
+        "message": "Element not found: Id matching regex: sim-filter"
+      },
+      "sequenceNumber": 44,
+      "depth": 0
+    }
+  }
+]

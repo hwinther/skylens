@@ -76,6 +76,11 @@ export const color = {
   runway: "#9FB6CC", // RUNWAY_COLOR — a lighter steel above the airport marker's tone
   // Port reference (from portStyle.ts): a muted sea-green, dimmer than the live vessel teal (#3FC9B0)
   port: "#7DB5A8", // PORT_COLOR — harbours/marinas/ferry quays read as coastal infrastructure
+  // Ferry quays/terminals, split from the other ports in the cockpit view's 3D labels so the many
+  // quays along a fjord read apart from the harbours: a sand tone, clear of the teal/green family.
+  ferry: "#E6C88A",
+  // Cockpit view route line to the destination: the avionics flight-plan magenta.
+  route: "#E86BD8",
   // AR identify ("what am I looking at?"): the laser beam, marker and reticle. A pink-red no entity
   // family uses, so the pointer never reads as an aircraft / vessel / planet label.
   laser: "#FF5C7A",

@@ -10,7 +10,11 @@
  * The webview is a separate JS context: it shares no zustand store, hub connection or token with the
  * app. So:
  *  - data comes in as props (JSON only): the latest sample (~1 Hz), the satellite's OMM, a recenter
- *    counter, and whether API calls are allowed;
+ *    counter, whether API calls are allowed, and the cockpit extras: the other traffic (slim items,
+ *    re-selected natively at ~1 Hz and only re-sent when changed), the layer visibility, the camera
+ *    mode and the route destination. `targetKey` names the followed object: when "Follow this" changes
+ *    it the tracker and traffic start over, without reloading the engine;
+ *  - a tap on traffic is picked here (scene picking) and reported by the `onPick` native action;
  *  - everything that needs the network with auth stays native: airport/port labels are fetched by the
  *    `loadOverlay` native action (an async function prop), so no token ever enters the webview;
  *  - state goes back through native actions: onReady (first frame rendered), onFailed (no WebGL, the
@@ -34,8 +38,12 @@ import { buildSatrec, satelliteStateAt } from "@/ar/satellites";
 import { AIRPORT_COLOR } from "@/components/webmap/airportStyle";
 import { DIAG_TAG, formatDiag, newGlobeDiag, noteError, type GlobeDiag } from "@/sim/globeDiag";
 import { PORT_COLOR } from "@/components/webmap/portStyle";
+import type { CameraMode } from "@/sim/chase";
+import type { SimLayerVisibility } from "@/sim/layers";
 import { cesiumBaseUrl, loadCesium } from "@/sim/loadCesium";
 import type { Look } from "@/sim/look";
+import type { GeoPos } from "@/sim/route";
+import type { TrafficItem, TrafficPick } from "@/sim/traffic";
 import {
   AIRPORT_REFETCH_KM,
   PORT_REFETCH_KM,
@@ -76,6 +84,17 @@ const LEVEL: Readonly<Look> = Object.freeze({ yaw: 0, pitch: 0 });
 
 export interface SimGlobeViewProps {
   kind: SimKind;
+  /** "kind:id" of the followed object; a change re-targets (new tracker, no traffic carried over). */
+  targetKey: string;
+  /** Other traffic to draw (src/sim/traffic.ts). */
+  traffic: TrafficItem[];
+  /** Which airport / port / ferry-quay layers are drawn. */
+  layers: SimLayerVisibility;
+  cameraMode: CameraMode;
+  /** The route line's destination, or null. */
+  destination: GeoPos | null;
+  /** Native action: the user tapped this traffic in the scene. */
+  onPick: (pick: TrafficPick) => Promise<void>;
   /** The followed aircraft/vessel's latest sample; null for a satellite or before the first one. */
   sample: SimSample | null;
   /** The followed satellite's orbital elements; null otherwise. */
@@ -96,7 +115,9 @@ export interface SimGlobeViewProps {
 }
 
 export default function SimGlobeView(props: SimGlobeViewProps) {
-  const { kind, sample, omm, recenter, apiAllowed } = props;
+  const { kind, targetKey, sample, omm, recenter, apiAllowed, traffic, layers, cameraMode, destination } = props;
+  const globeRef = useRef<SimGlobe | null>(null);
+  const kindRef = useRef(kind);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const markerRef = useRef<HTMLDivElement | null>(null);
   const trackerRef = useRef<SimTracker | null>(null);
@@ -109,18 +130,60 @@ export default function SimGlobeView(props: SimGlobeViewProps) {
   useEffect(() => {
     actionsRef.current = props;
     apiAllowedRef.current = apiAllowed;
+    kindRef.current = kind;
   });
+
 
   // Every prop change re-renders this tree with freshly deserialised props, so compare by value: a
   // sample must reach the tracker once, not on every unrelated prop change.
+  // "Follow this": a new followed object starts a fresh tracker (the engine stays up), then takes the
+  // new object's sample, which arrives in the same render.
   const lastSampleRef = useRef("");
+  const lastTargetRef = useRef(targetKey);
   useEffect(() => {
+    if (targetKey !== lastTargetRef.current) {
+      lastTargetRef.current = targetKey;
+      trackerRef.current = new SimTracker();
+      lastSampleRef.current = "";
+      lookRef.current = LEVEL;
+      globeRef.current?.clearTraffic();
+    }
     if (!sample) return;
     const key = JSON.stringify(sample);
     if (key === lastSampleRef.current) return;
     lastSampleRef.current = key;
     trackerRef.current?.update(sample, Date.now());
-  }, [sample]);
+  }, [sample, targetKey]);
+
+  // The cockpit extras, applied to the engine by value (props arrive freshly deserialised).
+  const trafficRef = useRef(traffic);
+  const lastTrafficRef = useRef("");
+  useEffect(() => {
+    trafficRef.current = traffic;
+    const key = JSON.stringify(traffic);
+    if (key === lastTrafficRef.current) return;
+    lastTrafficRef.current = key;
+    globeRef.current?.setTraffic(traffic);
+  }, [traffic]);
+  const layersRef = useRef(layers);
+  const layersKey = JSON.stringify(layers);
+  useEffect(() => {
+    layersRef.current = layers;
+    globeRef.current?.setVisibility(layers);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layersKey]);
+  const cameraRef = useRef(cameraMode);
+  useEffect(() => {
+    cameraRef.current = cameraMode;
+    globeRef.current?.setCameraMode(cameraMode);
+  }, [cameraMode]);
+  const destinationRef = useRef(destination);
+  const destinationKey = JSON.stringify(destination);
+  useEffect(() => {
+    destinationRef.current = destination;
+    globeRef.current?.setDestination(destination);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [destinationKey]);
 
   const lastOmmRef = useRef("");
   useEffect(() => {
@@ -137,7 +200,6 @@ export default function SimGlobeView(props: SimGlobeViewProps) {
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const tracker = trackerRef.current ?? new SimTracker();
     let cancelled = false;
     let globe: SimGlobe | null = null;
     let failed = false;
@@ -163,6 +225,10 @@ export default function SimGlobeView(props: SimGlobeViewProps) {
       enabled: () => true,
       onReset: () => {
         lookRef.current = LEVEL;
+      },
+      onTap: (x, y) => {
+        const hit = globeRef.current?.pick(x, y);
+        if (hit) void actionsRef.current.onPick(hit);
       },
     });
 
@@ -202,8 +268,11 @@ export default function SimGlobeView(props: SimGlobeViewProps) {
           try {
             globe = createSimGlobe(C, {
               container: el,
+              kind: () => kindRef.current,
               marker: () => markerRef.current,
               pose: (now, terrain) => {
+                // Read per frame: "Follow this" swaps in a fresh tracker.
+                const tracker = trackerRef.current ?? new SimTracker();
                 const satrec = satrecRef.current;
                 if (satrec) {
                   const s = satelliteStateAt(satrec, new Date(now));
@@ -227,6 +296,12 @@ export default function SimGlobeView(props: SimGlobeViewProps) {
                 if (!cancelled) report(summary);
               },
             });
+            globeRef.current = globe;
+            // What arrived while the engine was loading.
+            globe.setTraffic(trafficRef.current);
+            globe.setVisibility(layersRef.current);
+            globe.setCameraMode(cameraRef.current);
+            globe.setDestination(destinationRef.current);
           } catch (e) {
             fail(`Couldn't start the 3D view: ${e instanceof Error ? e.message : String(e)}`);
           }
@@ -243,6 +318,7 @@ export default function SimGlobeView(props: SimGlobeViewProps) {
       stopCapture();
       globe?.destroy();
       globe = null;
+      globeRef.current = null;
     };
     // The engine lives for the component's lifetime; the kind never changes for a mounted globe (the
     // native screen remounts it per target).

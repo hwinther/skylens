@@ -153,8 +153,19 @@ npm run coverage:summary          # unit (../app/coverage) + e2e (monocart-cover
   `LabelCollection`/`PointPrimitiveCollection` from `/api/airports` and `/api/ports`; the policy (zoom,
   ranges, refetch, label items) is pure TS in `src/sim/overlay.ts`. Looking around (drag, or on the web
   "Pan/tilt" with the phone's DeviceOrientation via `useWebArSensors`) is an offset from the direction of
-  travel; a "straight ahead" marker and Recenter keep it findable (`src/sim/look.ts`). Maestro covers the
-  Android screen in `app/.maestro/cockpit.yaml` (globe state screenshot-only, see its README).
+  travel; a "straight ahead" marker and Recenter keep it findable (`src/sim/look.ts`). Extras, shared by
+  both screens via `src/components/useSimCockpit.ts`: the AR detail cards (`SimCard.tsx`, open on the
+  followed object; a tap on other traffic opens its card with "Follow this", which re-targets the session
+  via `simStore.start` + `router.setParams` without rebuilding the globe; never on the tap alone); other
+  traffic from the live stores (`src/sim/traffic.ts`: aircraft ≤ 50 km, vessels ≤ 20 km, 60 points / 20
+  labels, nearest first, lost targets and AtoNs left out, ~1 Hz, dead-reckoned in the globe); a persisted
+  "Layers" filter (`settingsStore.simHiddenLayers`, `src/sim/layers.ts`; ferry quays split from ports);
+  an outside/chase camera (`src/sim/chase.ts`); nearest airport/port and destination in the HUD plus a
+  great-circle route line (`src/sim/route.ts`) only from places already fetched for labels and a route the
+  card already knows (free cached read on open or the user tapping the paid Route button). On Android these
+  cross the webview as slim props (`traffic`, `layers`, `cameraMode`, `destination`, `targetKey`) and the
+  `onPick` action. Maestro covers the Android screen in `app/.maestro/cockpit.yaml` (globe state
+  screenshot-only; the outside view is never switched on there, it hung the CI emulator's GPU; see its README).
 - **Ports layer** (`GET /api/ports`, `PortDbService`): an offline file committed at
   `data/ports/ports.csv.gz`, built by `node data/ports/extract-osm-ports.mjs [--wpi UpdatedPub150.csv]`:
   OpenStreetMap (Overpass) for Norway + the NGA World Port Index elsewhere. Refresh by re-running the
@@ -199,6 +210,10 @@ npm run coverage:summary          # unit (../app/coverage) + e2e (monocart-cover
   (ccache), written from main only. It selects by testID (Android resource-id), incl. the tab
   buttons `tab-ar|map|list|settings` (`tabBarButtonTestID`), `onboarding-skip`, `status-source`
   (DEMO/LIVE badge), `list-ac-<hex>`, `detail-card*`, `map-view-*`, `radar`, `settings-demo-mode`.
+  `app/.maestro/scripts/maestro-summary.mjs` (dependency-free, `node --test` via `npm run test:scripts`
+  in `app/`, run by ci.yml's node job) writes the result to the job summary; on PRs the separate
+  `comment` job (only `pull-requests: write`, no checkout) posts that Markdown as the sticky
+  `skylens-maestro` comment. Keep log text going through its `code()`/`text()` escaping.
 
 ## Conventions & hard rules
 

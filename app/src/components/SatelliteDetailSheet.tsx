@@ -11,7 +11,7 @@
  */
 
 import { alpha, color } from "@/theme";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Sheet, sheetActionStyle, SheetSummary } from "./Sheet";
 import { SimulatorButton } from "./SimulatorButton";
@@ -48,6 +48,8 @@ export interface SatelliteDetailSheetProps {
   onClose: () => void;
   /** Side-panel layout only: offset from the top of the screen (see Sheet). */
   panelTop?: number;
+  /** Replaces the "Cockpit view" action (null in the cockpit view itself). Undefined keeps it. */
+  cockpitAction?: ReactNode;
 }
 
 /** Local wall-clock time for a pass instant, e.g. "18:42:10" (display only — not unit-tested). */
@@ -77,6 +79,7 @@ export function SatelliteDetailSheet({
   elevationMaskDeg,
   onClose,
   panelTop,
+  cockpitAction,
 }: SatelliteDetailSheetProps) {
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
   // Without API access (signed out behind real auth) only the live view's rows show.
@@ -192,13 +195,17 @@ export function SatelliteDetailSheet({
             >
               <Text style={styles.trackButtonText}>Show ground track</Text>
             </Pressable>
-            <SimulatorButton
-              testID="sat-cockpit"
-              target={{ kind: "satellite", id: String(noradId) }}
-              accent={color.entity.orbit}
-              onClose={onClose}
-              style={sheetActionStyle}
-            />
+            {cockpitAction !== undefined ? (
+              cockpitAction
+            ) : (
+              <SimulatorButton
+                testID="sat-cockpit"
+                target={{ kind: "satellite", id: String(noradId) }}
+                accent={color.entity.orbit}
+                onClose={onClose}
+                style={sheetActionStyle}
+              />
+            )}
           </>
         ) : null
       }

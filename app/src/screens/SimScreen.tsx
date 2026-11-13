@@ -1,24 +1,39 @@
 /**
  * Simulator / cockpit view (Android). The 3D globe is the web view's Cesium scene running in a webview
  * as an Expo DOM component (components/SimGlobeView.tsx, scene code shared in src/sim/simGlobe.ts);
- * everything around it is native: the HUD (shared components/SimHud.tsx), Exit / Map / Recenter, the
- * loading and failure states, and the Android back button.
+ * everything around it is native: the HUD (shared components/SimHud.tsx), the detail card (shared
+ * components/SimCard.tsx), Exit / Map / Outside view / Layers / Recenter, the loading and failure
+ * states, and the Android back button (closes the card first, then leaves).
  *
  * Data flow mirrors the web screen, but the webview shares no JS state with the app, so this screen
  * reads the live stores (the root layout re-centres the hub subscription on the target via simStore)
  * and passes each new sample to the globe as a prop. A native SimTracker drives the HUD and the
  * subscription centre at 4 Hz, so both keep working even when the globe can't start. Satellites: the
  * OMM is fetched here (the API and its auth stay native) and handed over; the globe propagates it per
- * frame. Airport/port labels are fetched here too, on request from the globe (a native action).
+ * frame. Airport/port labels are fetched here too, on request from the globe (a native action), and
+ * their places kept for the HUD's nearest airport/port. The cockpit extras (components/useSimCockpit.ts)
+ * cross as slim props: other traffic (only when it changed, ≤ 1 Hz), layer visibility, camera mode and
+ * route destination; a tap on traffic comes back through the `onPick` action and opens its card, whose
+ * "Follow this" re-targets the session (the globe stays up and starts a fresh tracker).
  *
- * The globe, the session and the subscriptions are tied to screen focus, like on the web (tabs stay
- * mounted). Not on Android (yet): the minimap inset (Leaflet; a "Map" button opens the full Map on the
- * target instead) and the phone's pan/tilt look mode (drag to look works inside the globe).
+ * The session (target, tracker, subscriptions) and the globe's lifetime are separate focus effects
+ * (tabs stay mounted), so a re-target doesn't reload the webview. Not on Android (yet): the minimap
+ * inset (Leaflet; a "Map" button opens the full Map on the target instead) and the phone's pan/tilt
+ * look mode (drag to look works inside the globe).
  */
 
 import { color } from "@/theme";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  BackHandler,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+  type LayoutChangeEvent,
+} from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { SatRec } from "satellite.js";
@@ -27,16 +42,22 @@ import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
 import { orbitInfo, type OrbitClass } from "@/ar/orbitClass";
 import { buildSatrec, satelliteStateAt } from "@/ar/satellites";
+import { SheetHeightContext } from "@/components/Sheet";
+import { SimCard } from "@/components/SimCard";
+import { SimActionChip, SimFilter, SimToggleChip } from "@/components/SimControls";
 import SimGlobeView from "@/components/SimGlobeView";
 import { SimHud, simHudStyles } from "@/components/SimHud";
+import { useSimCockpit } from "@/components/useSimCockpit";
 import { DIAG_TAG } from "@/sim/globeDiag";
 import { statusText } from "@/sim/hud";
+import { cockpitLayout, hudMaxWidth } from "@/sim/layout";
 import { describeLook, isCentred, type Look } from "@/sim/look";
 import type { OverlayItem, OverlayLayerKind } from "@/sim/overlay";
-import { fetchOverlayItems } from "@/sim/overlayData";
+import { fetchOverlay } from "@/sim/overlayData";
 import { aircraftSample, satelliteSample, vesselSample, type SimSample } from "@/sim/simPose";
 import { parseTarget } from "@/sim/target";
 import { SimTracker, type TrackedPose } from "@/sim/tracker";
+import type { TrafficItem, TrafficPick } from "@/sim/traffic";
 import { useAircraftStore } from "@/state/aircraftStore";
 import { isApiAllowed, useApiAllowed } from "@/state/authStore";
 import { useMapFocusStore } from "@/state/mapFocusStore";
@@ -64,7 +85,8 @@ const SHOW_DIAG = process.env.EXPO_PUBLIC_SIM_DIAG === "1";
 /**
  * The webview re-receives ALL its props on every render of its parent (Expo DOM components emit them
  * unconditionally), and this screen re-renders at the HUD's 4 Hz. Memoised, the globe only hears about
- * real changes: a new sample, the OMM, recenter, access, or its (stable) callbacks.
+ * real changes: a new sample, the OMM, recenter, access, new traffic (≤ 1 Hz), the filter, the camera
+ * mode, the destination, or its (stable) callbacks.
  */
 const Globe = memo(SimGlobeView);
 
@@ -80,6 +102,7 @@ export default function SimScreen() {
   const target = useMemo(() => parseTarget(params.kind, params.id), [params.kind, params.id]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const win = useWindowDimensions();
   const start = useSimStore((s) => s.start);
   const stop = useSimStore((s) => s.stop);
   const setPosition = useSimStore((s) => s.setPosition);
@@ -98,7 +121,24 @@ export default function SimScreen() {
   const [diag, setDiag] = useState("");
   const [look, setLook] = useState<Look>(LEVEL);
   const [recenterSeq, setRecenterSeq] = useState(0);
+  const [traffic, setTraffic] = useState<TrafficItem[]>([]);
+  const [cardHeight, setCardHeight] = useState(0);
+  // The right-hand control column's width (the HUD stops left of it, src/sim/layout.ts hudMaxWidth).
+  const [columnWidth, setColumnWidth] = useState(0);
+  const onColumnLayout = useCallback((e: LayoutChangeEvent) => setColumnWidth(e.nativeEvent.layout.width), []);
   const nameRef = useRef("");
+  // The session's state, read by the HUD timer (which outlives a re-target).
+  const trackerRef = useRef(new SimTracker());
+  const satrecRef = useRef<SatRec | null>(null);
+
+  // Card, filter, camera mode, traffic and nav aids (shared with the web screen).
+  // An empty set stays the same array, so "still no traffic" doesn't re-render the globe.
+  const onTraffic = useCallback(
+    (items: TrafficItem[]) => setTraffic((prev) => (prev.length === 0 && items.length === 0 ? prev : items)),
+    [],
+  );
+  const cockpit = useSimCockpit({ target, focused, onTraffic });
+  const { poseRef, onPlaces, select } = cockpit;
 
   const exit = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -116,26 +156,34 @@ export default function SimScreen() {
     router.push("/map");
   }, [target, setMapFocus, setTrackedSatellite, router]);
 
-  // Android back leaves the cockpit view the same way Exit does (the tab navigator would otherwise
-  // jump to the first tab).
+  // Android back: an open card closes first (as everywhere in the app), then back leaves the cockpit
+  // view the same way Exit does (the tab navigator would otherwise jump to the first tab). This
+  // listener can be registered after the card's own one, so it handles the card itself.
+  const cardOpenRef = useRef(false);
+  useEffect(() => {
+    cardOpenRef.current = cockpit.selection != null;
+  }, [cockpit.selection]);
+  const closeCard = cockpit.closeCard;
   useFocusEffect(
     useCallback(() => {
       const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-        exit();
+        if (cardOpenRef.current) closeCard();
+        else exit();
         return true;
       });
       return () => sub.remove();
-    }, [exit]),
+    }, [exit, closeCard]),
   );
 
+  // --- the session: target, tracker, subscriptions (re-run on "Follow this") ------------------------
   useFocusEffect(
     useCallback(() => {
       if (!target) return;
-      setFocused(true);
       start(target);
       const tracker = new SimTracker();
+      trackerRef.current = tracker;
+      satrecRef.current = null;
       let cancelled = false;
-      let satrec: SatRec | null = null;
       const cleanups: (() => void)[] = [];
 
       if (target.kind === "aircraft") {
@@ -148,6 +196,7 @@ export default function SimScreen() {
           tracker.update(next, Date.now());
           setSample(next);
         };
+        nameRef.current = target.id.toUpperCase();
         feed(useAircraftStore.getState());
         cleanups.push(useAircraftStore.subscribe(feed));
       } else if (target.kind === "vessel") {
@@ -160,6 +209,7 @@ export default function SimScreen() {
           tracker.update(next, Date.now());
           setSample(next);
         };
+        nameRef.current = `MMSI ${target.id}`;
         feed(useVesselStore.getState());
         cleanups.push(useVesselStore.subscribe(feed));
       } else {
@@ -172,10 +222,10 @@ export default function SimScreen() {
             .satelliteDetail(Number(target.id))
             .then((detail) => {
               if (cancelled) return;
-              satrec = buildSatrec(detail.satellite.omm);
+              satrecRef.current = buildSatrec(detail.satellite.omm);
               setOrbitClass(orbitInfo(detail.satellite.omm)?.class ?? null);
               nameRef.current = detail.satellite.name?.trim() || nameRef.current;
-              if (satrec) setOmm(detail.satellite.omm);
+              if (satrecRef.current) setOmm(detail.satellite.omm);
               else setError("This satellite's orbit can't be propagated.");
             })
             .catch(() => {
@@ -183,38 +233,58 @@ export default function SimScreen() {
             });
         }
       }
-
-      // HUD + subscription centre at 4 Hz.
-      const hudTimer = setInterval(() => {
-        const now = Date.now();
-        if (satrec) {
-          const s = satelliteStateAt(satrec, new Date(now));
-          if (s) tracker.update(satelliteSample(s, now), now);
-        }
-        const pose = tracker.pose(now);
-        if (pose) setPosition(pose.lat, pose.lon);
-        setHud({ pose, name: nameRef.current });
-      }, HUD_MS);
-      cleanups.push(() => clearInterval(hudTimer));
+      // Centre the subscription on the new target straight away: a re-target must not fall back to
+      // the observer for a tick, or the object could drop out of the feed.
+      const first = tracker.pose(Date.now());
+      if (first) setPosition(first.lat, first.lon);
 
       return () => {
         cancelled = true;
         for (const fn of cleanups) fn();
-        setFocused(false);
         setSample(null);
         setOmm(null);
         setOrbitClass(null);
         setError(null);
+        setLook(LEVEL);
+        stop();
+      };
+    }, [target, start, stop, setPosition]),
+  );
+
+  // --- the globe's lifetime and the HUD: tied to focus only ---------------------------------------
+  const hasTarget = target != null;
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasTarget) return;
+      setFocused(true);
+      // HUD + subscription centre at 4 Hz.
+      const hudTimer = setInterval(() => {
+        const now = Date.now();
+        const satrec = satrecRef.current;
+        if (satrec) {
+          const s = satelliteStateAt(satrec, new Date(now));
+          if (s) trackerRef.current.update(satelliteSample(s, now), now);
+        }
+        const pose = trackerRef.current.pose(now);
+        if (pose) setPosition(pose.lat, pose.lon);
+        poseRef.current = pose;
+        setHud({ pose, name: nameRef.current });
+      }, HUD_MS);
+
+      return () => {
+        clearInterval(hudTimer);
+        poseRef.current = null;
+        setFocused(false);
         setPhase("loading");
         setGlobeError(null);
         setImagery(null);
         setImageryReason(null);
         setDiag("");
         setLook(LEVEL);
+        setTraffic([]);
         setHud({ pose: null, name: "" });
-        stop();
       };
-    }, [target, start, stop, setPosition]),
+    }, [hasTarget, setPosition, poseRef]),
   );
 
   // A globe that never reports back (webview stuck, page never ran) still ends in the failure state.
@@ -234,9 +304,11 @@ export default function SimScreen() {
     async (layer: OverlayLayerKind, lat: number, lon: number): Promise<OverlayItem[]> => {
       // Rejecting (not an empty list) makes the globe retry once access returns.
       if (!isApiAllowed()) throw new Error("API not allowed");
-      return fetchOverlayItems(client, layer, lat, lon);
+      const { items, places } = await fetchOverlay(client, layer, lat, lon);
+      onPlaces(layer, places);
+      return items;
     },
-    [client],
+    [client, onPlaces],
   );
   const onReady = useCallback(async () => {
     console.log(`${DIAG_TAG} globe ready`);
@@ -259,6 +331,12 @@ export default function SimScreen() {
   const onLook = useCallback(async (next: Look) => {
     setLook(next);
   }, []);
+  const onPick = useCallback(
+    async (pick: TrafficPick) => {
+      select(pick);
+    },
+    [select],
+  );
   const recenter = useCallback(() => {
     setLook(LEVEL);
     setRecenterSeq((n) => n + 1);
@@ -280,6 +358,13 @@ export default function SimScreen() {
     [onRenderProcessGone],
   );
 
+  const layout = cockpitLayout({
+    windowWidth: win.width,
+    windowHeight: win.height,
+    cardOpen: cockpit.selection != null,
+    cardHeight,
+  });
+
   if (!target) {
     return (
       <View style={styles.center}>
@@ -292,6 +377,8 @@ export default function SimScreen() {
   }
 
   const top = insets.top + 12;
+  const hudLeft = insets.left + 12;
+  const columnRight = insets.right + 12 + layout.rightInset;
   const pose = hud.pose;
   return (
     <View style={styles.root} testID="sim-screen">
@@ -303,17 +390,25 @@ export default function SimScreen() {
       >
         {focused && phase !== "failed" ? (
           <Globe
-            key={`${target.kind}:${target.id}`}
+            // Rebuilt only between surface and orbit (their label layers differ); "Follow this"
+            // between aircraft and vessels keeps the engine and changes targetKey instead.
+            key={target.kind === "satellite" ? "orbit" : "surface"}
             kind={target.kind}
+            targetKey={`${target.kind}:${target.id}`}
             sample={sample}
             omm={omm}
             recenter={recenterSeq}
             apiAllowed={apiAllowed}
+            traffic={traffic}
+            layers={cockpit.visibility}
+            cameraMode={cockpit.cameraMode}
+            destination={cockpit.destination}
             loadOverlay={loadOverlay}
             onReady={onReady}
             onFailed={onFailed}
             onImagery={onImagery}
             onLook={onLook}
+            onPick={onPick}
             onDiagnostic={onDiagnostic}
             dom={domProps}
           />
@@ -345,7 +440,8 @@ export default function SimScreen() {
         pose={pose}
         orbitClass={orbitClass}
         status={statusText(pose, phase === "ready", error)}
-        style={{ top, left: insets.left + 12 }}
+        navRows={cockpit.navRows}
+        style={{ top, left: hudLeft, maxWidth: hudMaxWidth({ windowWidth: win.width, hudLeft, columnRight, columnWidth }) }}
       >
         {imagery === "failed" ? (
           <Text testID="sim-imagery-failed" style={simHudStyles.note}>
@@ -354,13 +450,38 @@ export default function SimScreen() {
         ) : null}
       </SimHud>
 
-      <View style={[styles.topRight, { top, right: insets.right + 12 }]} pointerEvents="box-none">
+      <View
+        testID="sim-controls"
+        style={[styles.topRight, { top, right: columnRight }]}
+        pointerEvents="box-none"
+        onLayout={onColumnLayout}
+      >
         <Pressable testID="sim-exit" style={styles.exit} onPress={exit}>
           <Text style={styles.exitText}>Exit</Text>
         </Pressable>
-        <Pressable testID="sim-open-map" style={styles.chip} onPress={openOnMap}>
-          <Text style={styles.chipText}>Map</Text>
-        </Pressable>
+        <SimActionChip
+          testID="sim-open-map"
+          label="Map"
+          accessibilityLabel="Open on the map"
+          onPress={openOnMap}
+        />
+        <SimToggleChip
+          testID="sim-camera-toggle"
+          label="Outside view"
+          accessibilityLabel="Outside view: watch from behind and above"
+          on={cockpit.cameraMode === "chase"}
+          onPress={cockpit.toggleCamera}
+        />
+        {cockpit.selection == null ? (
+          <SimActionChip testID="sim-details" label="Details" onPress={cockpit.showDetails} />
+        ) : null}
+        <SimFilter
+          chips={cockpit.chips}
+          open={cockpit.filterOpen}
+          onToggleOpen={cockpit.toggleFilter}
+          onToggleLayer={cockpit.toggleLayer}
+          summary={cockpit.filterSummary}
+        />
       </View>
 
       {SHOW_DIAG && diag ? (
@@ -372,7 +493,7 @@ export default function SimScreen() {
       {!isCentred(look) ? (
         <Pressable
           testID="sim-recenter"
-          style={[styles.recenter, { bottom: insets.bottom + 24 }]}
+          style={[styles.recenter, { bottom: insets.bottom + 24 + layout.bottomInset }]}
           onPress={recenter}
         >
           <Text style={styles.recenterText}>↺ Recenter</Text>
@@ -381,6 +502,18 @@ export default function SimScreen() {
           </Text>
         </Pressable>
       ) : null}
+
+      <SheetHeightContext.Provider value={setCardHeight}>
+        <SimCard
+          target={target}
+          selection={cockpit.selection}
+          onClose={cockpit.closeCard}
+          onFollow={cockpit.follow}
+          followedLost={!!pose?.stale}
+          origin={pose}
+          onRoute={cockpit.onRoute}
+        />
+      </SheetHeightContext.Provider>
     </View>
   );
 }
@@ -428,15 +561,6 @@ const styles = StyleSheet.create({
   },
   exitText: { color: color.text, fontSize: 15, fontWeight: "600" },
   topRight: { position: "absolute", alignItems: "flex-end", gap: 8 },
-  chip: {
-    backgroundColor: "rgba(11, 22, 34, 0.72)",
-    borderColor: color.textMuted,
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  chipText: { color: color.textDim, fontSize: 13, fontWeight: "600" },
   recenter: {
     position: "absolute",
     alignSelf: "center",

@@ -10,27 +10,39 @@
  *
  * Everything (Cesium widget, store subscriptions, the session itself) is tied to screen focus, not
  * mount: tabs stay mounted, and the subscription must go back to the observer when the user leaves.
+ * The session (target, tracker, data subscriptions) and the globe are separate effects, so "Follow this"
+ * re-targets the session without tearing down the globe (it is only rebuilt between surface and orbit).
  *
  * Looking around: dragging adds a look offset to the direction of travel; on a phone, "Pan/tilt" uses
  * the device's own orientation instead (the AR view's DeviceOrientation sensors), relative to the pose
  * it had when switched on. A flight-path-style marker shows where straight ahead is (clamped to the edge
- * with an arrow when out of view), and "Recenter" (or a double click) snaps back to it. Math: src/sim/look.ts.
+ * with an arrow when out of view), and "Recenter" (or a double click / double tap) snaps back to it.
+ * "Outside view" (sim-camera-toggle) moves the camera behind and above the object (src/sim/chase.ts);
+ * look-around orbits it there. Math: src/sim/look.ts, src/sim/chase.ts.
  *
  * Map aids: a minimap inset (SimMinimap) keeps the object centred with a heading arrow; tapping it opens
- * the full Map on the target. Nearby airports (GET /api/airports) and ports (GET /api/ports), refetched as
- * the object moves, are labelled in the 3D scene, each class from its own distance (src/sim/overlay.ts).
+ * the full Map on the target. Nearby airports (GET /api/airports) and ports (GET /api/ports, ferry quays
+ * styled apart), refetched as the object moves, are labelled in the 3D scene, each class from its own
+ * distance (src/sim/overlay.ts); the HUD shows the nearest one and, when the route is known, the
+ * destination with a route line. Other aircraft/vessels nearby are drawn from the live stores
+ * (src/sim/traffic.ts); a tap on one opens its card with "Follow this". A "Layers" filter hides layers.
  *
- * The Cesium scene itself (camera, forward marker, label layers, drag-to-look) is src/sim/simGlobe.ts and
- * the HUD box is components/SimHud.tsx, both shared with the Android screen (SimScreen.tsx).
+ * The Cesium scene itself is src/sim/simGlobe.ts, the HUD box components/SimHud.tsx, the card
+ * components/SimCard.tsx and the extras' state components/useSimCockpit.ts, all shared with the Android
+ * screen (SimScreen.tsx).
  */
 
 import { color } from "@/theme";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, useWindowDimensions, View, type LayoutChangeEvent } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import type { SatRec } from "satellite.js";
+import { SheetHeightContext } from "@/components/Sheet";
+import { SimCard } from "@/components/SimCard";
+import { SimActionChip, SimFilter, SimToggleChip } from "@/components/SimControls";
 import { SimHud } from "@/components/SimHud";
 import { SimMinimap } from "@/components/SimMinimap";
+import { useSimCockpit } from "@/components/useSimCockpit";
 import { useWebArSensors } from "@/components/useWebArSensors";
 import { AIRPORT_COLOR } from "@/components/webmap/airportStyle";
 import { PORT_COLOR } from "@/components/webmap/portStyle";
@@ -44,7 +56,7 @@ import {
   showsAirportOverlay,
   showsPortOverlay,
 } from "@/sim/overlay";
-import { fetchOverlayItems } from "@/sim/overlayData";
+import { fetchOverlay } from "@/sim/overlayData";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
 import { buildSatrec, satelliteStateAt } from "@/ar/satellites";
@@ -55,13 +67,16 @@ import { useVesselStore } from "@/state/vesselStore";
 import { useSimStore } from "@/state/simStore";
 import { loadCesium } from "@/sim/loadCesium";
 import { statusText } from "@/sim/hud";
+import { cockpitLayout, hudMaxWidth } from "@/sim/layout";
 import { attachLookGestures, createSimGlobe, type SimGlobe, type SimOverlayLayer } from "@/sim/simGlobe";
-import { aircraftSample, satelliteSample, vesselSample } from "@/sim/simPose";
+import { aircraftSample, satelliteSample, vesselSample, type SimKind } from "@/sim/simPose";
 import { parseTarget } from "@/sim/target";
 import { SimTracker, type TrackedPose } from "@/sim/tracker";
 
 /** HUD refresh rate; the camera itself updates every frame. */
 const HUD_MS = 250;
+/** The HUD's left and the control column's right margin (SimHud's own top/left offset), px. */
+const HUD_EDGE = 16;
 
 /** A phone/tablet browser with orientation sensors: the "Pan/tilt" look mode is offered there. */
 function deviceLookSupported(): boolean {
@@ -88,12 +103,19 @@ export default function SimScreen() {
   const start = useSimStore((s) => s.start);
   const stop = useSimStore((s) => s.stop);
   const setPosition = useSimStore((s) => s.setPosition);
+  const win = useWindowDimensions();
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const lookRef = useRef<Look>(LEVEL);
   const markerRef = useRef<HTMLDivElement | null>(null);
   const nameRef = useRef("");
+  // The session's state, read by the globe's render loop (which outlives a re-target).
+  const trackerRef = useRef(new SimTracker());
+  const satrecRef = useRef<SatRec | null>(null);
+  const kindRef = useRef<SimKind>(target?.kind ?? "aircraft");
+  const globeRef = useRef<SimGlobe | null>(null);
   const [hud, setHud] = useState<Hud>({ pose: null, name: "", look: LEVEL });
+  const [focused, setFocused] = useState(false);
 
   // Look mode: drag (default) or the device's own pan/tilt. The sensor hook runs only in device mode.
   const [deviceLook, setDeviceLook] = useState(false);
@@ -135,6 +157,28 @@ export default function SimScreen() {
   // The followed satellite's orbit class, from the OMM the session already fetches; null otherwise.
   const [orbitClass, setOrbitClass] = useState<OrbitClass | null>(null);
 
+  // Card, filter, camera mode, traffic and nav aids (shared with the Android screen).
+  const cockpit = useSimCockpit({
+    target,
+    focused,
+    onTraffic: (items) => globeRef.current?.setTraffic(items),
+  });
+  const { select, poseRef, onPlaces } = cockpit;
+  // Read by the tap handler, which lives as long as the globe (a re-target must not rebuild it).
+  const selectRef = useRef(select);
+  useEffect(() => {
+    selectRef.current = select;
+  }, [select]);
+  useEffect(() => {
+    globeRef.current?.setVisibility(cockpit.visibility);
+  }, [cockpit.visibility, engineReady]);
+  useEffect(() => {
+    globeRef.current?.setCameraMode(cockpit.cameraMode);
+  }, [cockpit.cameraMode, engineReady]);
+  useEffect(() => {
+    globeRef.current?.setDestination(cockpit.destination);
+  }, [cockpit.destination, engineReady]);
+
   const exit = useCallback(() => {
     if (router.canGoBack()) router.back();
     else router.replace("/");
@@ -151,22 +195,22 @@ export default function SimScreen() {
     router.push("/map");
   }, [target, setMapFocus, setTrackedSatellite, router]);
 
+  // --- the session: target, tracker, data subscriptions (re-run on "Follow this") ------------------
   useFocusEffect(
     useCallback(() => {
       if (!target) return;
-      const el = containerRef.current;
-      if (!el) return;
-
       // (Re)start the session: also covers a reload or deep link straight to /sim.
       start(target);
+      kindRef.current = target.kind;
       const tracker = new SimTracker();
+      trackerRef.current = tracker;
+      satrecRef.current = null;
+      lookRef.current = LEVEL;
+      deviceRefRef.current = null;
+      globeRef.current?.clearTraffic();
       let cancelled = false;
-      let globe: SimGlobe | null = null;
-      let satrec: SatRec | null = null;
       const cleanups: (() => void)[] = [];
-      let lastPose: TrackedPose | null = null;
 
-      // --- data sources -------------------------------------------------------------------------
       if (target.kind === "aircraft") {
         const feed = (s: ReturnType<typeof useAircraftStore.getState>) => {
           const ac = s.byHex[target.id];
@@ -175,6 +219,7 @@ export default function SimScreen() {
           const sample = aircraftSample(ac, s.lastSnapshotAt || Date.now());
           if (sample) tracker.update(sample, Date.now());
         };
+        nameRef.current = target.id.toUpperCase();
         feed(useAircraftStore.getState());
         cleanups.push(useAircraftStore.subscribe(feed));
       } else if (target.kind === "vessel") {
@@ -185,6 +230,7 @@ export default function SimScreen() {
           const sample = vesselSample(v, s.lastSnapshotAt || Date.now());
           if (sample) tracker.update(sample, Date.now());
         };
+        nameRef.current = `MMSI ${target.id}`;
         feed(useVesselStore.getState());
         cleanups.push(useVesselStore.subscribe(feed));
       } else {
@@ -198,28 +244,57 @@ export default function SimScreen() {
             .satelliteDetail(noradId)
             .then((detail) => {
               if (cancelled) return;
-              satrec = buildSatrec(detail.satellite.omm);
+              satrecRef.current = buildSatrec(detail.satellite.omm);
               setOrbitClass(orbitInfo(detail.satellite.omm)?.class ?? null);
               nameRef.current = detail.satellite.name?.trim() || nameRef.current;
-              if (!satrec) setError("This satellite's orbit can't be propagated.");
+              if (!satrecRef.current) setError("This satellite's orbit can't be propagated.");
             })
             .catch(() => {
               if (!cancelled) setError("Couldn't load the satellite's orbit.");
             });
         }
       }
+      // Centre the subscription on the new target straight away: a re-target must not fall back to
+      // the observer for a tick, or the object could drop out of the feed.
+      const first = tracker.pose(Date.now());
+      if (first) setPosition(first.lat, first.lon);
+
+      return () => {
+        cancelled = true;
+        for (const fn of cleanups) fn();
+        setError(null);
+        setOrbitClass(null);
+        stop();
+      };
+    }, [target, start, stop, setPosition]),
+  );
+
+  // --- the globe, HUD and gestures: tied to focus, rebuilt only between surface and orbit -----------
+  const surface = target ? target.kind !== "satellite" : null;
+  useFocusEffect(
+    useCallback(() => {
+      if (surface == null) return;
+      const el = containerRef.current;
+      if (!el) return;
+      setFocused(true);
+      let cancelled = false;
+      let globe: SimGlobe | null = null;
+      const cleanups: (() => void)[] = [];
+      let lastPose: TrackedPose | null = null;
 
       // --- HUD + subscription centre at 4 Hz -----------------------------------------------------
       const hudTimer = setInterval(() => {
         const now = Date.now();
+        const satrec = satrecRef.current;
         if (satrec) {
           const s = satelliteStateAt(satrec, new Date(now));
-          if (s) tracker.update(satelliteSample(s, now), now);
+          if (s) trackerRef.current.update(satelliteSample(s, now), now);
         }
         // Without Cesium (still loading, or failed) the pose is computed here; with it, the render
         // loop has already advanced the tracker this frame.
-        const pose = globe ? lastPose : tracker.pose(now);
+        const pose = globe ? lastPose : trackerRef.current.pose(now);
         if (pose) setPosition(pose.lat, pose.lon);
+        poseRef.current = pose;
         setHud({ pose, name: nameRef.current, look: lookRef.current });
       }, HUD_MS);
       cleanups.push(() => clearInterval(hudTimer));
@@ -229,35 +304,46 @@ export default function SimScreen() {
         .then((C) => {
           if (cancelled) return;
           const client = new ApiClient({ baseUrl: getApiBaseUrl() });
+          const kind = kindRef.current;
           const overlays: SimOverlayLayer[] = [];
           // No API calls without access (signed out behind real auth): no labels, no fetch.
-          if (showsAirportOverlay(target.kind)) {
+          if (showsAirportOverlay(kind)) {
             overlays.push({
               color: AIRPORT_COLOR,
               refetchKm: AIRPORT_REFETCH_KM,
-              load: (lat, lon) => fetchOverlayItems(client, "airports", lat, lon),
+              load: (lat, lon) =>
+                fetchOverlay(client, "airports", lat, lon).then((r) => {
+                  onPlaces("airports", r.places);
+                  return r.items;
+                }),
               allowed: isApiAllowed,
             });
           }
-          if (showsPortOverlay(target.kind)) {
+          if (showsPortOverlay(kind)) {
             overlays.push({
               color: PORT_COLOR,
               refetchKm: PORT_REFETCH_KM,
-              load: (lat, lon) => fetchOverlayItems(client, "ports", lat, lon),
+              load: (lat, lon) =>
+                fetchOverlay(client, "ports", lat, lon).then((r) => {
+                  onPlaces("ports", r.places);
+                  return r.items;
+                }),
               allowed: isApiAllowed,
             });
           }
           let lookReferenced = false;
           globe = createSimGlobe(C, {
             container: el,
+            kind: () => kindRef.current,
             marker: () => markerRef.current,
             pose: (now, terrain) => {
+              const satrec = satrecRef.current;
               if (satrec) {
                 const s = satelliteStateAt(satrec, new Date(now));
-                if (s) tracker.update(satelliteSample(s, now), now);
+                if (s) trackerRef.current.update(satelliteSample(s, now), now);
               }
-              const pose = tracker.pose(now, terrain);
-              if (pose) lastPose = pose;
+              const pose = trackerRef.current.pose(now, terrain);
+              lastPose = pose;
               return pose;
             },
             look: () => {
@@ -276,13 +362,14 @@ export default function SimScreen() {
             },
             overlays,
           });
+          globeRef.current = globe;
           setEngineReady(true);
         })
         .catch((e: unknown) => {
           if (!cancelled) setError(e instanceof Error ? e.message : "Couldn't start the 3D view.");
         });
 
-      // --- drag to look around (pan/tilt mode: the phone aims the view) ---------------------------
+      // --- drag to look around (pan/tilt mode: the phone aims the view), tap to pick traffic -------
       cleanups.push(
         attachLookGestures(el, {
           get: () => lookRef.current,
@@ -291,6 +378,10 @@ export default function SimScreen() {
           },
           enabled: () => !deviceActiveRef.current,
           onReset: recenter,
+          onTap: (x, y) => {
+            const hit = globeRef.current?.pick(x, y);
+            if (hit) selectRef.current(hit);
+          },
         }),
       );
 
@@ -299,14 +390,25 @@ export default function SimScreen() {
         for (const fn of cleanups) fn();
         globe?.destroy();
         globe = null;
+        globeRef.current = null;
+        poseRef.current = null;
         setEngineReady(false);
-        setError(null);
-        setOrbitClass(null);
+        setFocused(false);
         setHud({ pose: null, name: "", look: LEVEL });
-        stop();
       };
-    }, [target, start, stop, setPosition, recenter, sensorPoseRef]),
+    }, [surface, setPosition, recenter, sensorPoseRef, poseRef, onPlaces]),
   );
+
+  const [cardHeight, setCardHeight] = useState(0);
+  // The right-hand control column's width (the HUD stops left of it, src/sim/layout.ts hudMaxWidth).
+  const [columnWidth, setColumnWidth] = useState(0);
+  const onColumnLayout = useCallback((e: LayoutChangeEvent) => setColumnWidth(e.nativeEvent.layout.width), []);
+  const layout = cockpitLayout({
+    windowWidth: win.width,
+    windowHeight: win.height,
+    cardOpen: cockpit.selection != null,
+    cardHeight,
+  });
 
   if (!target) {
     return (
@@ -325,6 +427,7 @@ export default function SimScreen() {
       <div
         ref={containerRef}
         data-testid="sim-view"
+        data-camera={cockpit.cameraMode}
         style={{ position: "absolute", inset: 0, touchAction: "none", cursor: "grab" }}
       />
       {/* "Straight ahead" marker, positioned every frame by the render loop (src/sim/simGlobe.ts). */}
@@ -348,9 +451,18 @@ export default function SimScreen() {
         pose={pose}
         orbitClass={orbitClass}
         status={statusText(pose, engineReady, error)}
+        navRows={cockpit.navRows}
+        style={{
+          maxWidth: hudMaxWidth({
+            windowWidth: win.width,
+            hudLeft: HUD_EDGE,
+            columnRight: HUD_EDGE + layout.rightInset,
+            columnWidth,
+          }),
+        }}
       />
 
-      {pose ? (
+      {pose && layout.minimapFits ? (
         <SimMinimap
           lat={pose.lat}
           lon={pose.lon}
@@ -364,10 +476,16 @@ export default function SimScreen() {
                 : color.entity.orbit
           }
           onPress={openOnMap}
+          style={{ right: 16 + layout.rightInset, bottom: 32 + layout.bottomInset }}
         />
       ) : null}
 
-      <View style={styles.topRight} pointerEvents="box-none">
+      <View
+        testID="sim-controls"
+        style={[styles.topRight, { right: HUD_EDGE + layout.rightInset }]}
+        pointerEvents="box-none"
+        onLayout={onColumnLayout}
+      >
         <Pressable testID="sim-exit" style={styles.exit} onPress={exit}>
           <Text style={styles.exitText}>Exit</Text>
         </Pressable>
@@ -386,6 +504,23 @@ export default function SimScreen() {
             </Text>
           </Pressable>
         ) : null}
+        <SimToggleChip
+          testID="sim-camera-toggle"
+          label="Outside view"
+          accessibilityLabel="Outside view: watch from behind and above"
+          on={cockpit.cameraMode === "chase"}
+          onPress={cockpit.toggleCamera}
+        />
+        {cockpit.selection == null ? (
+          <SimActionChip testID="sim-details" label="Details" onPress={cockpit.showDetails} />
+        ) : null}
+        <SimFilter
+          chips={cockpit.chips}
+          open={cockpit.filterOpen}
+          onToggleOpen={cockpit.toggleFilter}
+          onToggleLayer={cockpit.toggleLayer}
+          summary={cockpit.filterSummary}
+        />
       </View>
 
       {!isCentred(hud.look) ? (
@@ -396,6 +531,18 @@ export default function SimScreen() {
           </Text>
         </Pressable>
       ) : null}
+
+      <SheetHeightContext.Provider value={setCardHeight}>
+        <SimCard
+          target={target}
+          selection={cockpit.selection}
+          onClose={cockpit.closeCard}
+          onFollow={cockpit.follow}
+          followedLost={!!pose?.stale}
+          origin={pose}
+          onRoute={cockpit.onRoute}
+        />
+      </SheetHeightContext.Provider>
     </View>
   );
 }
