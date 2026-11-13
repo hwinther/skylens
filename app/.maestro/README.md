@@ -38,8 +38,9 @@ Metro is not needed. `launchApp` clears the app's state, so the flow starts from
 ## CI
 
 `.github/workflows/android-e2e.yml` runs the flow nightly, on manual dispatch, and on PRs labelled
-`mobile-e2e`. Every run (pass or fail) uploads a `maestro-output-<attempt>` artifact, kept 7 days:
-the flows' screenshots (`artifacts/<timestamp>/<flow name>/screenshots`, e.g. `Smoke (demo mode)` and
+`mobile-e2e`. The build restores a Gradle cache and a ccache of the NDK C++ compile (both written only
+by runs on main; PR runs just read them), and logs `ccache --show-stats` after the Gradle step. Every
+run (pass or fail) uploads a `maestro-output-<attempt>` artifact, kept 7 days: the flows' screenshots (`artifacts/<timestamp>/<flow name>/screenshots`, e.g. `Smoke (demo mode)` and
 `Cockpit view (demo mode)`), the JUnit report,
 Maestro's log and the failing step's view hierarchy, plus device screenshots from just before and
 after the test, logcat (main, system, crash, events; from boot), `dumpsys activity activities`, the
