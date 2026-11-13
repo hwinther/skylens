@@ -99,6 +99,32 @@ export type PortsResponse = Omit<Schemas["Skylens.Api.Enrichment.PortsResponse"]
   attribution: string;
 };
 
+/**
+ * AR identify gazetteer (bundled GeoNames extract): one named peak or populated place. `id`/`kind`/
+ * `name`/`lat`/`lon` are tightened (always set; the generator marks them optional). `elevationM` is set
+ * for every peak, `isolationKm` (distance to the nearest higher peak) only for peaks.
+ */
+export type LandmarkKind = "peak" | "city" | "town" | "village" | "hamlet";
+export type LandmarkDto = Omit<
+  Schemas["Skylens.Api.Enrichment.LandmarkDto"],
+  "id" | "kind" | "name" | "lat" | "lon"
+> & {
+  id: string;
+  kind: LandmarkKind;
+  name: string;
+  lat: number;
+  lon: number;
+};
+
+/** GET /api/landmarks — nearby landmarks (nearest-first) + the CC BY attribution to show with them. */
+export type LandmarksResponse = Omit<
+  Schemas["Skylens.Api.Enrichment.LandmarksResponse"],
+  "landmarks" | "attribution"
+> & {
+  landmarks: LandmarkDto[];
+  attribution: string;
+};
+
 /** GET /api/aircraft/{hex}/route — AeroAPI route by callsign. */
 export type RouteResponse = Schemas["Skylens.Api.Enrichment.FlightRoute"];
 

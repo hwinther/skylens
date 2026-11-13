@@ -3,6 +3,8 @@ import {
   DEFAULT_PROJECTION_CONFIG,
   effectiveHFovDeg,
   project,
+  screenToNdc,
+  unproject,
   type ProjectionConfig,
 } from "@/ar/projection";
 import type { CameraPose } from "@/ar/orientation";
@@ -129,5 +131,31 @@ describe("project — roll rotation", () => {
     const rStraight = Math.hypot(straight.xNdc, straight.yNdc);
     const rRolled = Math.hypot(rolled.xNdc, rolled.yNdc);
     expect(rRolled).toBeCloseTo(rStraight, 6);
+  });
+});
+
+describe("unproject — the inverse of project for on-screen points", () => {
+  it("maps the screen centre to the bore-sight", () => {
+    const pose: CameraPose = { azimuth: 123, elevation: 4, roll: 17 };
+    const ray = unproject(0, 0, pose, CONFIG);
+    expect(ray.azimuth).toBeCloseTo(123, 9);
+    expect(ray.elevation).toBeCloseTo(4, 9);
+  });
+
+  it.each([
+    [{ azimuth: 10, elevation: 5 }, { azimuth: 0, elevation: 0, roll: 0 }],
+    [{ azimuth: 355, elevation: -3 }, { azimuth: 5, elevation: 2, roll: 25 }],
+    [{ azimuth: 100, elevation: 30 }, { azimuth: 90, elevation: 20, roll: -40 }],
+  ])("round-trips %o through project at pose %o", (target, pose) => {
+    const p = project(target, pose, CONFIG);
+    const back = unproject(p.xNdc, p.yNdc, pose, CONFIG);
+    expect(back.azimuth).toBeCloseTo(target.azimuth, 6);
+    expect(back.elevation).toBeCloseTo(target.elevation, 6);
+  });
+
+  it("converts pixels to NDC with up positive", () => {
+    expect(screenToNdc(200, 400, 400, 800)).toEqual({ xNdc: 0, yNdc: 0 });
+    expect(screenToNdc(400, 0, 400, 800)).toEqual({ xNdc: 1, yNdc: 1 });
+    expect(screenToNdc(0, 800, 400, 800)).toEqual({ xNdc: -1, yNdc: -1 });
   });
 });

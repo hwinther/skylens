@@ -611,6 +611,62 @@ public sealed class SmokeTests
     }
 
     [Fact]
+    public async Task Api_landmarks_requires_authentication()
+    {
+        using var client = _factory.CreateClient();
+
+        using var resp = await client.GetAsync("/api/landmarks?lat=59.9&lon=10.75",
+                                               TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task Api_landmarks_returns_nearby_peaks_and_places_with_the_geonames_attribution_when_authenticated()
+    {
+        using var client = _authFactory.CreateClient();
+
+        // Development reads the committed GeoNames extract (data/landmarks/landmarks.csv.gz). Await the
+        // background load so the assertion isn't racing the parse.
+        var db = _authFactory.Services.GetRequiredService<Skylens.Api.Enrichment.LandmarkDbService>();
+        if (db.LoadTask is { } load)
+            await load;
+
+        using var resp = await client.GetAsync(
+            "/api/landmarks?lat=59.9&lon=10.75&radiusKm=150", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        var root = doc.RootElement;
+        Assert.Equal(Skylens.Api.Enrichment.LandmarkDbService.Attribution, root.GetProperty("attribution").GetString());
+        var landmarks = root.GetProperty("landmarks");
+        Assert.InRange(landmarks.GetArrayLength(), 1, Skylens.Api.Enrichment.LandmarkDbService.MaxResults);
+        var names = new HashSet<string>();
+        foreach (var l in landmarks.EnumerateArray())
+        {
+            Assert.Contains(l.GetProperty("kind").GetString(), new[] { "peak", "city", "town", "village", "hamlet" });
+            names.Add(l.GetProperty("name").GetString()!);
+        }
+
+        // Oslo itself and Gaustatoppen (~117 km west, the classic "visible from Oslo" summit).
+        Assert.Contains("Oslo", names);
+        Assert.Contains("Gaustatoppen", names);
+    }
+
+    [Theory]
+    [InlineData("lat=91&lon=10")]
+    [InlineData("lat=59.9&lon=-181")]
+    [InlineData("lat=NaN&lon=10")]
+    public async Task Api_landmarks_rejects_out_of_range_coordinates(string query)
+    {
+        using var client = _authFactory.CreateClient();
+
+        using var resp = await client.GetAsync($"/api/landmarks?{query}", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+    }
+
+    [Fact]
     public async Task Healthz_includes_the_airport_fields()
     {
         // The airports vertical extends healthz ADDITIVELY, like the AIS and satellite fields. On
