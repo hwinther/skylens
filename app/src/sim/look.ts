@@ -118,3 +118,22 @@ export function forwardMarker(
 function angleOf(dx: number, dy: number): number {
   return ((Math.atan2(dx, -dy) * 180) / Math.PI + 360) % 360;
 }
+
+/** A press that moved at most this far (CSS px) ... */
+export const TAP_SLOP_PX = 8;
+/** ... and was released within this long is a tap (it picks traffic), not a drag. */
+export const TAP_MAX_MS = 400;
+/** A second tap this soon after the first makes a double tap (recenter), so the first doesn't pick. */
+export const DOUBLE_TAP_MS = 300;
+
+export interface PointerMark {
+  x: number;
+  y: number;
+  /** ms */
+  t: number;
+}
+
+/** Whether a press from `down` to `up` was a tap rather than a drag to look around. */
+export function isTap(down: PointerMark, up: PointerMark): boolean {
+  return Math.hypot(up.x - down.x, up.y - down.y) <= TAP_SLOP_PX && up.t - down.t <= TAP_MAX_MS;
+}

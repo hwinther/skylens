@@ -1,5 +1,6 @@
 # Cockpit view (simulator) flow for the release APK in demo mode: onboarding Skip -> List -> first
-# aircraft's detail card -> "Cockpit view" -> wait for the 3D globe -> screenshot -> hardware back.
+# aircraft's detail card -> "Cockpit view" -> wait for the 3D globe -> screenshot -> card, outside
+# view and Layers controls -> hardware back (closes the card, then leaves).
 # A separate file from smoke.yaml so a globe problem shows up as its own failing flow and never makes
 # the smoke steps flaky. Run with `maestro test .maestro` from app/ (README.md); CI runs every
 # top-level flow in .github/workflows/android-e2e.yml.
@@ -124,8 +125,36 @@ name: Cockpit view (demo mode)
           optional: true
       - evalScript: "${console.log('SkylensSim diag = ' + maestro.copiedText)}"
 
-# Hardware back leaves the cockpit view (back to the List, where the tab bar is shown again).
+# The cockpit controls, by testID only (native UI outside the webview, so no globe pixels involved):
+# the followed aircraft's card is open (collapsed), the outside view toggles, the Layers filter unfolds
+# and folds again.
+- assertVisible:
+    id: "detail-card"
 - runFlow: subflows/dismiss-system-anr.yaml
+- tapOn:
+    id: "sim-camera-toggle"
+- tapOn:
+    id: "sim-filter"
+- assertVisible:
+    id: "sim-filter-aircraft"
+- assertVisible:
+    id: "sim-filter-ferries"
+- tapOn:
+    id: "sim-filter"
+- tapOn:
+    id: "sim-camera-toggle"
+- takeScreenshot:
+    path: cockpit-controls
+    optional: true
+
+# Hardware back: the first press closes the card, the second leaves the cockpit view (back to the
+# List, where the tab bar is shown again).
+- runFlow: subflows/dismiss-system-anr.yaml
+- pressKey: back
+- extendedWaitUntil:
+    visible:
+      id: "sim-details"
+    timeout: 10000
 - pressKey: back
 - extendedWaitUntil:
     visible:

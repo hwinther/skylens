@@ -8,11 +8,36 @@ import type { ApiClient } from "@/api/client";
 import {
   AIRPORT_FETCH_RADIUS_KM,
   airportOverlayItems,
+  airportPlaces,
   PORT_FETCH_RADIUS_KM,
   portOverlayItems,
+  portPlaces,
   type OverlayItem,
   type OverlayLayerKind,
+  type OverlayPlace,
 } from "./overlay";
+
+export interface OverlayFetch {
+  /** The 3D labels (handed to the globe). */
+  items: OverlayItem[];
+  /** The same places, slim, for the screen's HUD (nearest airport/port, destination lookup). */
+  places: OverlayPlace[];
+}
+
+/** One fetch, both views of it: labels for the globe and places for the screen. */
+export async function fetchOverlay(
+  client: Pick<ApiClient, "airports" | "ports">,
+  layer: OverlayLayerKind,
+  lat: number,
+  lon: number,
+): Promise<OverlayFetch> {
+  if (layer === "airports") {
+    const airports = (await client.airports(lat, lon, AIRPORT_FETCH_RADIUS_KM)).airports ?? [];
+    return { items: airportOverlayItems(airports), places: airportPlaces(airports) };
+  }
+  const ports = (await client.ports(lat, lon, PORT_FETCH_RADIUS_KM)).ports ?? [];
+  return { items: portOverlayItems(ports), places: portPlaces(ports) };
+}
 
 export async function fetchOverlayItems(
   client: Pick<ApiClient, "airports" | "ports">,
@@ -20,10 +45,5 @@ export async function fetchOverlayItems(
   lat: number,
   lon: number,
 ): Promise<OverlayItem[]> {
-  if (layer === "airports") {
-    const res = await client.airports(lat, lon, AIRPORT_FETCH_RADIUS_KM);
-    return airportOverlayItems(res.airports ?? []);
-  }
-  const res = await client.ports(lat, lon, PORT_FETCH_RADIUS_KM);
-  return portOverlayItems(res.ports ?? []);
+  return (await fetchOverlay(client, layer, lat, lon)).items;
 }

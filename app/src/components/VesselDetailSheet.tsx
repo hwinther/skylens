@@ -12,7 +12,7 @@
  */
 
 import { alpha, color } from "@/theme";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { Sheet, sheetActionStyle, SheetSummary } from "./Sheet";
 import { ShowOnMapButton } from "./ShowOnMapButton";
@@ -38,9 +38,21 @@ export interface VesselDetailSheetProps {
   panelTop?: number;
   /** The AR view's tracker says this ship's signal is lost (src/ar/signalLost): show a status line. */
   signalLost?: boolean;
+  /** Replaces the "Cockpit view" action (the cockpit view's "Follow this", or null). Undefined keeps it. */
+  cockpitAction?: ReactNode;
+  /** Measure the summary's distance from here instead of the observer (the cockpit's followed object). */
+  relativeTo?: { lat: number; lon: number } | null;
 }
 
-export function VesselDetailSheet({ mmsi, vessel, onClose, panelTop, signalLost = false }: VesselDetailSheetProps) {
+export function VesselDetailSheet({
+  mmsi,
+  vessel,
+  onClose,
+  panelTop,
+  signalLost = false,
+  cockpitAction,
+  relativeTo,
+}: VesselDetailSheetProps) {
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
   // Without API access (signed out behind real auth) only the live DTO's rows show.
   const apiAllowed = useApiAllowed();
@@ -83,7 +95,7 @@ export function VesselDetailSheet({ mmsi, vessel, onClose, panelTop, signalLost 
   const moving = vessel?.sog != null && vessel.sog > 0.5;
   const navStatus = navStatusText(vessel?.navStatus);
   const dims = metadata ? formatDimensions(metadata) : null;
-  const rel = hasPosition ? relativePosition(observer, vessel!.lat!, vessel!.lon!) : null;
+  const rel = hasPosition ? relativePosition(relativeTo ?? observer, vessel!.lat!, vessel!.lon!) : null;
   const distance = rel ? `${rel.distanceKm.toFixed(1)} km ${compass8(rel.bearingDeg)}` : null;
   // IMO 0 (or absent) means "not supplied" — hide the row rather than showing a bogus 0.
   const imo = metadata?.imo != null && metadata.imo > 0 ? String(metadata.imo) : null;
@@ -161,13 +173,17 @@ export function VesselDetailSheet({ mmsi, vessel, onClose, panelTop, signalLost 
               onClose={onClose}
               style={sheetActionStyle}
             />
-            <SimulatorButton
-              testID="vessel-cockpit"
-              target={{ kind: "vessel", id: mmsi }}
-              accent={color.entity.sea}
-              onClose={onClose}
-              style={sheetActionStyle}
-            />
+            {cockpitAction !== undefined ? (
+              cockpitAction
+            ) : (
+              <SimulatorButton
+                testID="vessel-cockpit"
+                target={{ kind: "vessel", id: mmsi }}
+                accent={color.entity.sea}
+                onClose={onClose}
+                style={sheetActionStyle}
+              />
+            )}
           </>
         ) : null
       }

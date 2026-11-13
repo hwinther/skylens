@@ -9,7 +9,7 @@
 import { alpha, color } from "@/theme";
 import "leaflet/dist/leaflet.css";
 import { useEffect } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { MapContainer, TileLayer, useMap } from "react-leaflet";
 
@@ -21,9 +21,12 @@ export interface SimMinimapProps {
   /** Accent for the arrow (the object's family colour). */
   accent: string;
   onPress?: () => void;
+  /** Position override (the cockpit view lifts it above an open detail card). */
+  style?: StyleProp<ViewStyle>;
 }
 
-const SIZE = 168;
+export const MINIMAP_SIZE = 168;
+const SIZE = MINIMAP_SIZE;
 
 /** Re-centre on every pose update without animation (the HUD ticks at 4 Hz). */
 function Follow({ lat, lon, zoom }: { lat: number; lon: number; zoom: number }) {
@@ -34,9 +37,9 @@ function Follow({ lat, lon, zoom }: { lat: number; lon: number; zoom: number }) 
   return null;
 }
 
-export function SimMinimap({ lat, lon, headingDeg, zoom, accent, onPress }: SimMinimapProps) {
+export function SimMinimap({ lat, lon, headingDeg, zoom, accent, onPress, style }: SimMinimapProps) {
   return (
-    <View style={styles.frame} testID="sim-minimap">
+    <View style={[styles.frame, style]} testID="sim-minimap">
       <MapContainer
         center={[lat, lon]}
         zoom={zoom}

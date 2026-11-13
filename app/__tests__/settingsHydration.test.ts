@@ -107,3 +107,23 @@ test("unknown List kinds and sections in storage are ignored", async () => {
   expect(store.getState().listHiddenKinds).toEqual(["sea"]);
   expect(store.getState().listCollapsedSections).toEqual([]);
 });
+
+test("the cockpit layer filter survives a restart; unknown or missing layers are ignored", async () => {
+  installLocalStorage();
+  const first = await loadStore();
+  first.getState().toggleSimLayer("ferries");
+  first.getState().toggleSimLayer("aircraft");
+  expect(first.getState().simHiddenLayers).toEqual(["aircraft", "ferries"]);
+  const saved = (globalThis as unknown as { localStorage: Storage }).localStorage.getItem(KEY);
+  installLocalStorage({ [KEY]: saved! });
+  const relaunched = await loadStore();
+  expect(relaunched.getState().simHiddenLayers).toEqual(["aircraft", "ferries"]);
+
+  installLocalStorage({
+    [KEY]: JSON.stringify({ state: { simHiddenLayers: ["comets", "ports", "ports"] }, version: 0 }),
+  });
+  expect((await loadStore()).getState().simHiddenLayers).toEqual(["ports"]);
+
+  installLocalStorage({ [KEY]: JSON.stringify({ state: { onboarded: true }, version: 0 }) });
+  expect((await loadStore()).getState().simHiddenLayers).toEqual([]);
+});

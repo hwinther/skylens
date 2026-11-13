@@ -4,10 +4,32 @@
  * a container element it creates the widget (Esri World Imagery + terrain), drives the camera from the
  * caller's pose/look every frame, draws the "straight ahead" marker, and keeps the airport/port label
  * layers fresh. The caller owns the data (tracker, satellite propagation, device look) and the lifetime.
- * Browser only (DOM + WebGL); the pure math it calls lives in look.ts / overlay.ts.
+ *
+ * On top of that, driven through the returned handle (plain JSON in, so Android can call it from props):
+ *  - other traffic (setTraffic, ~1 Hz): points + short labels, dead-reckoned per frame with the AR
+ *    view's PositionTracker; the primitives are created, updated and removed in place per id;
+ *  - picking (pick): which traffic point/label is under a tap;
+ *  - the layer filter (setVisibility): airports / ports / ferry quays shown or hidden in place;
+ *  - the camera mode (setCameraMode): cockpit, or chase (behind and above, see chase.ts) with a point
+ *    and heading chevron marking the followed object;
+ *  - the route line (setDestination): a great circle from the object to a known destination.
+ * Browser only (DOM + WebGL); the pure math it calls lives in look.ts / overlay.ts / chase.ts / route.ts.
  */
 
-import type { Cartesian3, CesiumWidget, LabelCollection, PointPrimitiveCollection, Scene } from "cesium";
+import type {
+  Cartesian3,
+  CesiumWidget,
+  Label,
+  LabelCollection,
+  PointPrimitive,
+  PointPrimitiveCollection,
+  Polyline,
+  PolylineCollection,
+  Scene,
+} from "cesium";
+import { PositionTracker, type PositionSample, type TrackPoint } from "@/ar/positionTracker";
+import { color } from "@/theme";
+import { chaseCamera, chaseSpec, chevronEnu, chevronSizeM, type CameraMode } from "./chase";
 import {
   DIAG_PROBE_MS,
   formatDiag,
@@ -19,9 +41,13 @@ import {
   type TileCounts,
 } from "./globeDiag";
 import type { Cesium } from "./loadCesium";
-import { forwardMarker, MAX_LOOK_PITCH_DEG, wrap180, type Look } from "./look";
-import { distanceKm, type OverlayItem } from "./overlay";
+import type { SimLayerVisibility } from "./layers";
+import { DOUBLE_TAP_MS, forwardMarker, isTap, MAX_LOOK_PITCH_DEG, wrap180, type Look, type PointerMark } from "./look";
+import { distanceKm, type OverlayGroup, type OverlayItem } from "./overlay";
+import { greatCirclePoints, type GeoPos } from "./route";
+import type { SimKind } from "./simPose";
 import type { TrackedPose } from "./tracker";
+import type { TrafficItem, TrafficKind, TrafficPick } from "./traffic";
 
 export const ESRI_IMAGERY_URL = "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer";
 export const ESRI_TERRAIN_URL =
@@ -33,6 +59,19 @@ const FORWARD_PROBE_M = 20_000;
 const LOOK_DEG_PER_PX = 0.15;
 /** How often each overlay layer checks whether it should refetch. */
 const OVERLAY_TICK_MS = 2000;
+/** How often the route line's start is moved to the object. */
+const ROUTE_TICK_MS = 1000;
+/** Tap tolerance for picking traffic: a square this many CSS px around the tap. */
+const PICK_PX = 24;
+/** The chase camera keeps at least this much clearance above the terrain under it. */
+const CHASE_CLEARANCE_M = 10;
+
+/** The followed object's colour (chase marker), by kind. */
+const KIND_ACCENT: Record<SimKind, string> = {
+  aircraft: color.entity.air,
+  vessel: color.entity.sea,
+  satellite: color.entity.orbit,
+};
 
 /** Flight-path-vector style symbol: a ring with wings and a fin, like a HUD's velocity marker. */
 const FPV_SVG =
@@ -59,8 +98,23 @@ export interface SimOverlayLayer {
   allowed: () => boolean;
 }
 
+/** The id stamped on traffic primitives, so a pick can tell them from airport/port labels. */
+interface TrafficPrimitiveId {
+  simTraffic: true;
+  kind: TrafficKind;
+  id: string;
+}
+
+interface TrafficEntry {
+  item: TrafficItem;
+  point: PointPrimitive;
+  label: Label | null;
+}
+
 export interface SimGlobeOptions {
   container: HTMLElement;
+  /** What is followed now (read every frame: the chase distance and marker colour depend on it). */
+  kind: () => SimKind;
   /** The "straight ahead" marker element, positioned every frame (read lazily: it may mount later). */
   marker: () => HTMLElement | null;
   /** This frame's pose, given the terrain height under the previous one (undefined while unknown). */
@@ -90,6 +144,17 @@ export interface SimGlobeOptions {
 export interface SimGlobe {
   readonly scene: Scene;
   readonly diag: GlobeDiag;
+  /** Other traffic to draw (src/sim/traffic.ts selectTraffic); replaces the previous set. */
+  setTraffic: (items: readonly TrafficItem[]) => void;
+  /** Show or hide the airport / port / ferry-quay labels (traffic is filtered by the caller). */
+  setVisibility: (v: SimLayerVisibility) => void;
+  setCameraMode: (mode: CameraMode) => void;
+  /** Draw the route line to this destination, or none. */
+  setDestination: (dest: GeoPos | null) => void;
+  /** The traffic under canvas position (x, y) in CSS px, or null. */
+  pick: (x: number, y: number) => TrafficPick | null;
+  /** Forget the traffic tracks (the followed object changed). */
+  clearTraffic: () => void;
   destroy: () => void;
 }
 
@@ -326,6 +391,103 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
   }, DIAG_PROBE_MS);
   cleanups.push(() => clearInterval(diagTimer));
 
+  // --- other traffic: points + labels, updated in place, dead-reckoned per frame -------------------
+  const trafficPoints: PointPrimitiveCollection = scene.primitives.add(new C.PointPrimitiveCollection());
+  const trafficLabels: LabelCollection = scene.primitives.add(new C.LabelCollection());
+  // The AR view's tracker (with its snap guard): smooth between ~1 Hz updates, no smear on a jump.
+  const trafficTracks = new PositionTracker<PositionSample>();
+  const traffic = new Map<string, TrafficEntry>();
+  const trafficPt: TrackPoint = { lat: 0, lon: 0, alt: 0 };
+  const trafficScratch = new C.Cartesian3();
+  const keyOf = (it: { kind: string; id: string }) => `${it.kind}:${it.id}`;
+  const addTrafficLabel = (it: TrafficItem, pickId: TrafficPrimitiveId, position: Cartesian3): Label =>
+    trafficLabels.add({
+      position,
+      text: it.label,
+      font: "600 12px sans-serif",
+      fillColor: C.Color.fromCssColorString(it.color),
+      outlineColor: C.Color.BLACK,
+      outlineWidth: 3,
+      style: C.LabelStyle.FILL_AND_OUTLINE,
+      pixelOffset: new C.Cartesian2(0, -12),
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      id: pickId,
+    });
+  const setTraffic = (items: readonly TrafficItem[]) => {
+    if (destroyed) return;
+    trafficTracks.sync(items, keyOf, (it): PositionSample => it, Date.now());
+    const seen = new Set<string>();
+    for (const it of items) {
+      const key = keyOf(it);
+      seen.add(key);
+      const position = C.Cartesian3.fromDegrees(it.lon, it.lat, it.altM);
+      const pickId: TrafficPrimitiveId = { simTraffic: true, kind: it.kind, id: it.id };
+      const entry = traffic.get(key);
+      if (!entry) {
+        const point = trafficPoints.add({
+          position,
+          pixelSize: it.kind === "aircraft" ? 8 : 7,
+          color: C.Color.fromCssColorString(it.color),
+          outlineColor: C.Color.BLACK,
+          outlineWidth: 1.5,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          id: pickId,
+        });
+        traffic.set(key, { item: it, point, label: it.label ? addTrafficLabel(it, pickId, position) : null });
+        continue;
+      }
+      if (it.color !== entry.item.color) {
+        const c = C.Color.fromCssColorString(it.color);
+        entry.point.color = c;
+        if (entry.label) entry.label.fillColor = c;
+      }
+      if (!it.label && entry.label) {
+        trafficLabels.remove(entry.label);
+        entry.label = null;
+      } else if (it.label && !entry.label) {
+        entry.label = addTrafficLabel(it, pickId, position);
+      } else if (entry.label && it.label !== entry.item.label) {
+        entry.label.text = it.label;
+      }
+      entry.item = it;
+    }
+    for (const [key, entry] of traffic) {
+      if (seen.has(key)) continue;
+      trafficPoints.remove(entry.point);
+      if (entry.label) trafficLabels.remove(entry.label);
+      traffic.delete(key);
+    }
+  };
+  const placeTraffic = (now: number) => {
+    for (const [key, entry] of traffic) {
+      if (!trafficTracks.positionAt(key, now, trafficPt)) continue;
+      C.Cartesian3.fromDegrees(trafficPt.lon, trafficPt.lat, trafficPt.alt, undefined, trafficScratch);
+      entry.point.position = trafficScratch; // the setters copy
+      if (entry.label) entry.label.position = trafficScratch;
+    }
+  };
+  const clearTraffic = () => {
+    trafficPoints.removeAll();
+    trafficLabels.removeAll();
+    traffic.clear();
+    trafficTracks.clear();
+  };
+
+  const pick = (x: number, y: number): TrafficPick | null => {
+    if (destroyed) return null;
+    let hits: unknown[];
+    try {
+      hits = scene.drillPick(new C.Cartesian2(x, y), 8, PICK_PX, PICK_PX);
+    } catch {
+      return null;
+    }
+    for (const hit of hits) {
+      const id = (hit as { id?: Partial<TrafficPrimitiveId> } | undefined)?.id;
+      if (id?.simTraffic && id.kind && id.id) return { kind: id.kind, id: id.id };
+    }
+    return null;
+  };
+
   // --- camera -------------------------------------------------------------------------------------
   // "Straight ahead" marker: project a point FORWARD_PROBE_M along the direction of travel and draw it
   // straight into the DOM every frame (no React state at 60 fps).
@@ -338,8 +500,7 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
     const marker = opts.marker();
     if (!marker) return;
     const cam = widget.camera;
-    const origin: Cartesian3 = C.Cartesian3.fromDegrees(pose.lon, pose.lat, pose.altM);
-    C.Transforms.eastNorthUpToFixedFrame(origin, undefined, enu);
+    // `enu` is the object's local frame, computed by the render loop this frame.
     const h = C.Math.toRadians(pose.headingDeg);
     const p = C.Math.toRadians(pose.pitchDeg);
     probeLocal.x = Math.sin(h) * Math.cos(p) * FORWARD_PROBE_M;
@@ -365,6 +526,47 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
     }
   };
 
+  // --- followed-object marker (chase view only): a point plus a heading chevron ------------------
+  const ownPoints: PointPrimitiveCollection = scene.primitives.add(new C.PointPrimitiveCollection());
+  const ownLines: PolylineCollection = scene.primitives.add(new C.PolylineCollection());
+  const ownScratch = new C.Cartesian3();
+  const chevLocal = new C.Cartesian3();
+  let ownKind: SimKind | null = null;
+  let ownPoint: PointPrimitive | null = null;
+  let ownChevron: Polyline | null = null;
+  const placeOwnMarker = (pose: TrackedPose, kind: SimKind, show: boolean) => {
+    if (kind !== ownKind) {
+      ownKind = kind;
+      ownPoints.removeAll();
+      ownLines.removeAll();
+      const c = C.Color.fromCssColorString(KIND_ACCENT[kind]);
+      ownPoint = ownPoints.add({
+        pixelSize: 10,
+        color: c,
+        outlineColor: C.Color.WHITE,
+        outlineWidth: 2,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      });
+      ownChevron = ownLines.add({ width: 3, material: C.Material.fromType("Color", { color: c }) });
+    }
+    ownPoints.show = show;
+    ownLines.show = show;
+    if (!show || !ownPoint || !ownChevron) return;
+    ownPoint.position = C.Cartesian3.fromDegrees(pose.lon, pose.lat, pose.altM, undefined, ownScratch);
+    // A little above the object, so the chevron isn't lost in the sea surface or the terrain mesh.
+    ownChevron.positions = chevronEnu(pose.headingDeg, chevronSizeM(chaseSpec(kind))).map((p) => {
+      chevLocal.x = p.east;
+      chevLocal.y = p.north;
+      chevLocal.z = p.up + 1.5;
+      return C.Matrix4.multiplyByPoint(enu, chevLocal, new C.Cartesian3());
+    });
+  };
+
+  let cameraMode: CameraMode = "cockpit";
+  const camLocal = new C.Cartesian3();
+  const camWorld = new C.Cartesian3();
+  const camCarto = new C.Cartographic();
+
   let lastPose: TrackedPose | null = null;
   const onPreRender = () => {
     const now = Date.now();
@@ -374,33 +576,101 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
     if (!pose) return;
     lastPose = pose;
     const look = opts.look();
-    widget.camera.setView({
-      destination: C.Cartesian3.fromDegrees(pose.lon, pose.lat, pose.altM),
-      orientation: {
-        heading: C.Math.toRadians(pose.headingDeg + look.yaw),
-        pitch: C.Math.toRadians(Math.max(-89, Math.min(89, pose.pitchDeg + look.pitch))),
-        roll: 0,
-      },
-    });
+    const kind = opts.kind();
+    const origin: Cartesian3 = C.Cartesian3.fromDegrees(pose.lon, pose.lat, pose.altM);
+    C.Transforms.eastNorthUpToFixedFrame(origin, undefined, enu);
+    if (cameraMode === "chase") {
+      const cam = chaseCamera(pose.headingDeg, look, chaseSpec(kind));
+      camLocal.x = cam.east;
+      camLocal.y = cam.north;
+      camLocal.z = cam.up;
+      C.Matrix4.multiplyByPoint(enu, camLocal, camWorld);
+      // Keep the camera above the ground behind the object (a ridge, a quay).
+      const carto = C.Cartographic.fromCartesian(camWorld, undefined, camCarto);
+      const ground = carto ? scene.globe.getHeight(carto) : undefined;
+      const destination =
+        carto && ground !== undefined && carto.height < ground + CHASE_CLEARANCE_M
+          ? C.Cartesian3.fromRadians(carto.longitude, carto.latitude, ground + CHASE_CLEARANCE_M)
+          : camWorld;
+      widget.camera.setView({
+        destination,
+        orientation: { heading: C.Math.toRadians(cam.headingDeg), pitch: C.Math.toRadians(cam.pitchDeg), roll: 0 },
+      });
+    } else {
+      widget.camera.setView({
+        destination: origin,
+        orientation: {
+          heading: C.Math.toRadians(pose.headingDeg + look.yaw),
+          pitch: C.Math.toRadians(Math.max(-89, Math.min(89, pose.pitchDeg + look.pitch))),
+          roll: 0,
+        },
+      });
+    }
+    placeOwnMarker(pose, kind, cameraMode === "chase");
     placeForwardMarker(pose, look);
+    placeTraffic(now);
   };
   cleanups.push(scene.preRender.addEventListener(onPreRender));
 
+  // --- route line to a known destination ----------------------------------------------------------
+  const routeLines: PolylineCollection = scene.primitives.add(new C.PolylineCollection());
+  const routeLine: Polyline = routeLines.add({
+    width: 2.5,
+    material: C.Material.fromType("Color", { color: C.Color.fromCssColorString(color.route).withAlpha(0.85) }),
+    show: false,
+  });
+  let destination: GeoPos | null = null;
+  const drawRoute = () => {
+    const pose = lastPose;
+    if (destroyed || !destination || !pose) {
+      routeLine.show = false;
+      return;
+    }
+    const pts = greatCirclePoints({ lat: pose.lat, lon: pose.lon, altM: pose.altM }, destination);
+    routeLine.positions = pts.map((p) => C.Cartesian3.fromDegrees(p.lon, p.lat, p.altM));
+    routeLine.show = true;
+  };
+  const routeTimer = setInterval(drawRoute, ROUTE_TICK_MS);
+  cleanups.push(() => clearInterval(routeTimer));
+
   // --- airports + ports: labelled points, each class visible from its own distance -----------------
+  // One pair of collections per filter group, so the filter hides a group in place (no refetch).
+  let visibility: Partial<Record<OverlayGroup, boolean>> = {};
+  const groups = new Map<OverlayGroup, { labels: LabelCollection; points: PointPrimitiveCollection }>();
+  const collectionsFor = (group: OverlayGroup) => {
+    let cols = groups.get(group);
+    if (!cols) {
+      cols = {
+        labels: scene.primitives.add(new C.LabelCollection()),
+        points: scene.primitives.add(new C.PointPrimitiveCollection()),
+      };
+      const shown = visibility[group] !== false;
+      cols.labels.show = shown;
+      cols.points.show = shown;
+      groups.set(group, cols);
+    }
+    return cols;
+  };
   for (const layer of opts.overlays) {
-    const labels: LabelCollection = scene.primitives.add(new C.LabelCollection());
-    const points: PointPrimitiveCollection = scene.primitives.add(new C.PointPrimitiveCollection());
-    const pointColor = C.Color.fromCssColorString(layer.color);
+    const layerColor = C.Color.fromCssColorString(layer.color);
+    // The groups this layer has drawn into (the ports layer fills both "ports" and "ferries").
+    const owned = new Set<OverlayGroup>();
     const draw = (items: OverlayItem[]) => {
-      labels.removeAll();
-      points.removeAll();
+      for (const g of owned) {
+        const cols = collectionsFor(g);
+        cols.labels.removeAll();
+        cols.points.removeAll();
+      }
       for (const it of items) {
+        owned.add(it.group);
+        const { labels, points } = collectionsFor(it.group);
+        const itemColor = it.color ? C.Color.fromCssColorString(it.color) : null;
         const position = C.Cartesian3.fromDegrees(it.lon, it.lat, it.altM);
         const shown = new C.DistanceDisplayCondition(0, it.rangeM);
         points.add({
           position,
           pixelSize: it.pixelSize,
-          color: pointColor,
+          color: itemColor ?? layerColor,
           outlineColor: C.Color.BLACK,
           outlineWidth: 1,
           distanceDisplayCondition: shown,
@@ -411,7 +681,8 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
           position,
           text: it.label,
           font: "600 13px sans-serif",
-          fillColor: C.Color.WHITE,
+          // Ferry quays keep their colour in the text too, so they read apart from the harbours.
+          fillColor: itemColor ?? C.Color.WHITE,
           outlineColor: C.Color.BLACK,
           outlineWidth: 3,
           style: C.LabelStyle.FILL_AND_OUTLINE,
@@ -433,7 +704,7 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
       layer
         .load(Math.round(at.lat * 100) / 100, Math.round(at.lon * 100) / 100)
         .then((items) => {
-          if (destroyed || labels.isDestroyed()) return;
+          if (destroyed) return;
           fetchedAt = at;
           draw(items);
         })
@@ -451,6 +722,24 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
   return {
     scene,
     diag,
+    setTraffic,
+    setVisibility: (v) => {
+      visibility = { airports: v.airports, ports: v.ports, ferries: v.ferries };
+      for (const [group, cols] of groups) {
+        const shown = visibility[group] !== false;
+        cols.labels.show = shown;
+        cols.points.show = shown;
+      }
+    },
+    setCameraMode: (mode) => {
+      cameraMode = mode;
+    },
+    setDestination: (dest) => {
+      destination = dest;
+      drawRoute();
+    },
+    pick,
+    clearTraffic,
     destroy: () => {
       if (destroyed) return;
       destroyed = true;
@@ -467,14 +756,36 @@ export interface LookGestureHandlers {
   enabled: () => boolean;
   /** Double click / double tap: back to straight ahead. */
   onReset: () => void;
+  /**
+   * A single tap (not a drag, not half of a double tap) at (x, y) in CSS px relative to `el`: picks
+   * traffic. Fired DOUBLE_TAP_MS after the tap, once it is clear no second tap follows.
+   */
+  onTap?: (x: number, y: number) => void;
 }
 
-/** Drag to look around on `el` (pointer events, so mouse and touch alike). Returns the cleanup. */
+/**
+ * Drag to look around on `el` (pointer events, so mouse and touch alike), and tap to pick. A press
+ * that barely moves and is released quickly is a tap (look.ts isTap); two of them in quick succession
+ * are a double tap, which recenters instead of picking. Returns the cleanup.
+ */
 export function attachLookGestures(el: HTMLElement, h: LookGestureHandlers): () => void {
   let drag: { x: number; y: number } | null = null;
+  let down: PointerMark | null = null;
+  let lastTapAt = -Infinity;
+  let pendingTap: ReturnType<typeof setTimeout> | null = null;
+  const cancelTap = () => {
+    if (pendingTap) clearTimeout(pendingTap);
+    pendingTap = null;
+  };
   const onDown = (e: PointerEvent) => {
     drag = { x: e.clientX, y: e.clientY };
-    el.setPointerCapture(e.pointerId);
+    down = { x: e.clientX, y: e.clientY, t: performance.now() };
+    // Capture is a nicety (keeps the drag when the pointer leaves); a synthetic pointer can't be.
+    try {
+      el.setPointerCapture(e.pointerId);
+    } catch {
+      /* not capturable */
+    }
   };
   const onMove = (e: PointerEvent) => {
     if (!drag || !h.enabled()) return;
@@ -490,8 +801,29 @@ export function attachLookGestures(el: HTMLElement, h: LookGestureHandlers): () 
     });
     drag = { x: e.clientX, y: e.clientY };
   };
-  const onUp = () => {
+  const onUp = (e: PointerEvent) => {
     drag = null;
+    const start = down;
+    down = null;
+    if (!start || !h.onTap || e.type !== "pointerup") return;
+    const up: PointerMark = { x: e.clientX, y: e.clientY, t: performance.now() };
+    if (!isTap(start, up)) return;
+    if (up.t - lastTapAt <= DOUBLE_TAP_MS) {
+      // The second half of a double tap: that recenters, it doesn't pick.
+      cancelTap();
+      lastTapAt = -Infinity;
+      h.onReset();
+      return;
+    }
+    lastTapAt = up.t;
+    const rect = el.getBoundingClientRect();
+    const x = up.x - rect.left;
+    const y = up.y - rect.top;
+    cancelTap();
+    pendingTap = setTimeout(() => {
+      pendingTap = null;
+      h.onTap?.(x, y);
+    }, DOUBLE_TAP_MS);
   };
   const onReset = () => h.onReset();
   el.addEventListener("pointerdown", onDown);
@@ -505,5 +837,6 @@ export function attachLookGestures(el: HTMLElement, h: LookGestureHandlers): () 
     el.removeEventListener("pointerup", onUp);
     el.removeEventListener("pointercancel", onUp);
     el.removeEventListener("dblclick", onReset);
+    cancelTap();
   };
 }

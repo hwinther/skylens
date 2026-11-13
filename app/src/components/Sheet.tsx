@@ -19,7 +19,7 @@
 import { alpha, color } from "@/theme";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import {
   BackHandler,
   Platform,
@@ -53,6 +53,12 @@ export interface SheetProps {
   /** The full content: always shown in the side panel, behind the expand toggle in the compact card. */
   children: ReactNode;
 }
+
+/**
+ * Optional: a screen that lays its own controls out around the card (the cockpit view keeps its minimap
+ * and Recenter above it) provides this to hear the card's height; 0 while no card is shown.
+ */
+export const SheetHeightContext = createContext<((height: number) => void) | null>(null);
 
 /** The collapsed card's one-line summary: the parts that are known, joined by " · ". */
 export function SheetSummary({ parts }: { parts: (string | null | undefined | false)[] }) {
@@ -127,6 +133,11 @@ export function Sheet({
     if (!visible) setExpanded(false);
   }, [visible]);
   useDismissKeys(visible, onClose);
+  const reportHeight = useContext(SheetHeightContext);
+  useEffect(() => {
+    if (!visible) reportHeight?.(0);
+  }, [visible, reportHeight]);
+  useEffect(() => () => reportHeight?.(0), [reportHeight]);
 
   if (!visible) return null;
 
@@ -175,6 +186,7 @@ export function Sheet({
       testID="detail-card"
       role="region"
       accessibilityLabel={label}
+      onLayout={reportHeight ? (e) => reportHeight(e.nativeEvent.layout.height) : undefined}
       style={[
         styles.card,
         webSurface,

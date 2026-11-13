@@ -8,15 +8,19 @@ import {
   AIRPORT_FETCH_RADIUS_KM,
   airportLabelRangeM,
   airportOverlayItems,
+  airportPlaces,
+  bearingDeg,
   distanceKm,
+  FERRY_COLOR,
   minimapZoom,
   PORT_FETCH_RADIUS_KM,
   portLabelRangeM,
   portOverlayItems,
+  portPlaces,
   showsAirportOverlay,
   showsPortOverlay,
 } from "@/sim/overlay";
-import { fetchOverlayItems } from "@/sim/overlayData";
+import { fetchOverlay, fetchOverlayItems } from "@/sim/overlayData";
 
 test("the minimap zooms out with altitude and furthest for satellites", () => {
   expect(minimapZoom("vessel", 12)).toBe(12);
@@ -94,4 +98,56 @@ test("fetchOverlayItems asks the right endpoint with the layer's radius", async 
   expect(airports).toHaveLength(1);
   await fetchOverlayItems(client as never, "ports", 59.9, 10.75);
   expect(client.ports).toHaveBeenCalledWith(59.9, 10.75, PORT_FETCH_RADIUS_KM);
+});
+
+test("ferry quays get their own filter group and colour; the other ports stay in the ports group", () => {
+  const items = portOverlayItems([
+    { id: "1", kind: "ferry", lat: 59, lon: 10, name: "Nesodden ferjekai" },
+    { id: "2", kind: "harbour", lat: 59, lon: 10, name: "Drøbak" },
+    { id: "3", kind: "marina", lat: 59, lon: 10 },
+  ]);
+  expect(items.map((i) => i.group)).toEqual(["ferries", "ports", "ports"]);
+  expect(items[0].color).toBe(FERRY_COLOR);
+  expect(items[1].color).toBeUndefined();
+  expect(airportOverlayItems([{ ident: "ENGM", name: "", type: "large_airport", lat: 60, lon: 11, runways: [], frequencies: [] }])[0].group).toBe(
+    "airports",
+  );
+});
+
+test("places: the labelled airport classes with their ident, ports with ferry quays kept apart", () => {
+  const base = { lat: 60, lon: 11, runways: [], frequencies: [] };
+  expect(
+    airportPlaces([
+      { ...base, ident: "ENGM", name: "Oslo Gardermoen", type: "large_airport", elevationFt: 681 },
+      { ...base, ident: "NO-0001", name: "Helipad", type: "heliport" },
+    ]),
+  ).toEqual([{ kind: "airport", code: "ENGM", name: "Oslo Gardermoen", lat: 60, lon: 11, altM: 681 * 0.3048 }]);
+  expect(
+    portPlaces([
+      { id: "1", kind: "ferry", lat: 59, lon: 10, name: "Nesodden" },
+      { id: "2", kind: "port", lat: 59, lon: 10 },
+    ]).map((p) => [p.kind, p.name]),
+  ).toEqual([
+    ["ferry", "Nesodden"],
+    ["port", "Port"],
+  ]);
+});
+
+test("fetchOverlay returns the labels and the places from one request", async () => {
+  const client = {
+    airports: jest.fn(),
+    ports: jest.fn(() => Promise.resolve({ ports: [{ id: "1", kind: "ferry", lat: 59, lon: 10, name: "Q" }] })),
+  };
+  const r = await fetchOverlay(client as never, "ports", 59.9, 10.75);
+  expect(client.ports).toHaveBeenCalledTimes(1);
+  expect(r.items).toHaveLength(1);
+  expect(r.places).toEqual([{ kind: "ferry", code: "", name: "Q", lat: 59, lon: 10, altM: 0 }]);
+});
+
+test("bearingDeg: the initial great-circle bearing", () => {
+  expect(bearingDeg(60, 10, 61, 10)).toBeCloseTo(0, 5);
+  expect(bearingDeg(60, 10, 60, 11)).toBeGreaterThan(89);
+  expect(bearingDeg(60, 10, 60, 11)).toBeLessThan(91);
+  expect(bearingDeg(60, 10, 59, 10)).toBeCloseTo(180, 5);
+  expect(bearingDeg(0, 10, 0, 9)).toBeCloseTo(270, 5);
 });
