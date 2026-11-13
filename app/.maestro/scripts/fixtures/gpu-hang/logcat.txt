@@ -1,0 +1,8 @@
+--------- beginning of events
+11-13 20:40:21.913   145   145 I snet_event_log: [121035042,-1,]
+11-13 20:41:04.587   533  3573 I am_crash: [533,0,com.google.android.googlequicksearchbox:search,953925189,Native crash,Illegal instruction,unknown,0,0]
+11-13 20:45:01.196   533  6763 I am_anr  : [0,868,com.android.systemui,550026765,App requested: Buffer processing hung up due to stuck fence. Indicates GPU hang]
+11-13 20:45:15.775   533  2444 I am_proc_died: [0,868,com.android.systemui,-800,0]
+11-13 20:45:20.949   533  6834 I am_anr  : [0,5209,no.wsh.skylens,552123972,App requested: Buffer processing hung up due to stuck fence. Indicates GPU hang]
+11-13 20:45:22.053   533  1226 I am_proc_died: [0,5209,no.wsh.skylens,0,12]
+11-13 20:45:22.171   533  1016 I am_proc_died: [0,6509,com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0,0,10]

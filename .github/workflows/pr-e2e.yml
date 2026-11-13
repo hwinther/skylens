@@ -77,9 +77,11 @@ jobs:
       node_version: "26.x"
       node_working_directory: "app"
       # Include the backend contract so a PR that touches openapi.json re-runs the node job; the extra
-      # command regenerates the typed client and the workflow fails on any uncommitted drift.
+      # command regenerates the typed client and the workflow fails on any uncommitted drift. It also
+      # runs the node --test suite of the Maestro summary script (app/.maestro/scripts), which jest
+      # does not pick up.
       node_changes_regex: "app/.*|backend/src/Api/openapi.json"
-      node_extra_command: "npm run openapi:generate"
+      node_extra_command: "npm run openapi:generate && npm run test:scripts"
       dotnet_enabled: true
       dotnet_version: "10.0.x"
       dotnet_working_directory: "backend"
@@ -162,7 +164,7 @@ jobs:
       packages: read
       pull-requests: write
       actions: read
-    uses: hwinther/reusable-workflows/.github/workflows/playwright-e2e.yml@6b6810e17143f38ac9dc0f84d504e7ff08b1d2bf # v2.26.0
+    uses: hwinther/reusable-workflows/.github/workflows/playwright-e2e.yml@56a8121d7a91b3c48c444c7b3fde8d0801320f08 # v2.35.0
     with:
       compose_file: docker-compose.e2e.yml
       # The suite runs from the e2e image as a compose service (`npm run test:ci`), not with Node and
@@ -319,7 +321,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    uses: hwinther/reusable-workflows/.github/workflows/quality-artifact.yml@6b6810e17143f38ac9dc0f84d504e7ff08b1d2bf # v2.26.0
+    uses: hwinther/reusable-workflows/.github/workflows/quality-artifact.yml@56a8121d7a91b3c48c444c7b3fde8d0801320f08 # v2.35.0
     with:
       tags: |
         ${{ needs.main-tag.outputs.tag }}

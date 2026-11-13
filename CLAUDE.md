@@ -210,6 +210,10 @@ npm run coverage:summary          # unit (../app/coverage) + e2e (monocart-cover
   (ccache), written from main only. It selects by testID (Android resource-id), incl. the tab
   buttons `tab-ar|map|list|settings` (`tabBarButtonTestID`), `onboarding-skip`, `status-source`
   (DEMO/LIVE badge), `list-ac-<hex>`, `detail-card*`, `map-view-*`, `radar`, `settings-demo-mode`.
+  `app/.maestro/scripts/maestro-summary.mjs` (dependency-free, `node --test` via `npm run test:scripts`
+  in `app/`, run by ci.yml's node job) writes the result to the job summary; on PRs the separate
+  `comment` job (only `pull-requests: write`, no checkout) posts that Markdown as the sticky
+  `skylens-maestro` comment. Keep log text going through its `code()`/`text()` escaping.
 
 ## Conventions & hard rules
 
