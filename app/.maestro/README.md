@@ -15,8 +15,8 @@ aircraft's position with the HUD top left and Exit / Map top right; "Map imagery
 (<reason>)" under the HUD means the globe runs without a map. Screenshots are `optional` too
 (UiAutomation can return none on a starved emulator). The flow then logs the globe's own account to
 `maestro.log`: `SkylensSim globe = <its accessibility label>` and, in the CI build
-(`EXPO_PUBLIC_SIM_DIAG=1`), `SkylensSim diag = gl=…|tex=…|wk=…|img=req/ok/fail|ter=req/ok/fail|q=…|fr=…|ff=…|px=r,g,b|blk=…|err=…|last=…`
-(keys in `src/sim/globeDiag.ts`). It is its own file so a globe problem fails as its own flow and
+(`EXPO_PUBLIC_SIM_DIAG=1`), `SkylensSim diag = gl=…|tex=…|wk=…|img=req/ok/fail|ter=req/ok/fail|q=…|fr=…|ff=…|px=r,g,b|blk=…|paused=0/1|err=…|last=…`
+(keys in `src/sim/globeDiag.ts`). `paused=1`: the globe found a software renderer (the emulator's SwiftShader) drawing nothing but black and stopped rendering a few seconds after the first tiles; the HUD note then reads "software graphics can't draw the 3D view". It is its own file so a globe problem fails as its own flow and
 never makes the smoke steps flaky. Right after the screen opens (before the globe streams imagery and
 starves the emulator's UI thread, when UiAutomator can see no app views for many seconds) it checks
 the card, that the `sim-camera-toggle` is there and that the Layers filter unfolds (`cockpit-controls`

@@ -34,10 +34,15 @@ import {
   DIAG_PROBE_MS,
   formatDiag,
   imageryVerdict,
+  fastProbing,
   newGlobeDiag,
   noteError,
-  notePixel,
+  noteProbe,
+  PAUSED_REASON,
+  shouldPauseRendering,
+  SOFTWARE_PROBE_MS,
   type GlobeDiag,
+  type Rgb,
   type TileCounts,
 } from "./globeDiag";
 import type { Cesium } from "./loadCesium";
@@ -63,6 +68,8 @@ const OVERLAY_TICK_MS = 2000;
 const ROUTE_TICK_MS = 1000;
 /** Tap tolerance for picking traffic: a square this many CSS px around the tap. */
 const PICK_PX = 24;
+/** While rendering is stopped, the camera / pose / forward marker still update this often (ms). */
+const PAUSED_TICK_MS = 250;
 /** The chase camera keeps at least this much clearance above the terrain under it. */
 const CHASE_CLEARANCE_M = 10;
 
@@ -344,19 +351,21 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
   canvas.addEventListener("webglcontextlost", onContextLost);
   cleanups.push(() => canvas.removeEventListener("webglcontextlost", onContextLost));
 
-  // Pixel probe: one pixel near the bottom centre (ground or sea from every camera we use), read right
-  // after a frame is drawn, once per DIAG_PROBE_MS. Pure black there means nothing reached the canvas.
+  // Pixel probe: three pixels down the vertical centre line (near the bottom: ground or sea from every
+  // camera we use; the middle; near the top: sky, or the Earth below a satellite), read right after a
+  // frame is drawn, once per DIAG_PROBE_MS (every SOFTWARE_PROBE_MS on a software renderer once tiles
+  // arrived, see below). All three pure black means nothing reached the canvas.
   let probeDue = false;
   const probePixel = () => {
     try {
       const ctx = (scene as unknown as { context: { readPixels: (o: object) => Uint8Array } }).context;
-      const px = ctx.readPixels({
-        x: Math.floor(canvas.width / 2),
-        y: Math.floor(canvas.height * 0.2), // GL rows count from the bottom
-        width: 1,
-        height: 1,
+      const x = Math.floor(canvas.width / 2);
+      const samples: Rgb[] = [0.2, 0.5, 0.8].map((f) => {
+        // GL rows count from the bottom.
+        const px = ctx.readPixels({ x, y: Math.floor(canvas.height * f), width: 1, height: 1 });
+        return [px[0] ?? 0, px[1] ?? 0, px[2] ?? 0];
       });
-      notePixel(diag, [px[0] ?? 0, px[1] ?? 0, px[2] ?? 0]);
+      noteProbe(diag, samples);
     } catch (e) {
       diag.blackProbes = -1; // can't tell: never hold "loaded" back on it
       noteError(diag, "pixel probe", e);
@@ -368,6 +377,8 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
       if (probeDue) {
         probeDue = false;
         probePixel();
+        // Deferred: stop the loop between frames, not from inside one.
+        if (shouldPauseRendering(diag)) setTimeout(pauseRendering, 0);
       }
       if (firstFrameAt) return;
       firstFrameAt = Date.now();
@@ -390,6 +401,12 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
     opts.onDiagnostic?.(summary);
   }, DIAG_PROBE_MS);
   cleanups.push(() => clearInterval(diagTimer));
+  // A software rasteriser that has tiles but still draws only black gets probed faster, so rendering
+  // stops a few seconds in (shouldPauseRendering) instead of grinding on for the 20 s blank verdict.
+  const fastProbeTimer = setInterval(() => {
+    if (!destroyed && fastProbing(diag)) probeDue = true;
+  }, SOFTWARE_PROBE_MS);
+  cleanups.push(() => clearInterval(fastProbeTimer));
 
   // --- other traffic: points + labels, updated in place, dead-reckoned per frame -------------------
   const trafficPoints: PointPrimitiveCollection = scene.primitives.add(new C.PointPrimitiveCollection());
@@ -606,11 +623,30 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
         },
       });
     }
-    placeOwnMarker(pose, kind, cameraMode === "chase");
     placeForwardMarker(pose, look);
+    if (diag.paused) return; // nothing is drawn: skip the scene's own primitives
+    placeOwnMarker(pose, kind, cameraMode === "chase");
     placeTraffic(now);
   };
   cleanups.push(scene.preRender.addEventListener(onPreRender));
+
+  // --- rendering stopped: a software rasteriser draws nothing (globeDiag.ts shouldPauseRendering) ----
+  // Cesium's render loop is turned off; a slow tick keeps the camera, the pose callback (the web HUD
+  // reads the pose the globe last asked for) and the "straight ahead" marker current, without drawing.
+  // The map note says why; the diagnostics line says paused=1.
+  function pauseRendering() {
+    if (destroyed || diag.paused) return;
+    diag.paused = true;
+    widget.useDefaultRenderLoop = false;
+    const tick = setInterval(() => {
+      if (!destroyed) onPreRender();
+    }, PAUSED_TICK_MS);
+    cleanups.push(() => clearInterval(tick));
+    imageryReported = true;
+    opts.onImagery?.("failed", PAUSED_REASON);
+    lastSummary = formatDiag(diag);
+    opts.onDiagnostic?.(lastSummary);
+  }
 
   // --- route line to a known destination ----------------------------------------------------------
   const routeLines: PolylineCollection = scene.primitives.add(new C.PolylineCollection());

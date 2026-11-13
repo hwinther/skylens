@@ -38,6 +38,10 @@ export interface GlobeDiag {
   px: string;
   /** Consecutive probes, from the first, that read pure black; -1 once any probe saw colour. */
   blackProbes: number;
+  /** Of those, the ones taken after the first imagery/terrain tile arrived (the scene had something to draw). */
+  blackAfterTiles: number;
+  /** Rendering was stopped: a software rasteriser drew nothing (shouldPauseRendering). */
+  paused: boolean;
   /** Page errors seen (console.error, window.onerror, unhandledrejection, provider errors). */
   errors: number;
   /** The latest error, short. */
@@ -57,6 +61,8 @@ export function newGlobeDiag(): GlobeDiag {
     firstFrameMs: -1,
     px: "",
     blackProbes: 0,
+    blackAfterTiles: 0,
+    paused: false,
     errors: 0,
     lastError: "",
   };
@@ -87,11 +93,76 @@ export function noteError(d: GlobeDiag, where: string, e: unknown): void {
   d.lastError = `${where}: ${describeError(e)}`;
 }
 
-/** Record one pixel probe ("r,g,b"). */
-export function notePixel(d: GlobeDiag, rgb: readonly [number, number, number]): void {
-  d.px = rgb.join(",");
+export type Rgb = readonly [number, number, number];
+
+/**
+ * Record one probe of the canvas: a few pixels read after the same frame (the first is the one shown as
+ * `px`). It counts as black only when every sample is pure black: a scene that draws anything at all
+ * (sky, ground, base colour) colours at least one of them.
+ */
+export function noteProbe(d: GlobeDiag, samples: readonly Rgb[]): void {
+  if (samples.length === 0) return;
+  d.px = samples[0].join(",");
   if (d.blackProbes < 0) return;
-  d.blackProbes = rgb[0] === 0 && rgb[1] === 0 && rgb[2] === 0 ? d.blackProbes + 1 : -1;
+  const black = samples.every((c) => c[0] === 0 && c[1] === 0 && c[2] === 0);
+  if (!black) {
+    d.blackProbes = -1;
+    return;
+  }
+  d.blackProbes += 1;
+  if (tilesArrived(d)) d.blackAfterTiles += 1;
+}
+
+/** Record one single-pixel probe ("r,g,b"). */
+export function notePixel(d: GlobeDiag, rgb: Rgb): void {
+  noteProbe(d, [rgb]);
+}
+
+/** Has any imagery or terrain tile arrived (so the globe has something to draw)? */
+export function tilesArrived(d: GlobeDiag): boolean {
+  return d.imagery.ok > 0 || d.terrain.ok > 0;
+}
+
+/**
+ * WebGL renderers that rasterise on the CPU (lower-case substrings of the `gl=` renderer string): the
+ * Android emulator's and headless Chromium's SwiftShader, Mesa's llvmpipe/softpipe, Windows' WARP.
+ */
+export const SOFTWARE_RENDERERS: readonly string[] = [
+  "swiftshader",
+  "llvmpipe",
+  "softpipe",
+  "software",
+  "microsoft basic render",
+];
+
+export function isSoftwareRenderer(gl: string): boolean {
+  const s = gl.toLowerCase();
+  return SOFTWARE_RENDERERS.some((r) => s.includes(r));
+}
+
+/** On a software renderer, once tiles have arrived, the canvas is probed this often (ms). */
+export const SOFTWARE_PROBE_MS = 1_000;
+/** All-black probes after the first tile arrived before a software renderer's rendering is stopped. */
+export const SOFTWARE_BLANK_PROBES = 3;
+/** Why the map is unavailable once rendering was stopped (shown under the HUD). */
+export const PAUSED_REASON = "software graphics can't draw the 3D view";
+
+/** Should the caller probe the canvas at the fast SOFTWARE_PROBE_MS rate now? */
+export function fastProbing(d: GlobeDiag): boolean {
+  return !d.paused && d.blackProbes >= 0 && isSoftwareRenderer(d.gl) && tilesArrived(d);
+}
+
+/**
+ * Stop rendering? Only on a software rasteriser (on a real GPU black can be legitimate: night, space
+ * behind a satellite, so this never fires there) whose canvas has stayed pure black at every sampled
+ * pixel for SOFTWARE_BLANK_PROBES probes after tiles arrived, from the very first probe on. Rendering a
+ * scene that draws nothing only burns the CPU; on the CI emulator it starved the UI thread and hung
+ * the emulated GPU.
+ */
+export function shouldPauseRendering(d: GlobeDiag): boolean {
+  return (
+    !d.paused && d.blackProbes >= 0 && d.blackAfterTiles >= SOFTWARE_BLANK_PROBES && isSoftwareRenderer(d.gl)
+  );
 }
 
 const tiles = (t: TileCounts) => `${t.req}/${t.ok}/${t.fail}`;
@@ -112,6 +183,7 @@ export function formatDiag(d: GlobeDiag): string {
     `ff=${d.firstFrameMs}`,
     `px=${d.px || "-"}`,
     `blk=${d.blackProbes}`,
+    `paused=${d.paused ? 1 : 0}`,
     `err=${d.errors}`,
     `last=${d.lastError || "-"}`,
   ].join("|");
@@ -130,7 +202,7 @@ export type ImageryVerdict = { state: "loaded" } | { state: "failed"; reason: st
 
 /**
  * What to tell the user about the map, once (the caller reports the first non-null verdict):
- *  - failed: the imagery service could not be reached, tiles keep failing with none loaded, the canvas
+ *  - failed: rendering was stopped (shouldPauseRendering), the imagery service could not be reached, tiles keep failing with none loaded, the canvas
  *    has drawn nothing but black (the device's graphics can't render the scene), or no tile has arrived
  *    IMAGERY_NO_TILES_MS after the first frame;
  *  - loaded: at least one imagery tile arrived, the load queue has drained, and a pixel probe has seen
@@ -140,6 +212,7 @@ export type ImageryVerdict = { state: "loaded" } | { state: "failed"; reason: st
  * `drained` is the globe's own "queue empty and all tiles loaded".
  */
 export function imageryVerdict(d: GlobeDiag, msSinceFirstFrame: number, drained: boolean): ImageryVerdict {
+  if (d.paused) return { state: "failed", reason: PAUSED_REASON };
   if (d.imageryLayerFailed) return { state: "failed", reason: "map service unreachable" };
   if (d.blackProbes >= BLANK_PROBES) return { state: "failed", reason: "this device's graphics drew nothing" };
   if (d.imagery.ok === 0 && d.imagery.fail >= IMAGERY_FAIL_TILES)

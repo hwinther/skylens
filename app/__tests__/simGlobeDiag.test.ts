@@ -11,9 +11,16 @@ import {
   IMAGERY_FAIL_TILES,
   IMAGERY_NO_TILES_MS,
   imageryVerdict,
+  fastProbing,
+  isSoftwareRenderer,
   newGlobeDiag,
   noteError,
   notePixel,
+  noteProbe,
+  PAUSED_REASON,
+  shouldPauseRendering,
+  SOFTWARE_BLANK_PROBES,
+  type GlobeDiag,
 } from "@/sim/globeDiag";
 
 describe("describeError", () => {
@@ -37,7 +44,7 @@ describe("formatDiag", () => {
   it("is one stable, grep-friendly line", () => {
     const d = newGlobeDiag();
     expect(formatDiag(d)).toBe(
-      "gl=?|tex=0|wk=pending|img=0/0/0|ter=0/0/0|q=0|fr=0|ff=-1|px=-|blk=0|err=0|last=-",
+      "gl=?|tex=0|wk=pending|img=0/0/0|ter=0/0/0|q=0|fr=0|ff=-1|px=-|blk=0|paused=0|err=0|last=-",
     );
     d.gl = "webgl2 ANGLE (SwiftShader)";
     d.maxTex = 8192;
@@ -48,7 +55,7 @@ describe("formatDiag", () => {
     noteError(d, "imagery L8 138/76", { statusCode: 503 });
     expect(formatDiag(d)).toBe(
       "gl=webgl2 ANGLE (SwiftShader)|tex=8192|wk=ok|img=12/4/8+layerfail|ter=0/0/0|q=0|fr=0|ff=-1|px=0,0,0|blk=1" +
-        "|err=1|last=imagery L8 138/76: HTTP 503",
+        "|paused=0|err=1|last=imagery L8 138/76: HTTP 503",
     );
   });
 });
@@ -120,5 +127,96 @@ describe("imageryVerdict", () => {
       state: "failed",
       reason: "no map tiles arrived",
     });
+  });
+});
+
+describe("multi-pixel probes", () => {
+  it("is black only when every sample is black, and shows the first sample", () => {
+    const d = newGlobeDiag();
+    noteProbe(d, [
+      [0, 0, 0],
+      [0, 0, 0],
+      [0, 0, 0],
+    ]);
+    expect(d.blackProbes).toBe(1);
+    noteProbe(d, [
+      [0, 0, 0],
+      [0, 0, 0],
+      [80, 120, 200], // the sky near the top: the scene draws
+    ]);
+    expect(d.blackProbes).toBe(-1);
+    expect(d.px).toBe("0,0,0");
+  });
+
+  it("counts black probes after the first tile separately", () => {
+    const d = newGlobeDiag();
+    notePixel(d, [0, 0, 0]);
+    expect(d.blackAfterTiles).toBe(0);
+    d.terrain = { req: 1, ok: 1, fail: 0 };
+    notePixel(d, [0, 0, 0]);
+    expect(d).toMatchObject({ blackProbes: 2, blackAfterTiles: 1 });
+  });
+});
+
+describe("stopping rendering on a software renderer that draws nothing", () => {
+  const EMULATOR = "webgl2 Android Emulator OpenGL ES Translator (Google SwiftShader)";
+  const black = (d: GlobeDiag, n: number) => {
+    for (let i = 0; i < n; i++) notePixel(d, [0, 0, 0]);
+  };
+  const withTiles = (gl: string) => {
+    const d = newGlobeDiag();
+    d.gl = gl;
+    d.imagery = { req: 10, ok: 8, fail: 0 };
+    return d;
+  };
+
+  it("knows the software rasterisers, case-insensitively", () => {
+    expect(isSoftwareRenderer(EMULATOR)).toBe(true);
+    expect(isSoftwareRenderer("webgl2 ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)")).toBe(
+      true,
+    );
+    expect(isSoftwareRenderer("webgl2 llvmpipe (LLVM 15.0.7, 256 bits)")).toBe(true);
+    expect(isSoftwareRenderer("webgl2 ANGLE (Microsoft, Microsoft Basic Render Driver Direct3D11)")).toBe(true);
+    expect(isSoftwareRenderer("webgl2 Adreno (TM) 740")).toBe(false);
+    expect(isSoftwareRenderer("webgl2 Android Emulator OpenGL ES Translator (NVIDIA GeForce RTX 3060)")).toBe(false);
+    expect(isSoftwareRenderer("")).toBe(false);
+  });
+
+  it("pauses after SOFTWARE_BLANK_PROBES black probes once tiles arrived, and says so", () => {
+    const d = withTiles(EMULATOR);
+    expect(fastProbing(d)).toBe(true);
+    black(d, SOFTWARE_BLANK_PROBES - 1);
+    expect(shouldPauseRendering(d)).toBe(false);
+    black(d, 1);
+    expect(shouldPauseRendering(d)).toBe(true);
+
+    d.paused = true;
+    expect(shouldPauseRendering(d)).toBe(false); // once
+    expect(fastProbing(d)).toBe(false);
+    expect(imageryVerdict(d, 5000, true)).toEqual({ state: "failed", reason: PAUSED_REASON });
+    expect(formatDiag(d)).toContain("|paused=1|");
+  });
+
+  it("never pauses a hardware renderer, however black (night side, space behind a satellite)", () => {
+    const d = withTiles("webgl2 Mali-G710");
+    black(d, 50);
+    expect(fastProbing(d)).toBe(false);
+    expect(shouldPauseRendering(d)).toBe(false);
+  });
+
+  it("does not count black frames before any tile arrived (nothing to draw yet)", () => {
+    const d = newGlobeDiag();
+    d.gl = EMULATOR;
+    black(d, 10);
+    expect(fastProbing(d)).toBe(false);
+    expect(shouldPauseRendering(d)).toBe(false);
+  });
+
+  it("never pauses once the canvas has shown colour (headless Chromium draws the globe)", () => {
+    const d = withTiles("webgl2 ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)");
+    notePixel(d, [20, 40, 90]);
+    black(d, 10);
+    expect(fastProbing(d)).toBe(false);
+    expect(shouldPauseRendering(d)).toBe(false);
   });
 });

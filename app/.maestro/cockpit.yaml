@@ -96,6 +96,9 @@ name: Cockpit view (demo mode)
 # window root not found"), so a lookup can miss an element that is on screen (run 43507610368:
 # `tapOn sim-filter` saw no app views for 40 s). Hence also the long waits and the retry blocks, whose
 # steps are safe to repeat (the filter is only tapped when it is in the wrong state).
+# Since then the globe stops rendering when a software renderer draws only black (globeDiag.ts
+# shouldPauseRendering; diag `paused=1`), which should end the stalls a few seconds after the first
+# tiles; the flow does not depend on it (a faster runner may draw the scene).
 # The outside view is only asserted, never switched on here: on the CI emulator turning it on hung the
 # emulator's GPU ("stuck fence" ANRs in System UI and then the app, whose process died). The toggle is
 # exercised by the Playwright cockpit test and jest instead.
