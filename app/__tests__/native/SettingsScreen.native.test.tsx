@@ -67,6 +67,19 @@ describe("SettingsScreen", () => {
     expect(settings()[key]).toBe(!before);
   });
 
+  it("toggles the map's satellites layer, which needs the satellites master switch", async () => {
+    useSettingsStore.setState({ showSatellites: true, showMapSatellites: true });
+    await renderSettings();
+    const sw = screen.getByTestId("settings-show-map-satellites");
+    expect(sw).toBeEnabled();
+
+    await fireEvent(sw, "valueChange", false);
+    expect(settings().showMapSatellites).toBe(false);
+
+    await act(async () => useSettingsStore.setState({ showSatellites: false, showMapSatellites: true }));
+    expect(screen.getByTestId("settings-show-map-satellites")).toBeDisabled();
+  });
+
   describe("account", () => {
     it("signed out behind auth: says so and offers a sign-in once the IdP is reachable", async () => {
       await renderSettings();

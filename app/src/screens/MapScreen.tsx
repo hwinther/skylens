@@ -6,7 +6,7 @@
  */
 
 import { alpha, color } from "@/theme";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import MapView, { Marker, Polygon, Polyline } from "react-native-maps";
@@ -21,9 +21,11 @@ import {
   DetailSheet,
   AircraftRadar,
   AirportDetailSheet,
+  SatelliteDetailSheet,
   VesselDetailSheet,
   useAirports,
   useFishingLayers,
+  useOverheadSatellites,
   usePorts,
   useSatelliteGroundTrack,
 } from "@/components";
@@ -59,6 +61,14 @@ import {
   airportSubtitle,
   airportTitle,
 } from "@/components/webmap/airportStyle";
+import {
+  footprintSatellite,
+  mapSatellites,
+  satelliteFootprint,
+  showTrackedMarker,
+  type MapSatellite,
+} from "@/components/webmap/satelliteLayer";
+import type { Footprint } from "@/ar";
 import { MapViewToggle } from "@/components/webmap/MapViewToggle";
 import type { MapView as MapViewMode } from "@/components/webmap/mapView";
 import { useMapViewMode } from "@/components/webmap/useMapViewMode";
@@ -142,6 +152,70 @@ function VesselMarker({
     >
       <MaterialCommunityIcons name={name} size={22} color={color} />
     </Marker>
+  );
+}
+
+/**
+ * One overhead satellite at its sub-satellite point, as the violet satellite glyph (upright: a
+ * sub-point has no meaningful "heading" on the map). Same brief tracksViewChanges window as the
+ * traffic markers, so the 1 Hz position updates move the frozen bitmap natively instead of
+ * re-rasterising it. No permanent name label (it would bloat every bitmap and pile up when zoomed
+ * out); the name is the marker title / accessibility label. Tapping opens the satellite card.
+ */
+function SatelliteMarker({
+  sat,
+  onSelect,
+}: {
+  sat: MapSatellite;
+  onSelect: (noradId: number) => void;
+}) {
+  const [tracksViewChanges, setTracksViewChanges] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setTracksViewChanges(false), 800);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <Marker
+      testID={`map-sat-${sat.noradId}`}
+      coordinate={{ latitude: sat.lat, longitude: sat.lon }}
+      title={sat.name}
+      accessibilityLabel={`Satellite ${sat.name}`}
+      onPress={() => onSelect(sat.noradId)}
+      anchor={{ x: 0.5, y: 0.5 }}
+      tracksViewChanges={tracksViewChanges}
+    >
+      <MaterialCommunityIcons name="satellite-variant" size={22} color={color.entity.orbit} />
+    </Marker>
+  );
+}
+
+/**
+ * Coverage footprint of the one selected satellite: a very light orbit-coloured fill (no stroke, so
+ * the antimeridian / pole-cap clip edges stay invisible) under a thin outline of the circle itself.
+ */
+function SatelliteFootprintShapes({ fp }: { fp: Footprint }) {
+  return (
+    <>
+      {fp.polygons.map((ring, i) => (
+        <Polygon
+          key={`sat-fp-fill-${i}`}
+          testID="map-sat-footprint"
+          coordinates={toLatLngs(ring)}
+          strokeWidth={0}
+          strokeColor="transparent"
+          fillColor={alpha(color.entity.orbit, 0.08)}
+          tappable={false}
+        />
+      ))}
+      {fp.outline.map((line, i) => (
+        <Polyline
+          key={`sat-fp-line-${i}`}
+          coordinates={toLatLngs(line)}
+          strokeColor={alpha(color.entity.orbit, 0.7)}
+          strokeWidth={1}
+        />
+      ))}
+    </>
   );
 }
 
@@ -332,11 +406,15 @@ export default function MapScreen() {
   const selectedHex = detail.idOf("aircraft");
   const selectedMmsi = detail.idOf("vessel");
   const selectedAirportIdent = detail.idOf("airport");
+  const selectedSat = detail.idOf("satellite");
+  const selectedNoradId = selectedSat != null ? Number(selectedSat) : null;
   const {
     aircraft: setSelectedHex,
     vessel: setSelectedMmsi,
     airport: setSelectedAirportIdent,
+    satellite: setSelectedSat,
   } = detail.set;
+  const selectSatellite = useCallback((id: number) => setSelectedSat(String(id)), [setSelectedSat]);
   // While a side-panel card is open (wide screens), right-edge controls move left by its width.
   const cardRightInset = useSheetRightInset(detail.open);
   const mapRef = useRef<MapView>(null);
@@ -417,6 +495,18 @@ export default function MapScreen() {
   const shownAirports = useMemo(
     () => airports.filter((a) => airportFilter(a.type, showSmallAirfields)),
     [airports, showSmallAirfields],
+  );
+  // Satellites layer: exactly the List's Overhead set (same hook), each at its sub-satellite point,
+  // re-placed at the hook's 1 Hz tick. One footprint, for the open card's satellite (else the tracked one).
+  const showMapSatellites = useSettingsStore((s) => s.showMapSatellites);
+  const sats = useOverheadSatellites({ client, observer, enabled: showMapSatellites });
+  const satMarkers = useMemo(() => mapSatellites(sats.overhead, showMapSatellites), [sats.overhead, showMapSatellites]);
+  const satFootprint = useMemo(
+    () =>
+      view === "map" && showMapSatellites
+        ? satelliteFootprint(footprintSatellite(selectedNoradId, track.trackedNoradId, sats.byNoradId))
+        : null,
+    [view, showMapSatellites, selectedNoradId, track.trackedNoradId, sats.byNoradId],
   );
   // Ports: static reference markers like the airports (map view only).
   const showPorts = useSettingsStore((s) => s.showPorts);
@@ -504,6 +594,8 @@ export default function MapScreen() {
                 strokeWidth={2.5}
               />
             ))}
+            {/* Selected satellite's coverage footprint: under the markers, faint. */}
+            {satFootprint ? <SatelliteFootprintShapes fp={satFootprint} /> : null}
             <Marker
               coordinate={{ latitude: observer.lat, longitude: observer.lon }}
               title="You"
@@ -523,9 +615,14 @@ export default function MapScreen() {
             {positionedVessels.map((v) => (
               <VesselMarker key={v.mmsi} vessel={v} onSelect={setSelectedMmsi} />
             ))}
-            {/* Current sub-satellite point; tapping it also clears the track. */}
-            {track.subPoint ? (
+            {satMarkers.map((sat) => (
+              <SatelliteMarker key={`sat-${sat.noradId}`} sat={sat} onSelect={selectSatellite} />
+            ))}
+            {/* Tracked satellite's sub-point (tapping it clears the track) — only when the satellites
+                layer isn't already drawing that satellite. */}
+            {track.subPoint && showTrackedMarker(track.trackedNoradId, satMarkers) ? (
               <Marker
+                testID="map-sat-track-point"
                 coordinate={toLatLng([track.subPoint.lat, track.subPoint.lon])}
                 title={track.name ?? "Satellite"}
                 onPress={track.clear}
@@ -576,6 +673,13 @@ export default function MapScreen() {
               : undefined
           }
           onClose={() => setSelectedAirportIdent(null)}
+        />
+        <SatelliteDetailSheet
+          noradId={selectedNoradId}
+          view={selectedNoradId != null ? sats.byNoradId.get(selectedNoradId) : undefined}
+          observer={observer}
+          elevationMaskDeg={sats.elevationMaskDeg}
+          onClose={() => setSelectedSat(null)}
         />
       </View>
     </SafeAreaView>

@@ -26,7 +26,7 @@ import {
   VesselDetailSheet,
   usePlanets,
   useRadioSky,
-  useSatellites,
+  useOverheadSatellites,
   useSkyEvents,
 } from "@/components";
 import { aircraftAccent, iconForCategory } from "@/components/aircraftIcon";
@@ -39,7 +39,7 @@ import { ListFilterBar } from "@/components/ListFilterBar";
 import { ListSectionHeader } from "@/components/ListSectionHeader";
 import { iconForVessel } from "@/components/vesselIcon";
 import { compass8, relativePosition } from "@/components/webmap/relative";
-import { RADIO_SOURCES, satGroupsFromSettings, type SkyEventKind } from "@/ar";
+import { RADIO_SOURCES, type SkyEventKind } from "@/ar";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
 
@@ -164,10 +164,6 @@ export default function ListScreen() {
   const showShips = useSettingsStore((s) => s.showShips);
   const showAton = useSettingsStore((s) => s.showAton);
   const showSatellites = useSettingsStore((s) => s.showSatellites);
-  const satAmateurStations = useSettingsStore((s) => s.satAmateurStations);
-  const satWeather = useSettingsStore((s) => s.satWeather);
-  const satGnss = useSettingsStore((s) => s.satGnss);
-  const satElevationMaskDeg = useSettingsStore((s) => s.satElevationMaskDeg);
   const showPlanets = useSettingsStore((s) => s.showPlanets);
   const showRadioSky = useSettingsStore((s) => s.showRadioSky);
   const showSkyEvents = useSettingsStore((s) => s.showSkyEvents);
@@ -210,30 +206,13 @@ export default function ListScreen() {
   const observer = useObserver();
 
   // Same satellite source the AR screen uses — independent of the ADS-B hub, so it runs in demo and
-  // live alike, gated only on the toggle. Groups/mask come from the shared settings derivation.
-  const satGroups = useMemo(
-    () =>
-      satGroupsFromSettings({
-        amateurStations: satAmateurStations,
-        weather: satWeather,
-        gnss: satGnss,
-      }),
-    [satAmateurStations, satWeather, satGnss],
-  );
-  const { visible: satellites, byNoradId } = useSatellites({
-    client,
-    observer,
-    enabled: showSatellites,
-    groups: satGroups,
+  // live alike, gated only on the toggle. Overhead: highest in the sky first. The Map's satellites
+  // layer reads the very same hook, so the two always show the same set.
+  const {
+    overhead,
+    byNoradId,
     elevationMaskDeg: satElevationMaskDeg,
-  });
-
-  // Overhead list: satellites are overhead, not distance-sorted traffic — a separate section, ordered
-  // highest-in-the-sky first (the hook returns group-priority order, so re-sort by elevation here).
-  const overhead = useMemo(
-    () => [...satellites].sort((a, b) => b.elevationDeg - a.elevationDeg),
-    [satellites],
-  );
+  } = useOverheadSatellites({ client, observer });
 
   // Planets: pure on-device astronomy, independent of the hub — a "Sky" section ordered highest first.
   const { visible: planetViews, byBody } = usePlanets({ observer, enabled: showPlanets });

@@ -115,6 +115,11 @@ export interface SatelliteView {
   /** Sub-satellite point longitude in degrees, normalised to [-180, 180). 0 when non-finite (see subLat). */
   subLon: number;
   /**
+   * Height above the ellipsoid in km at the sample instant (from the same geodetic reduction as the
+   * sub-point). The Map's coverage footprint is sized from it. Absent on fabricated views / non-finite.
+   */
+  altKm?: number;
+  /**
    * Naked-eye "look up now" flag: the satellite is sunlit AND the observer's sky is dark at the sample
    * instant. NOT elevation-masked here (the Overhead list only renders above-mask rows), so it means
    * exactly sunlit ∧ dark. Absent on fabricated (non-propagated) views. See visibility.ts.
@@ -251,6 +256,7 @@ export function propagateAll(
       subLat = subLatDeg;
       subLon = subLonDeg;
     }
+    const altKm = Number.isFinite(geo.height) ? geo.height : undefined;
 
     // Angular rates: propagate the SAME satrec RATE_SAMPLE_S ahead and finite-difference the look
     // angles. angleDiff carries the 0/360 azimuth seam (a satellite crossing north must NOT produce a
@@ -287,6 +293,7 @@ export function propagateAll(
       rangeRateKmS: Number.isFinite(rangeRateKmS) ? rangeRateKmS : 0,
       subLat,
       subLon,
+      ...(altKm != null ? { altKm } : {}),
       visibleNow: sunHat != null && isSatSunlitFromSunHat(positionEci, sunHat),
       ...(entry.freqSummary != null ? { freqSummary: entry.freqSummary } : {}),
     });
@@ -329,6 +336,15 @@ export function selectVisible(
     return b.elevationDeg - a.elevationDeg;
   });
   return visible.length > SATELLITE_RENDER_CAP ? visible.slice(0, SATELLITE_RENDER_CAP) : visible;
+}
+
+/**
+ * The List tab's "Overhead" set — and the Map's satellites layer, which must show exactly the same
+ * satellites: the hook's visible (above-mask, group-filtered, capped) views ordered highest in the sky
+ * first. Returns a new array; the input (group-priority order) is left alone.
+ */
+export function overheadSatellites(visible: readonly SatelliteView[]): SatelliteView[] {
+  return [...visible].sort((a, b) => b.elevationDeg - a.elevationDeg);
 }
 
 /**
