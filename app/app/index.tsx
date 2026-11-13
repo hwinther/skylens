@@ -42,7 +42,8 @@ import {
 } from "@/components";
 import { airportFilter } from "@/components/webmap/airportStyle";
 import { useDetailSelection } from "@/components/useDetailSelection";
-import { RADIO_SOURCES, satGroupsFromSettings } from "@/ar";
+import { ArIdentifyLayer, ArIdentifyTouch, useArIdentify } from "@/components/ArIdentify";
+import { RADIO_SOURCES, satGroupsFromSettings, type IdentifyObserver } from "@/ar";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
 import { startMockFeed, DEMO_HOME } from "@/mock/mockFeed";
@@ -56,7 +57,11 @@ import { useSettingsStore } from "@/state/settingsStore";
 
 /** Height of the AR status strip (two rows), which the side-panel detail card starts below. */
 const STATUS_STRIP_CLEARANCE = 64;
+/** Extra room the camera-denied banner takes under the status strip. */
+const BANNER_CLEARANCE = 44;
 const NO_SIGNAL_LOST: SignalLostIds = { aircraft: [], vessels: [] };
+/** Demo-mode identify observer: the demo home at the same 100 m eye height the demo pose uses. */
+const DEMO_IDENTIFY_OBSERVER: IdentifyObserver = { lat: DEMO_HOME.lat, lon: DEMO_HOME.lon, alt: 100 };
 
 export default function ArScreen() {
   const demoMode = useSettingsStore((s) => s.demoMode);
@@ -209,6 +214,31 @@ export default function ArScreen() {
   // render and thrashes setConnection.
   const { setObserverPosition } = live;
 
+  // AR identify ("what am I looking at?"): long-press a point, or the viewfinder reticle. Observer = demo
+  // home in demo mode, else the live fix (with its GPS altitude when known).
+  const identifyObserver = useMemo<IdentifyObserver | null>(
+    () =>
+      demoMode
+        ? DEMO_IDENTIFY_OBSERVER
+        : observer
+          ? { lat: observer.lat, lon: observer.lon, alt: observer.alt ?? 0 }
+          : null,
+    [demoMode, observer],
+  );
+  const { selection: detailSelection, set: detailSet } = detail;
+  const closeDetail = useCallback(() => {
+    if (detailSelection) detailSet[detailSelection.kind](null);
+  }, [detailSelection, detailSet]);
+  const identify = useArIdentify({
+    client,
+    observer: identifyObserver,
+    demoMode,
+    detailOpen: detail.open,
+    closeDetail,
+    poseRef,
+    hFovDeg,
+  });
+
   useEffect(() => {
     if (!demoMode) return;
     // Demo: replay recorded feed, fabricate a fixed observer at the series home.
@@ -276,6 +306,8 @@ export default function ArScreen() {
       onSignalLost={setSignalLost}
       // No camera feed (native without permission, or web without a working AR camera) → synthetic horizon.
       showHorizon={!demoMode && !cameraPermission?.granted && !webCamShown}
+      // AR identify's long-press catcher, beneath the labels so label taps still reach them.
+      underlay={polarisCalibrating ? null : <ArIdentifyTouch onLongPressAt={identify.onLongPressAt} />}
     />
   );
 
@@ -376,6 +408,16 @@ export default function ArScreen() {
           <Text style={styles.acquireSub}>Step outside for a clear view of the sky.</Text>
         </View>
       ) : null}
+
+      {polarisCalibrating ? null : (
+        <ArIdentifyLayer
+          state={identify}
+          poseRef={poseRef}
+          hFovDeg={hFovDeg}
+          suppressed={detail.open || showLegend}
+          cardTop={panelTop + 8 + (cameraDenied ? BANNER_CLEARANCE : 0)}
+        />
+      )}
 
       <DetailSheet
         hex={selectedHex}

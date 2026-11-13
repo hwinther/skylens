@@ -81,6 +81,9 @@ export const color = {
   ferry: "#E6C88A",
   // Cockpit view route line to the destination: the avionics flight-plan magenta.
   route: "#E86BD8",
+  // AR identify ("what am I looking at?"): the laser beam, marker and reticle. A pink-red no entity
+  // family uses, so the pointer never reads as an aircraft / vessel / planet label.
+  laser: "#FF5C7A",
 
   // Modal / detail-sheet chrome
   scrim: "rgba(0, 0, 0, 0.4)", // modal/sheet backdrop

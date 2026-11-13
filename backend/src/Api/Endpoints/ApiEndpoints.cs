@@ -367,6 +367,32 @@ public static class ApiEndpoints
                    })
            .WithName("Ports");
 
+        // GET /api/landmarks?lat=&lon=&radiusKm= — named peaks and populated places from the bundled GeoNames
+        // extract, for the AR "what am I looking at?" identify feature. The client fetches once for the
+        // observer's area and matches pointing directions locally, so this is never called per frame.
+        // radiusKm is clamped to [1, 200] (default 150); places are further limited to their kind's range
+        // (city 80, town 50, village 25, hamlet 12 km). Nearest-first, capped at LandmarkDbService.MaxResults.
+        // Offline like /api/ports, so it stays on the group's "global" limit. Out-of-range coordinates are a
+        // 400. The response carries the CC BY attribution the client must display with the data.
+        api.MapGet("/landmarks",
+                   Results<Ok<LandmarksResponse>, ProblemHttpResult> (LandmarkDbService landmarks,
+                                                                       TimeProvider time,
+                                                                       double lat, double lon, double? radiusKm) =>
+                   {
+                       if (!double.IsFinite(lat) || lat is < -90 or > 90 || !double.IsFinite(lon) ||
+                           lon is < -180 or > 180)
+                           return TypedResults.Problem(
+                               detail: "lat must be within [-90, 90] and lon within [-180, 180]",
+                               statusCode: StatusCodes.Status400BadRequest);
+
+                       var requested = radiusKm is { } rk && double.IsFinite(rk) ? rk : 150;
+                       var r = Math.Clamp(requested, 1, 200);
+                       var near = landmarks.Nearby(lat, lon, r, LandmarkDbService.MaxResults);
+                       return TypedResults.Ok(
+                           new LandmarksResponse(time.GetUtcNow(), near, LandmarkDbService.Attribution));
+                   })
+           .WithName("Landmarks");
+
         return app;
     }
 

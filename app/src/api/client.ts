@@ -19,6 +19,7 @@ import type {
   AircraftDetail,
   AircraftDto,
   AirportsResponse,
+  LandmarksResponse,
   PortsResponse,
   FishingZonesResponse,
   HealthResponse,
@@ -247,5 +248,12 @@ export class ApiClient {
   /** GET /api/ports — nearby harbours / marinas / ferry quays / ports (offline dataset) + attribution. */
   ports(lat: number, lon: number, radiusKm: number): Promise<PortsResponse> {
     return this.request<PortsResponse>(`/api/ports?lat=${lat}&lon=${lon}&radiusKm=${radiusKm}`);
+  }
+
+  /** GET /api/landmarks — named peaks + populated places for AR identify (offline dataset) + attribution. */
+  landmarks(lat: number, lon: number, radiusKm: number): Promise<LandmarksResponse> {
+    return this.request<LandmarksResponse>(
+      `/api/landmarks?lat=${lat}&lon=${lon}&radiusKm=${radiusKm}`,
+    );
   }
 }

@@ -112,6 +112,9 @@ export interface ArOverlayProps {
   /** Draw synthetic orientation aids — horizon, ground plane, and cardinal (N/E/S/W) hints —
    *  when there's no camera feed to orient against. */
   showHorizon?: boolean;
+  /** Drawn first, beneath every label (AR identify's long-press catcher): inside the overlay, so on web
+   *  it is what the pointer hits wherever no label is, while labels on top still take their taps. */
+  underlay?: React.ReactNode;
 }
 
 interface RenderLabel {
@@ -255,6 +258,7 @@ export function ArOverlay({
   onSelectVessel,
   onSignalLost,
   showHorizon = false,
+  underlay,
 }: ArOverlayProps) {
   const { width, height } = useWindowDimensions();
   const [labels, setLabels] = useState<RenderLabel[]>([]);
@@ -665,6 +669,7 @@ export function ArOverlay({
 
   return (
     <View style={[StyleSheet.absoluteFill, { pointerEvents: "box-none" }]}>
+      {underlay}
       {showHorizon && horizonY != null && (
         <>
           <View

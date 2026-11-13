@@ -166,6 +166,19 @@ npm run coverage:summary          # unit (../app/coverage) + e2e (monocart-cover
   OpenStreetMap (Overpass) for Norway + the NGA World Port Index elsewhere. Refresh by re-running the
   script and committing the output; the image bakes it and sets `Ports__PortsPath`. Show the
   attribution (ODbL) wherever ports appear.
+- **AR identify** ("what am I looking at?"): long-press a point on the AR view, or toggle the viewfinder
+  reticle (`ar-identify-toggle`), to name the peak / town in that direction with a laser beam to it.
+  Data: `GET /api/landmarks` (`LandmarkDbService`) from `data/landmarks/landmarks.csv.gz`, built by
+  `node data/landmarks/extract-geonames-landmarks.mjs --src <dir>` from GeoNames dumps (NO/SE/FI peaks
+  filtered by computed isolation, Norway's places + `cities1000` abroad); the same script rewrites the
+  demo-mode sample `app/src/mock/demo-landmarks.json`. Baked like ports (`Landmarks__LandmarksPath`).
+  Show "GeoNames (CC BY 4.0)" wherever results appear. Matching is pure TS in `src/ar/identify.ts`
+  (no DEM: bearing + curvature/refraction-corrected elevation bands, tolerance cone, crude occlusion);
+  `prepareLandmarks` runs per observer, `identifyAt` per move. The app fetches once per area
+  (refetch after 10 km), lazily on first use, gated like every API caller. The long-press catcher
+  (`ArIdentifyTouch`) is a gesture-handler LongPress passed to `ArOverlay` as `underlay` (beneath the
+  labels, so label taps still win; it fails on movement, so drag-to-look is unaffected). Not a
+  Pressable: under the web Pan it never sees the release and fires on every tap.
 - **Hidden routes**: in expo-router 58, `href: null` on a `Tabs.Screen` makes it `hidden`, and hidden
   routes redirect to `/`. To keep a route navigable without a tab button, use `HIDDEN_ROUTE`
   (`tabBarItemStyle: { display: "none" }`) in `app/_layout.tsx` instead. That only hides the button;

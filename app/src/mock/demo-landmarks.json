@@ -1,0 +1,702 @@
+[
+  {
+    "id": "g11256910",
+    "kind": "peak",
+    "name": "Baljåsen",
+    "lat": 59.0849,
+    "lon": 12.4713,
+    "elevationM": 301,
+    "population": null,
+    "isolationKm": 55.2
+  },
+  {
+    "id": "g11256929",
+    "kind": "peak",
+    "name": "Janskulle",
+    "lat": 58.8622,
+    "lon": 12.2525,
+    "elevationM": 259,
+    "population": null,
+    "isolationKm": 27.5
+  },
+  {
+    "id": "g13561697",
+    "kind": "town",
+    "name": "Greverud",
+    "lat": 59.7728,
+    "lon": 10.8041,
+    "elevationM": null,
+    "population": 4500,
+    "isolationKm": null
+  },
+  {
+    "id": "g2704679",
+    "kind": "peak",
+    "name": "Hovfjället",
+    "lat": 60.2831,
+    "lon": 12.9667,
+    "elevationM": 542,
+    "population": null,
+    "isolationKm": 40.5
+  },
+  {
+    "id": "g2721531",
+    "kind": "peak",
+    "name": "Blåbärskullen",
+    "lat": 59.8333,
+    "lon": 12.8667,
+    "elevationM": 390,
+    "population": null,
+    "isolationKm": 42
+  },
+  {
+    "id": "g3132058",
+    "kind": "town",
+    "name": "Vestby",
+    "lat": 59.6051,
+    "lon": 10.7523,
+    "elevationM": null,
+    "population": 5330,
+    "isolationKm": null
+  },
+  {
+    "id": "g3132925",
+    "kind": "peak",
+    "name": "Harmaamaki",
+    "lat": 60.6003,
+    "lon": 12.5157,
+    "elevationM": 594,
+    "population": null,
+    "isolationKm": 23.1
+  },
+  {
+    "id": "g3134070",
+    "kind": "town",
+    "name": "Tranby",
+    "lat": 59.8085,
+    "lon": 10.2611,
+    "elevationM": null,
+    "population": 5322,
+    "isolationKm": null
+  },
+  {
+    "id": "g3134236",
+    "kind": "peak",
+    "name": "Torsæterkampen",
+    "lat": 60.5694,
+    "lon": 10.938,
+    "elevationM": 841,
+    "population": null,
+    "isolationKm": 55.8
+  },
+  {
+    "id": "g3134349",
+    "kind": "town",
+    "name": "Tomter",
+    "lat": 59.6591,
+    "lon": 10.9949,
+    "elevationM": null,
+    "population": 2209,
+    "isolationKm": null
+  },
+  {
+    "id": "g3135124",
+    "kind": "town",
+    "name": "Svelvik",
+    "lat": 59.6137,
+    "lon": 10.4087,
+    "elevationM": null,
+    "population": 3926,
+    "isolationKm": null
+  },
+  {
+    "id": "g3135642",
+    "kind": "town",
+    "name": "Strømmen",
+    "lat": 59.9506,
+    "lon": 11.0101,
+    "elevationM": null,
+    "population": 11410,
+    "isolationKm": null
+  },
+  {
+    "id": "g3136521",
+    "kind": "peak",
+    "name": "Stordigerheden",
+    "lat": 60.8562,
+    "lon": 12.1812,
+    "elevationM": 610,
+    "population": null,
+    "isolationKm": 17.2
+  },
+  {
+    "id": "g3137245",
+    "kind": "town",
+    "name": "Spydeberg",
+    "lat": 59.6171,
+    "lon": 11.0856,
+    "elevationM": null,
+    "population": 3166,
+    "isolationKm": null
+  },
+  {
+    "id": "g3137320",
+    "kind": "peak",
+    "name": "Spåtind",
+    "lat": 61.0771,
+    "lon": 9.7894,
+    "elevationM": 1414,
+    "population": null,
+    "isolationKm": 39.6
+  },
+  {
+    "id": "g3137390",
+    "kind": "town",
+    "name": "Sørumsand",
+    "lat": 59.9862,
+    "lon": 11.2415,
+    "elevationM": null,
+    "population": 5878,
+    "isolationKm": null
+  },
+  {
+    "id": "g3137626",
+    "kind": "peak",
+    "name": "Sørbølfjell",
+    "lat": 60.4667,
+    "lon": 9.6167,
+    "elevationM": 1250,
+    "population": null,
+    "isolationKm": 20.5
+  },
+  {
+    "id": "g3138423",
+    "kind": "town",
+    "name": "Skui",
+    "lat": 59.9275,
+    "lon": 10.4475,
+    "elevationM": 30,
+    "population": 3487,
+    "isolationKm": null
+  },
+  {
+    "id": "g3139081",
+    "kind": "town",
+    "name": "Ski",
+    "lat": 59.7195,
+    "lon": 10.8358,
+    "elevationM": null,
+    "population": 12513,
+    "isolationKm": null
+  },
+  {
+    "id": "g3140100",
+    "kind": "peak",
+    "name": "Sangefjellet",
+    "lat": 60.544,
+    "lon": 8.4295,
+    "elevationM": 1140,
+    "population": null,
+    "isolationKm": 13.7
+  },
+  {
+    "id": "g3140128",
+    "kind": "town",
+    "name": "Sandvika",
+    "lat": 59.8907,
+    "lon": 10.5277,
+    "elevationM": null,
+    "population": null,
+    "isolationKm": null
+  },
+  {
+    "id": "g3140636",
+    "kind": "town",
+    "name": "Sætre",
+    "lat": 59.6813,
+    "lon": 10.5275,
+    "elevationM": null,
+    "population": 3009,
+    "isolationKm": null
+  },
+  {
+    "id": "g3140989",
+    "kind": "peak",
+    "name": "Røglefjell",
+    "lat": 59.2308,
+    "lon": 8.8589,
+    "elevationM": 835,
+    "population": null,
+    "isolationKm": 15.2
+  },
+  {
+    "id": "g3141107",
+    "kind": "town",
+    "name": "Røyken",
+    "lat": 59.7472,
+    "lon": 10.3883,
+    "elevationM": null,
+    "population": 2775,
+    "isolationKm": null
+  },
+  {
+    "id": "g3141156",
+    "kind": "town",
+    "name": "Rotnes",
+    "lat": 60.0571,
+    "lon": 10.8613,
+    "elevationM": null,
+    "population": 4705,
+    "isolationKm": null
+  },
+  {
+    "id": "g3141652",
+    "kind": "peak",
+    "name": "Robekknuten",
+    "lat": 59.7574,
+    "lon": 8.4011,
+    "elevationM": 1480,
+    "population": null,
+    "isolationKm": 17.6
+  },
+  {
+    "id": "g3143244",
+    "kind": "city",
+    "name": "Oslo",
+    "lat": 59.9127,
+    "lon": 10.7461,
+    "elevationM": null,
+    "population": 1082575,
+    "isolationKm": null
+  },
+  {
+    "id": "g3143491",
+    "kind": "peak",
+    "name": "Oppkuven",
+    "lat": 60.089,
+    "lon": 10.517,
+    "elevationM": 704,
+    "population": null,
+    "isolationKm": 35.5
+  },
+  {
+    "id": "g3143866",
+    "kind": "peak",
+    "name": "Nystølfjelli",
+    "lat": 60.7584,
+    "lon": 9.1809,
+    "elevationM": 1230,
+    "population": null,
+    "isolationKm": 29.9
+  },
+  {
+    "id": "g3144121",
+    "kind": "peak",
+    "name": "Norefjell",
+    "lat": 60.2667,
+    "lon": 9.4833,
+    "elevationM": 1468,
+    "population": null,
+    "isolationKm": 65.2
+  },
+  {
+    "id": "g3146631",
+    "kind": "town",
+    "name": "Lysaker",
+    "lat": 59.9099,
+    "lon": 10.6355,
+    "elevationM": null,
+    "population": 3439,
+    "isolationKm": null
+  },
+  {
+    "id": "g3147378",
+    "kind": "peak",
+    "name": "Linnekleppen",
+    "lat": 59.3657,
+    "lon": 11.5831,
+    "elevationM": 325,
+    "population": null,
+    "isolationKm": 36.4
+  },
+  {
+    "id": "g3147465",
+    "kind": "city",
+    "name": "Lillestrøm",
+    "lat": 59.956,
+    "lon": 11.0492,
+    "elevationM": null,
+    "population": 89684,
+    "isolationKm": null
+  },
+  {
+    "id": "g3149813",
+    "kind": "town",
+    "name": "Kløfta",
+    "lat": 60.0741,
+    "lon": 11.138,
+    "elevationM": null,
+    "population": 5942,
+    "isolationKm": null
+  },
+  {
+    "id": "g3150784",
+    "kind": "peak",
+    "name": "Jonsknuten",
+    "lat": 59.671,
+    "lon": 9.5222,
+    "elevationM": 904,
+    "population": null,
+    "isolationKm": 22.1
+  },
+  {
+    "id": "g3150851",
+    "kind": "town",
+    "name": "Jessheim",
+    "lat": 60.1415,
+    "lon": 11.1752,
+    "elevationM": null,
+    "population": 12365,
+    "isolationKm": null
+  },
+  {
+    "id": "g3152626",
+    "kind": "peak",
+    "name": "Hitfjell",
+    "lat": 61.2451,
+    "lon": 10.632,
+    "elevationM": 1040,
+    "population": null,
+    "isolationKm": 14.4
+  },
+  {
+    "id": "g3155786",
+    "kind": "peak",
+    "name": "Gitvola",
+    "lat": 61.0365,
+    "lon": 11.26,
+    "elevationM": 800,
+    "population": null,
+    "isolationKm": 15.5
+  },
+  {
+    "id": "g3157162",
+    "kind": "town",
+    "name": "Flateby",
+    "lat": 59.8295,
+    "lon": 11.1534,
+    "elevationM": null,
+    "population": 3298,
+    "isolationKm": null
+  },
+  {
+    "id": "g3157686",
+    "kind": "town",
+    "name": "Fetsund",
+    "lat": 59.9246,
+    "lon": 11.1571,
+    "elevationM": null,
+    "population": 6441,
+    "isolationKm": null
+  },
+  {
+    "id": "g3158886",
+    "kind": "peak",
+    "name": "Dyna",
+    "lat": 60.5699,
+    "lon": 8.7032,
+    "elevationM": 1160,
+    "population": null,
+    "isolationKm": 18.2
+  },
+  {
+    "id": "g3158960",
+    "kind": "town",
+    "name": "Drøbak",
+    "lat": 59.6624,
+    "lon": 10.628,
+    "elevationM": null,
+    "population": 11363,
+    "isolationKm": null
+  },
+  {
+    "id": "g3159016",
+    "kind": "city",
+    "name": "Drammen",
+    "lat": 59.7439,
+    "lon": 10.2045,
+    "elevationM": null,
+    "population": 106013,
+    "isolationKm": null
+  },
+  {
+    "id": "g3161016",
+    "kind": "peak",
+    "name": "Blefjell",
+    "lat": 59.8485,
+    "lon": 9.1902,
+    "elevationM": 1342,
+    "population": null,
+    "isolationKm": 24
+  },
+  {
+    "id": "g3162385",
+    "kind": "town",
+    "name": "Aursmoen",
+    "lat": 59.9276,
+    "lon": 11.4428,
+    "elevationM": null,
+    "population": 2173,
+    "isolationKm": null
+  },
+  {
+    "id": "g3162475",
+    "kind": "town",
+    "name": "Auli",
+    "lat": 60.0345,
+    "lon": 11.3605,
+    "elevationM": null,
+    "population": 2638,
+    "isolationKm": null
+  },
+  {
+    "id": "g3162657",
+    "kind": "city",
+    "name": "Asker",
+    "lat": 59.8333,
+    "lon": 10.4372,
+    "elevationM": null,
+    "population": 61906,
+    "isolationKm": null
+  },
+  {
+    "id": "g3162668",
+    "kind": "town",
+    "name": "Ask",
+    "lat": 60.0713,
+    "lon": 11.0362,
+    "elevationM": null,
+    "population": 6890,
+    "isolationKm": null
+  },
+  {
+    "id": "g3162797",
+    "kind": "town",
+    "name": "Ås",
+    "lat": 59.6647,
+    "lon": 10.7947,
+    "elevationM": null,
+    "population": 7961,
+    "isolationKm": null
+  },
+  {
+    "id": "g3336585",
+    "kind": "town",
+    "name": "Nesoddtangen",
+    "lat": 59.8624,
+    "lon": 10.6631,
+    "elevationM": null,
+    "population": 10911,
+    "isolationKm": null
+  },
+  {
+    "id": "g6690343",
+    "kind": "peak",
+    "name": "Skirveggen",
+    "lat": 60.1081,
+    "lon": 8.9245,
+    "elevationM": 1381,
+    "population": null,
+    "isolationKm": 29.7
+  },
+  {
+    "id": "g8436263",
+    "kind": "peak",
+    "name": "Gaustatoppen",
+    "lat": 59.8542,
+    "lon": 8.6492,
+    "elevationM": 1883,
+    "population": null,
+    "isolationKm": 96.9
+  },
+  {
+    "id": "g8436267",
+    "kind": "peak",
+    "name": "Sirikjerke",
+    "lat": 59.6922,
+    "lon": 9.9535,
+    "elevationM": 635,
+    "population": null,
+    "isolationKm": 17.1
+  },
+  {
+    "id": "g8436293",
+    "kind": "peak",
+    "name": "Styggmann",
+    "lat": 59.5208,
+    "lon": 9.643,
+    "elevationM": 872,
+    "population": null,
+    "isolationKm": 18
+  },
+  {
+    "id": "g8468748",
+    "kind": "peak",
+    "name": "Brennåsen (Finnemarka)",
+    "lat": 59.9665,
+    "lon": 10.1325,
+    "elevationM": 704,
+    "population": null,
+    "isolationKm": 25.3
+  },
+  {
+    "id": "g8504433",
+    "kind": "town",
+    "name": "Billingstad",
+    "lat": 59.8755,
+    "lon": 10.4823,
+    "elevationM": null,
+    "population": 2349,
+    "isolationKm": null
+  },
+  {
+    "id": "g9148368",
+    "kind": "peak",
+    "name": "Mælefjellet",
+    "lat": 59.5618,
+    "lon": 8.7149,
+    "elevationM": 1406,
+    "population": null,
+    "isolationKm": 28
+  },
+  {
+    "id": "g9148623",
+    "kind": "peak",
+    "name": "Vikbekkfjellet",
+    "lat": 60.1281,
+    "lon": 8.137,
+    "elevationM": 1430,
+    "population": null,
+    "isolationKm": 15.7
+  },
+  {
+    "id": "g9148653",
+    "kind": "peak",
+    "name": "Borgsjåbrotet",
+    "lat": 60.172,
+    "lon": 8.6599,
+    "elevationM": 1370,
+    "population": null,
+    "isolationKm": 15.4
+  },
+  {
+    "id": "g9205008",
+    "kind": "peak",
+    "name": "Grårovenatten",
+    "lat": 60.5379,
+    "lon": 9.3168,
+    "elevationM": 1100,
+    "population": null,
+    "isolationKm": 14.5
+  },
+  {
+    "id": "g9205095",
+    "kind": "peak",
+    "name": "Lauvhøgda",
+    "lat": 60.6872,
+    "lon": 10.533,
+    "elevationM": 722,
+    "population": null,
+    "isolationKm": 23.4
+  },
+  {
+    "id": "g9246080",
+    "kind": "peak",
+    "name": "Høyestang",
+    "lat": 59.0895,
+    "lon": 11.7255,
+    "elevationM": 269,
+    "population": null,
+    "isolationKm": 30.5
+  },
+  {
+    "id": "g9246916",
+    "kind": "peak",
+    "name": "Mannslagarnuten",
+    "lat": 59.373,
+    "lon": 8.6352,
+    "elevationM": 1060,
+    "population": null,
+    "isolationKm": 14.3
+  },
+  {
+    "id": "g9250111",
+    "kind": "peak",
+    "name": "Rundelen",
+    "lat": 59.9295,
+    "lon": 11.6358,
+    "elevationM": 393,
+    "population": null,
+    "isolationKm": 26.4
+  },
+  {
+    "id": "g9251791",
+    "kind": "peak",
+    "name": "Korpenatten",
+    "lat": 60.4143,
+    "lon": 9.0499,
+    "elevationM": 1260,
+    "population": null,
+    "isolationKm": 21.9
+  },
+  {
+    "id": "g9347556",
+    "kind": "peak",
+    "name": "Hedenhøgda",
+    "lat": 60.329,
+    "lon": 11.8262,
+    "elevationM": 500,
+    "population": null,
+    "isolationKm": 20.6
+  },
+  {
+    "id": "g9382178",
+    "kind": "peak",
+    "name": "Danseholen",
+    "lat": 60.9151,
+    "lon": 10.4581,
+    "elevationM": 760,
+    "population": null,
+    "isolationKm": 15.7
+  },
+  {
+    "id": "g9384278",
+    "kind": "peak",
+    "name": "Karihaugen",
+    "lat": 60.5977,
+    "lon": 11.6079,
+    "elevationM": 600,
+    "population": null,
+    "isolationKm": 25.2
+  },
+  {
+    "id": "g9397081",
+    "kind": "peak",
+    "name": "Auvisberg",
+    "lat": 59.9995,
+    "lon": 8.5298,
+    "elevationM": 1326,
+    "population": null,
+    "isolationKm": 12.9
+  },
+  {
+    "id": "g9400797",
+    "kind": "peak",
+    "name": "Vesle Steinknatten",
+    "lat": 61.0049,
+    "lon": 9.4173,
+    "elevationM": 1100,
+    "population": null,
+    "isolationKm": 12.9
+  }
+]
