@@ -11,9 +11,10 @@
 import { alpha, color } from "@/theme";
 import { textHalo } from "./textHalo";
 import { memo } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { SatelliteView } from "@/ar";
+import { LabelPressable } from "./LabelPressable";
 
 export interface SatelliteLabelProps {
   satellite: SatelliteView;
@@ -43,7 +44,7 @@ function SatelliteLabelBase({ satellite, x, y, anchorY, onPress }: SatelliteLabe
           ]}
         />
       )}
-      <Pressable
+      <LabelPressable
         testID={`sat-label-${satellite.noradId}`}
         onPress={() => onPress(satellite.noradId)}
         style={[styles.label, isGnss && styles.gnss, { left: x, top: y }]}
@@ -65,7 +66,7 @@ function SatelliteLabelBase({ satellite, x, y, anchorY, onPress }: SatelliteLabe
         <Text style={styles.sub} numberOfLines={1}>
           {sub}
         </Text>
-      </Pressable>
+      </LabelPressable>
     </>
   );
 }

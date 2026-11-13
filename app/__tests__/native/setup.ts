@@ -154,6 +154,12 @@ jest.mock("expo-auth-session", () => ({
   refreshAsync: jest.fn(),
 }));
 
+// A suite's first render pays for loading the screen's module tree (~1-2.5 s alone, several times
+// that on a loaded machine in a full parallel run), which can pass jest's 5 s default. Per-project
+// `testTimeout` in jest.config.js is not applied by jest-circus (it reads only the global option), so
+// the native project's budget is set here, where it covers every native test file and nothing else.
+jest.setTimeout(15_000);
+
 beforeEach(() => {
   jest.clearAllMocks();
   jest.requireMock<{ __data: Map<string, string> }>("expo-secure-store").__data.clear();

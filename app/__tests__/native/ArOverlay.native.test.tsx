@@ -141,6 +141,36 @@ describe("ArOverlay layers", () => {
     expect(handlers.onSelectRadio).toHaveBeenCalledWith("casA");
   });
 
+  it("ignores a press on any label that moved past the drag slop before release", async () => {
+    await render(
+      <ArOverlay
+        {...props({
+          vessels: [SHIP_N],
+          vesselsSnapshotAt: Date.now(),
+          showShips: true,
+          airports: [airport("ENGM", 60.0)],
+          showAirports: true,
+          satellites: [sat(25544, 10, 15)],
+          satellitesSampledAt: Date.now(),
+          showSatellites: true,
+          planets: [planet("Mars", 355, 8)],
+          showPlanets: true,
+          radioTargets: [radio("casA", 5, 20)],
+          showRadioSky: true,
+        })}
+      />,
+    );
+    await frames();
+
+    const ids = ["ves-name-257000001", "ar-airport-ENGM", "sat-label-25544", "planet-label-Mars", "radio-label-casA"];
+    for (const id of ids) {
+      // Down on the label, dragged 40 px (drag-to-look), released: not a tap.
+      await fireEvent(screen.getByTestId(id), "pressIn", { nativeEvent: { pageX: 50, pageY: 50 } });
+      await fireEvent(screen.getByTestId(id), "press", { nativeEvent: { pageX: 90, pageY: 50 } });
+    }
+    for (const fn of Object.values(handlers)) expect(fn).not.toHaveBeenCalled();
+  });
+
   it("draws none of those layers while they are switched off", async () => {
     await render(
       <ArOverlay

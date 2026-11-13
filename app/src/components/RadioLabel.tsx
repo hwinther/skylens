@@ -11,9 +11,10 @@
 
 import { alpha, color } from "@/theme";
 import { memo } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { RadioTargetView } from "@/ar";
+import { LabelPressable } from "./LabelPressable";
 
 export interface RadioLabelProps {
   target: RadioTargetView;
@@ -40,7 +41,7 @@ function RadioLabelBase({ target, x, y, anchorY, onPress }: RadioLabelProps) {
           ]}
         />
       )}
-      <Pressable
+      <LabelPressable
         testID={`radio-label-${target.key}`}
         onPress={() => onPress(target.key)}
         style={[styles.label, { left: x, top: y }]}
@@ -63,7 +64,7 @@ function RadioLabelBase({ target, x, y, anchorY, onPress }: RadioLabelProps) {
             {title}
           </Text>
         </View>
-      </Pressable>
+      </LabelPressable>
     </>
   );
 }

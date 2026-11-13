@@ -45,6 +45,7 @@ import {
   type PreparedLandmark,
   type ProjectionConfig,
 } from "@/ar";
+import { DRAG_SLOP_PX } from "./dragSlop";
 import { useLandmarks, type LandmarksStatus } from "./useLandmarks";
 import {
   identifyAccessibleLabel,
@@ -165,7 +166,7 @@ export function useArIdentify({
 /** Gesture test id, for gesture-handler's jest utilities. */
 export const LONG_PRESS_GESTURE_ID = "ar-identify-longpress";
 /** Movement (px) that turns a hold into a drag: the long-press fails, drag-to-look takes over. */
-const LONG_PRESS_MAX_DIST = 10;
+const LONG_PRESS_MAX_DIST = DRAG_SLOP_PX;
 
 /**
  * A gesture-handler LongPress, not a Pressable: drag-to-look is a gesture-handler Pan, and on web the
