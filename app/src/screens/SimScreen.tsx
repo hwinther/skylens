@@ -24,7 +24,16 @@
 
 import { color } from "@/theme";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, BackHandler, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import {
+  ActivityIndicator,
+  BackHandler,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+  type LayoutChangeEvent,
+} from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { SatRec } from "satellite.js";
@@ -41,7 +50,7 @@ import { SimHud, simHudStyles } from "@/components/SimHud";
 import { useSimCockpit } from "@/components/useSimCockpit";
 import { DIAG_TAG } from "@/sim/globeDiag";
 import { statusText } from "@/sim/hud";
-import { cockpitLayout } from "@/sim/layout";
+import { cockpitLayout, hudMaxWidth } from "@/sim/layout";
 import { describeLook, isCentred, type Look } from "@/sim/look";
 import type { OverlayItem, OverlayLayerKind } from "@/sim/overlay";
 import { fetchOverlay } from "@/sim/overlayData";
@@ -114,6 +123,9 @@ export default function SimScreen() {
   const [recenterSeq, setRecenterSeq] = useState(0);
   const [traffic, setTraffic] = useState<TrafficItem[]>([]);
   const [cardHeight, setCardHeight] = useState(0);
+  // The right-hand control column's width (the HUD stops left of it, src/sim/layout.ts hudMaxWidth).
+  const [columnWidth, setColumnWidth] = useState(0);
+  const onColumnLayout = useCallback((e: LayoutChangeEvent) => setColumnWidth(e.nativeEvent.layout.width), []);
   const nameRef = useRef("");
   // The session's state, read by the HUD timer (which outlives a re-target).
   const trackerRef = useRef(new SimTracker());
@@ -365,6 +377,8 @@ export default function SimScreen() {
   }
 
   const top = insets.top + 12;
+  const hudLeft = insets.left + 12;
+  const columnRight = insets.right + 12 + layout.rightInset;
   const pose = hud.pose;
   return (
     <View style={styles.root} testID="sim-screen">
@@ -427,7 +441,7 @@ export default function SimScreen() {
         orbitClass={orbitClass}
         status={statusText(pose, phase === "ready", error)}
         navRows={cockpit.navRows}
-        style={{ top, left: insets.left + 12 }}
+        style={{ top, left: hudLeft, maxWidth: hudMaxWidth({ windowWidth: win.width, hudLeft, columnRight, columnWidth }) }}
       >
         {imagery === "failed" ? (
           <Text testID="sim-imagery-failed" style={simHudStyles.note}>
@@ -437,8 +451,10 @@ export default function SimScreen() {
       </SimHud>
 
       <View
-        style={[styles.topRight, { top, right: insets.right + 12 + layout.rightInset }]}
+        testID="sim-controls"
+        style={[styles.topRight, { top, right: columnRight }]}
         pointerEvents="box-none"
+        onLayout={onColumnLayout}
       >
         <Pressable testID="sim-exit" style={styles.exit} onPress={exit}>
           <Text style={styles.exitText}>Exit</Text>

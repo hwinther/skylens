@@ -8,9 +8,10 @@
  * and the nearest-airport / destination aids.
  */
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
-import { DeviceEventEmitter } from "react-native";
+import { DeviceEventEmitter, Dimensions, StyleSheet } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import SimScreen, { GLOBE_START_TIMEOUT_MS } from "@/screens/SimScreen";
+import { HUD_COLUMN_GAP, hudMaxWidth } from "@/sim/layout";
 import type { SimGlobeViewProps } from "@/components/SimGlobeView";
 import { useSimStore } from "@/state/simStore";
 import { useMapFocusStore } from "@/state/mapFocusStore";
@@ -357,6 +358,20 @@ describe("SimScreen (Android) cockpit extras", () => {
 
     await tick(1000);
     expect(globe().traffic.map((t) => t.kind)).toEqual(["vessel"]);
+  });
+
+  it("keeps the HUD left of the control column (measured), so the chips never cover its values", async () => {
+    await renderSim();
+    const { width } = Dimensions.get("window");
+    const hudMax = () => StyleSheet.flatten(screen.getByTestId("sim-hud").props.style).maxWidth as number;
+    // Before the column is measured: a typical column width is assumed.
+    expect(hudMax()).toBe(hudMaxWidth({ windowWidth: width, hudLeft: 12, columnRight: 12, columnWidth: 0 }));
+
+    await fireEvent(screen.getByTestId("sim-controls"), "layout", {
+      nativeEvent: { layout: { x: width - 12 - 104, y: 12, width: 104, height: 200 } },
+    });
+    expect(hudMax()).toBe(width - 12 - 12 - 104 - HUD_COLUMN_GAP);
+    expect(12 + hudMax() + HUD_COLUMN_GAP).toBeLessThanOrEqual(width - 12 - 104);
   });
 
   it("has no filter when following a satellite", async () => {

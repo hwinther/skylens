@@ -17,7 +17,14 @@ import {
   MIN_CHASE_ELEVATION_DEG,
 } from "@/sim/chase";
 import { hiddenSummary, SIM_LAYERS, simFilterChips, simLayersFor, simLayerVisibility } from "@/sim/layers";
-import { cockpitLayout, CARD_GAP } from "@/sim/layout";
+import {
+  CARD_GAP,
+  cockpitLayout,
+  CONTROL_COLUMN_FALLBACK_WIDTH,
+  HUD_COLUMN_GAP,
+  HUD_MIN_WIDTH,
+  hudMaxWidth,
+} from "@/sim/layout";
 import { DOUBLE_TAP_MS, isTap, TAP_MAX_MS, TAP_SLOP_PX } from "@/sim/look";
 import { distanceKm, type OverlayPlace } from "@/sim/overlay";
 import {
@@ -315,6 +322,32 @@ describe("cockpit layout around the card", () => {
       bottomInset: 0,
       minimapFits: true,
     });
+  });
+});
+
+describe("HUD width next to the control column", () => {
+  // The CI phone (Pixel 6, 1080 px at 2.625 = 411 dp): before, the HUD stretched to its imagery note
+  // (~350 dp) and its right-aligned values sat under Map / Outside view / Layers (~103 dp wide).
+  const phone = { windowWidth: 411, hudLeft: 12, columnRight: 12, columnWidth: 103 };
+
+  it("stops the HUD a gap short of the column, so the two never overlap", () => {
+    const max = hudMaxWidth(phone);
+    expect(max).toBe(411 - 12 - 12 - 103 - HUD_COLUMN_GAP);
+    expect(phone.hudLeft + max + HUD_COLUMN_GAP).toBeLessThanOrEqual(
+      phone.windowWidth - phone.columnRight - phone.columnWidth,
+    );
+  });
+
+  it("follows the column as it widens (unfolded Layers panel) and moves with a side panel", () => {
+    expect(hudMaxWidth({ ...phone, columnWidth: 150 })).toBe(411 - 12 - 12 - 150 - HUD_COLUMN_GAP);
+    expect(hudMaxWidth({ windowWidth: 1280, hudLeft: 16, columnRight: 16 + SIDE_PANEL_WIDTH, columnWidth: 110 })).toBe(
+      1280 - 16 - 16 - SIDE_PANEL_WIDTH - 110 - HUD_COLUMN_GAP,
+    );
+  });
+
+  it("assumes a typical column width until it is measured, and never goes below the HUD's minimum", () => {
+    expect(hudMaxWidth({ ...phone, columnWidth: 0 })).toBe(411 - 12 - 12 - CONTROL_COLUMN_FALLBACK_WIDTH - HUD_COLUMN_GAP);
+    expect(hudMaxWidth({ ...phone, windowWidth: 280 })).toBe(HUD_MIN_WIDTH);
   });
 });
 

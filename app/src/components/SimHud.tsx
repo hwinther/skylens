@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import type { OrbitClass } from "@/ar/orbitClass";
 import { hudRows, type HudRow } from "@/sim/hud";
+import { HUD_MIN_WIDTH } from "@/sim/layout";
 import type { SimKind } from "@/sim/simPose";
 import type { TrackedPose } from "@/sim/tracker";
 
@@ -92,7 +93,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 12,
     backgroundColor: "rgba(11, 22, 34, 0.72)",
-    minWidth: 180,
+    minWidth: HUD_MIN_WIDTH,
   },
   name: { color: color.text, fontSize: 18, fontWeight: "700", marginBottom: 6 },
   rows: { gap: 2 },

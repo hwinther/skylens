@@ -34,7 +34,7 @@
 
 import { color } from "@/theme";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Pressable, StyleSheet, Text, useWindowDimensions, View, type LayoutChangeEvent } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import type { SatRec } from "satellite.js";
 import { SheetHeightContext } from "@/components/Sheet";
@@ -67,7 +67,7 @@ import { useVesselStore } from "@/state/vesselStore";
 import { useSimStore } from "@/state/simStore";
 import { loadCesium } from "@/sim/loadCesium";
 import { statusText } from "@/sim/hud";
-import { cockpitLayout } from "@/sim/layout";
+import { cockpitLayout, hudMaxWidth } from "@/sim/layout";
 import { attachLookGestures, createSimGlobe, type SimGlobe, type SimOverlayLayer } from "@/sim/simGlobe";
 import { aircraftSample, satelliteSample, vesselSample, type SimKind } from "@/sim/simPose";
 import { parseTarget } from "@/sim/target";
@@ -75,6 +75,8 @@ import { SimTracker, type TrackedPose } from "@/sim/tracker";
 
 /** HUD refresh rate; the camera itself updates every frame. */
 const HUD_MS = 250;
+/** The HUD's left and the control column's right margin (SimHud's own top/left offset), px. */
+const HUD_EDGE = 16;
 
 /** A phone/tablet browser with orientation sensors: the "Pan/tilt" look mode is offered there. */
 function deviceLookSupported(): boolean {
@@ -398,6 +400,9 @@ export default function SimScreen() {
   );
 
   const [cardHeight, setCardHeight] = useState(0);
+  // The right-hand control column's width (the HUD stops left of it, src/sim/layout.ts hudMaxWidth).
+  const [columnWidth, setColumnWidth] = useState(0);
+  const onColumnLayout = useCallback((e: LayoutChangeEvent) => setColumnWidth(e.nativeEvent.layout.width), []);
   const layout = cockpitLayout({
     windowWidth: win.width,
     windowHeight: win.height,
@@ -447,6 +452,14 @@ export default function SimScreen() {
         orbitClass={orbitClass}
         status={statusText(pose, engineReady, error)}
         navRows={cockpit.navRows}
+        style={{
+          maxWidth: hudMaxWidth({
+            windowWidth: win.width,
+            hudLeft: HUD_EDGE,
+            columnRight: HUD_EDGE + layout.rightInset,
+            columnWidth,
+          }),
+        }}
       />
 
       {pose && layout.minimapFits ? (
@@ -467,7 +480,12 @@ export default function SimScreen() {
         />
       ) : null}
 
-      <View style={[styles.topRight, { right: 16 + layout.rightInset }]} pointerEvents="box-none">
+      <View
+        testID="sim-controls"
+        style={[styles.topRight, { right: HUD_EDGE + layout.rightInset }]}
+        pointerEvents="box-none"
+        onLayout={onColumnLayout}
+      >
         <Pressable testID="sim-exit" style={styles.exit} onPress={exit}>
           <Text style={styles.exitText}>Exit</Text>
         </Pressable>
