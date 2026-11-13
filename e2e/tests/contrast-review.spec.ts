@@ -9,8 +9,13 @@ import type { Page, TestInfo } from '@playwright/test'
 import { expect, test } from './fixtures'
 
 // Flagged by the run before the colour change: the tab labels, found by structure, since
-// react-native-web's class names change with the colour.
-const REVIEW = ['a[href="/"] [dir="auto"]', 'a[href$="map"] [dir="auto"]', 'a[href$="settings"] [dir="auto"]']
+// react-native-web's class names change with the colour. The last text element is the label (the
+// icon glyph is one too).
+const REVIEW = [
+  'a[href="/"] [dir="auto"] >> nth=-1',
+  'a[href$="map"] [dir="auto"] >> nth=-1',
+  'a[href$="settings"] [dir="auto"] >> nth=-1',
+]
 
 async function crop(page: Page, selector: string, path: string): Promise<void> {
   const element = page.locator(selector).first()
