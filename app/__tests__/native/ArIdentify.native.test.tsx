@@ -173,6 +173,30 @@ describe("AR identify", () => {
     expect(requested.filter((p) => p === "/api/landmarks")).toHaveLength(1);
   });
 
+  it("a press before the landmarks have arrived says it is looking them up, then names the match", async () => {
+    // The first press triggers the lazy fetch: the card must show at once, then update in place.
+    let respond!: (r: Response) => void;
+    useSettingsStore.setState({ demoMode: false });
+    useObserverStore.setState({ position: OBSERVER });
+    useAuthStore.setState({ authRequired: false });
+    routeFetch({ "/api/landmarks": () => new Promise<Response>((resolve) => (respond = resolve)) });
+    await renderAr();
+
+    const { x, y } = pixelOf(0, 1.8, { azimuth: 0, elevation: 0, roll: 0 });
+    await longPressAt(x, y);
+    await frames();
+    expect(screen.getByTestId("ar-identify-name")).toHaveTextContent("Looking up landmarks…");
+
+    await act(async () =>
+      respond(
+        backendJson({ fetchedAt: new Date(0).toISOString(), landmarks: [NORTH_PEAK], attribution: "GeoNames (CC BY 4.0)" }),
+      ),
+    );
+    await frames();
+    expect(screen.getByTestId("ar-identify-name")).toHaveTextContent("Nordtoppen");
+    expect(screen.getByTestId("ar-identify-result")).toHaveTextContent(/GeoNames \(CC BY 4\.0\)/);
+  });
+
   it("the viewfinder toggle shows a reticle and names what the centre of the view points at", async () => {
     liveWithLandmarks([NORTH_PEAK]);
     await renderAr();
