@@ -17,7 +17,7 @@
  */
 
 import { color } from "@/theme";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -29,6 +29,7 @@ import { orbitInfo, type OrbitClass } from "@/ar/orbitClass";
 import { buildSatrec, satelliteStateAt } from "@/ar/satellites";
 import SimGlobeView from "@/components/SimGlobeView";
 import { SimHud, simHudStyles } from "@/components/SimHud";
+import { DIAG_TAG } from "@/sim/globeDiag";
 import { statusText } from "@/sim/hud";
 import { describeLook, isCentred, type Look } from "@/sim/look";
 import type { OverlayItem, OverlayLayerKind } from "@/sim/overlay";
@@ -52,6 +53,20 @@ const HUD_MS = 250;
 export const GLOBE_START_TIMEOUT_MS = 60_000;
 
 const LEVEL: Readonly<Look> = Object.freeze({ yaw: 0, pitch: 0 });
+
+/**
+ * Builds with EXPO_PUBLIC_SIM_DIAG=1 (the Maestro CI build) also put the globe's diagnostic summary on
+ * a tiny, near-invisible `sim-globe-diag` text node, so Maestro's hierarchy dump and copyTextFrom can
+ * read it. Every build logs it (logcat, tag ReactNativeJS, prefixed DIAG_TAG).
+ */
+const SHOW_DIAG = process.env.EXPO_PUBLIC_SIM_DIAG === "1";
+
+/**
+ * The webview re-receives ALL its props on every render of its parent (Expo DOM components emit them
+ * unconditionally), and this screen re-renders at the HUD's 4 Hz. Memoised, the globe only hears about
+ * real changes: a new sample, the OMM, recenter, access, or its (stable) callbacks.
+ */
+const Globe = memo(SimGlobeView);
 
 type GlobePhase = "loading" | "ready" | "failed";
 
@@ -79,6 +94,8 @@ export default function SimScreen() {
   const [phase, setPhase] = useState<GlobePhase>("loading");
   const [globeError, setGlobeError] = useState<string | null>(null);
   const [imagery, setImagery] = useState<"loaded" | "failed" | null>(null);
+  const [imageryReason, setImageryReason] = useState<string | null>(null);
+  const [diag, setDiag] = useState("");
   const [look, setLook] = useState<Look>(LEVEL);
   const [recenterSeq, setRecenterSeq] = useState(0);
   const nameRef = useRef("");
@@ -191,6 +208,8 @@ export default function SimScreen() {
         setPhase("loading");
         setGlobeError(null);
         setImagery(null);
+        setImageryReason(null);
+        setDiag("");
         setLook(LEVEL);
         setHud({ pose: null, name: "" });
         stop();
@@ -202,6 +221,7 @@ export default function SimScreen() {
   useEffect(() => {
     if (!focused || phase !== "loading") return;
     const timer = setTimeout(() => {
+      console.log(`${DIAG_TAG} globe start timed out`);
       setGlobeError("The 3D view didn't start in time.");
       setPhase("failed");
     }, GLOBE_START_TIMEOUT_MS);
@@ -219,14 +239,22 @@ export default function SimScreen() {
     [client],
   );
   const onReady = useCallback(async () => {
+    console.log(`${DIAG_TAG} globe ready`);
     setPhase((p) => (p === "failed" ? p : "ready"));
   }, []);
   const onFailed = useCallback(async (message: string) => {
+    console.log(`${DIAG_TAG} globe failed: ${message}`);
     setGlobeError(message);
     setPhase("failed");
   }, []);
-  const onImagery = useCallback(async (state: "loaded" | "failed") => {
+  const onImagery = useCallback(async (state: "loaded" | "failed", reason?: string) => {
+    console.log(`${DIAG_TAG} imagery ${state}${reason ? `: ${reason}` : ""}`);
     setImagery(state);
+    setImageryReason(reason ?? null);
+  }, []);
+  const onDiagnostic = useCallback(async (summary: string) => {
+    console.log(`${DIAG_TAG} ${summary}`);
+    setDiag(summary);
   }, []);
   const onLook = useCallback(async (next: Look) => {
     setLook(next);
@@ -236,9 +264,21 @@ export default function SimScreen() {
     setRecenterSeq((n) => n + 1);
   }, []);
   const onRenderProcessGone = useCallback(() => {
+    console.log(`${DIAG_TAG} webview render process gone`);
     setGlobeError("The 3D view crashed.");
     setPhase("failed");
   }, []);
+  const domProps = useMemo(
+    () => ({
+      style: styles.globe,
+      scrollEnabled: false,
+      overScrollMode: "never" as const,
+      contentInsetAdjustmentBehavior: "never" as const,
+      // The webview's renderer died (out of memory, GPU crash): the failure state, not a blank.
+      onRenderProcessGone,
+    }),
+    [onRenderProcessGone],
+  );
 
   if (!target) {
     return (
@@ -262,7 +302,7 @@ export default function SimScreen() {
         collapsable={false}
       >
         {focused && phase !== "failed" ? (
-          <SimGlobeView
+          <Globe
             key={`${target.kind}:${target.id}`}
             kind={target.kind}
             sample={sample}
@@ -274,14 +314,8 @@ export default function SimScreen() {
             onFailed={onFailed}
             onImagery={onImagery}
             onLook={onLook}
-            dom={{
-              style: styles.globe,
-              scrollEnabled: false,
-              overScrollMode: "never",
-              contentInsetAdjustmentBehavior: "never",
-              // The webview's renderer died (out of memory, GPU crash): the failure state, not a blank.
-              onRenderProcessGone,
-            }}
+            onDiagnostic={onDiagnostic}
+            dom={domProps}
           />
         ) : null}
       </View>
@@ -315,7 +349,7 @@ export default function SimScreen() {
       >
         {imagery === "failed" ? (
           <Text testID="sim-imagery-failed" style={simHudStyles.note}>
-            Map imagery unavailable (offline?)
+            Map imagery unavailable ({imageryReason ?? "offline?"})
           </Text>
         ) : null}
       </SimHud>
@@ -328,6 +362,12 @@ export default function SimScreen() {
           <Text style={styles.chipText}>Map</Text>
         </Pressable>
       </View>
+
+      {SHOW_DIAG && diag ? (
+        <Text testID="sim-globe-diag" style={styles.diag} pointerEvents="none">
+          {diag}
+        </Text>
+      ) : null}
 
       {!isCentred(look) ? (
         <Pressable
@@ -347,6 +387,8 @@ export default function SimScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#000" },
+  // Present for the hierarchy dump (non-zero size and alpha), practically invisible on screen.
+  diag: { position: "absolute", left: 0, bottom: 0, width: 4, height: 4, fontSize: 1, opacity: 0.02, color: "#000" },
   globe: { flex: 1, backgroundColor: "#000" },
   center: {
     flex: 1,

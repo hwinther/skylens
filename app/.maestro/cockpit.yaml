@@ -11,7 +11,18 @@
 # load, 60 s timeout) or is still loading is recorded by the screenshots, not asserted: those waits are
 # `optional`. The `cockpit` screenshot is expected to show the satellite-imagery globe from the
 # aircraft's position with the HUD (callsign, ALT/SPD/HDG/PITCH, status) top left and Exit/Map top
-# right; a "3D view unavailable" card instead means the globe failed and says why.
+# right; a "3D view unavailable" card instead means the globe failed and says why, and a "Map imagery
+# unavailable (<reason>)" note under the HUD means the globe runs but has no map (offline, tiles
+# failing, or the device's graphics drawing nothing, as on the software-GL CI emulator).
+#
+# Diagnostics: the CI build sets EXPO_PUBLIC_SIM_DIAG=1, so the screen carries the globe's health
+# summary on `sim-globe-diag` (src/sim/globeDiag.ts formatDiag: gl renderer, worker probe, imagery and
+# terrain tiles requested/ok/failed, pixel probe, last page error). The flow copies it and logs it to
+# maestro.log as "SkylensSim diag = ..."; the same lines are in logcat (grep SkylensSim).
+#
+# Screenshots are `optional`: on the starved emulator UiAutomation can return no screenshot ("window
+# may not be ready") while the app is fine. The asserts on sim-screen / sim-exit / sim-name and the
+# way back to the List are what fail the flow (cockpit didn't open, app crashed or hung).
 appId: no.wsh.skylens
 name: Cockpit view (demo mode)
 ---
@@ -72,7 +83,9 @@ name: Cockpit view (demo mode)
     id: "sim-exit"
 - assertVisible:
     id: "sim-name"
-- takeScreenshot: cockpit-opened
+- takeScreenshot:
+    path: cockpit-opened
+    optional: true
 
 # The globe: rendered its first frame or gave up (the screen itself times out after 60 s). Optional,
 # see the header. Then, if it is up, give the imagery a while to stream in before the screenshot.
@@ -90,9 +103,26 @@ name: Cockpit view (demo mode)
           visible:
             id: "sim-globe-ready"
             text: ".*imagery (loaded|failed).*"
-          timeout: 30000
+          timeout: 60000
           optional: true
-- takeScreenshot: cockpit
+- takeScreenshot:
+    path: cockpit
+    optional: true
+
+# Record what the globe says about itself (see the header). Both reads are optional.
+- copyTextFrom:
+    id: "sim-globe-(loading|ready|failed)"
+    optional: true
+- evalScript: "${console.log('SkylensSim globe = ' + maestro.copiedText)}"
+- runFlow:
+    when:
+      visible:
+        id: "sim-globe-diag"
+    commands:
+      - copyTextFrom:
+          id: "sim-globe-diag"
+          optional: true
+      - evalScript: "${console.log('SkylensSim diag = ' + maestro.copiedText)}"
 
 # Hardware back leaves the cockpit view (back to the List, where the tab bar is shown again).
 - runFlow: subflows/dismiss-system-anr.yaml
@@ -101,4 +131,6 @@ name: Cockpit view (demo mode)
     visible:
       id: "tab-list"
     timeout: 15000
-- takeScreenshot: cockpit-closed
+- takeScreenshot:
+    path: cockpit-closed
+    optional: true

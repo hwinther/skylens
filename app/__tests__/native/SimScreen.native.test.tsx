@@ -15,13 +15,14 @@ import { useMapFocusStore } from "@/state/mapFocusStore";
 import { aircraft, resetStores, seedAircraft } from "./fixtures";
 
 // The latest props the globe was rendered with (null once unmounted).
-const mockGlobe: { props: SimGlobeViewProps | null } = { props: null };
+const mockGlobe: { props: SimGlobeViewProps | null; renders: number } = { props: null, renders: 0 };
 
 jest.mock("@/components/SimGlobeView", () => {
   const React = jest.requireActual<typeof import("react")>("react");
   const { View } = jest.requireActual<typeof import("react-native")>("react-native");
   function SimGlobeViewStub(props: SimGlobeViewProps) {
     mockGlobe.props = props;
+    mockGlobe.renders += 1;
     React.useEffect(() => {
       return () => {
         mockGlobe.props = null;
@@ -52,6 +53,7 @@ describe("SimScreen (Android)", () => {
     jest.useFakeTimers();
     resetStores();
     mockGlobe.props = null;
+    mockGlobe.renders = 0;
     useSimStore.setState({ target: null, centre: null });
     seedAircraft([aircraft("abc123", { flight: "SAS123 ", alt: 10000, gs: 250, trk: 90 })]);
   });
@@ -103,7 +105,37 @@ describe("SimScreen (Android)", () => {
     await act(() => globe().onImagery("failed"));
 
     expect(screen.getByTestId("sim-globe-ready")).toBeOnTheScreen();
-    expect(screen.getByTestId("sim-imagery-failed")).toHaveTextContent(/imagery unavailable/);
+    expect(screen.getByTestId("sim-imagery-failed")).toHaveTextContent(/imagery unavailable \(offline\?\)/);
+  });
+
+  it("says why the imagery is missing when the globe knows", async () => {
+    await renderSim();
+    await act(() => globe().onReady());
+    await act(() => globe().onImagery("failed", "this device's graphics drew nothing"));
+
+    expect(screen.getByLabelText("3D globe ready, imagery failed")).toBeOnTheScreen();
+    expect(screen.getByTestId("sim-imagery-failed")).toHaveTextContent(
+      "Map imagery unavailable (this device's graphics drew nothing)",
+    );
+  });
+
+  it("logs the globe's diagnostics with a stable prefix, and keeps them off screen in normal builds", async () => {
+    const log = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      await renderSim();
+      await act(() => globe().onDiagnostic("gl=webgl2 X|tex=4096|wk=ok"));
+      expect(log).toHaveBeenCalledWith("SkylensSim gl=webgl2 X|tex=4096|wk=ok");
+      expect(screen.queryByTestId("sim-globe-diag")).toBeNull(); // only with EXPO_PUBLIC_SIM_DIAG=1
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("does not re-render the globe on every HUD tick", async () => {
+    await renderSim();
+    const before = mockGlobe.renders;
+    await tick(2000); // eight HUD ticks, no new sample
+    expect(mockGlobe.renders).toBe(before);
   });
 
   it("shows the failure card with the reason, drops the webview, and Back leaves", async () => {

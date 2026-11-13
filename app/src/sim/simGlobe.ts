@@ -8,6 +8,16 @@
  */
 
 import type { Cartesian3, CesiumWidget, LabelCollection, PointPrimitiveCollection, Scene } from "cesium";
+import {
+  DIAG_PROBE_MS,
+  formatDiag,
+  imageryVerdict,
+  newGlobeDiag,
+  noteError,
+  notePixel,
+  type GlobeDiag,
+  type TileCounts,
+} from "./globeDiag";
 import type { Cesium } from "./loadCesium";
 import { forwardMarker, MAX_LOOK_PITCH_DEG, wrap180, type Look } from "./look";
 import { distanceKm, type OverlayItem } from "./overlay";
@@ -61,17 +71,104 @@ export interface SimGlobeOptions {
   /** The first frame has been rendered: the globe is up (imagery may still be streaming in). */
   onFirstFrame?: () => void;
   /**
-   * The base imagery: "failed" when its metadata or a tile could not be fetched (offline, Esri down),
-   * "loaded" the first time the tile queue drains without such an error. Reported once.
+   * The base imagery, reported once (policy: imageryVerdict in ./globeDiag): "failed" with a short
+   * reason when the service is unreachable, tiles keep failing, none arrive, or the canvas stays black;
+   * "loaded" once tiles arrived, the queue drained and the canvas shows colour.
    */
-  onImagery?: (state: "loaded" | "failed") => void;
-  /** Cesium's render loop threw (it stops rendering); e.g. the WebGL context was lost. */
+  onImagery?: (state: "loaded" | "failed", reason?: string) => void;
+  /** Cesium's render loop threw (it stops rendering), or the WebGL context was lost. */
   onRenderError?: (message: string) => void;
+  /** Counters to fill (the caller may also record page errors on them); a fresh set otherwise. */
+  diag?: GlobeDiag;
+  /**
+   * The diagnostic summary (formatDiag), throttled: every DIAG_PROBE_MS for the first minute, then
+   * every 30 s; only when it changed.
+   */
+  onDiagnostic?: (summary: string) => void;
 }
 
 export interface SimGlobe {
   readonly scene: Scene;
+  readonly diag: GlobeDiag;
   destroy: () => void;
+}
+
+/** After this many diagnostic ticks, report only every DIAG_SLOW_EVERY-th tick. */
+const DIAG_FAST_TICKS = 12;
+const DIAG_SLOW_EVERY = 6;
+/** How long the worker probe may take before it counts as stuck. */
+const WORKER_PROBE_MS = 15_000;
+
+/**
+ * Count a provider's tile requests: wrap `method` (requestImage / requestTileGeometry) so every promise
+ * it hands Cesium also bumps `counts`. A resolved `undefined` counts as a failure (Cesium treats an
+ * undefined image as one). Returns the undo.
+ */
+function countRequests(target: object, method: string, counts: TileCounts): () => void {
+  const obj = target as Record<string, unknown>;
+  const orig = obj[method];
+  if (typeof orig !== "function") return () => undefined;
+  obj[method] = function (this: unknown, ...args: unknown[]) {
+    const p = (orig as (...a: unknown[]) => unknown).apply(this, args) as Promise<unknown> | undefined;
+    if (p && typeof p.then === "function") {
+      counts.req += 1;
+      p.then(
+        (v) => {
+          if (v === undefined) counts.fail += 1;
+          else counts.ok += 1;
+        },
+        () => {
+          counts.fail += 1;
+        },
+      );
+    }
+    return p;
+  };
+  return () => {
+    obj[method] = orig;
+  };
+}
+
+/** The WebGL renderer string and texture limit, for the diagnostics. Never throws. */
+function describeContext(scene: Scene, diag: GlobeDiag): void {
+  try {
+    const ctx = (scene as unknown as { context: { _gl: WebGLRenderingContext; webgl2: boolean } }).context;
+    const gl = ctx._gl;
+    const ext = gl.getExtension("WEBGL_debug_renderer_info");
+    const renderer = String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER));
+    diag.gl = `${ctx.webgl2 ? "webgl2" : "webgl1"} ${renderer}`.replace(/[|\s]+/g, " ").trim();
+    diag.maxTex = Number(gl.getParameter(gl.MAX_TEXTURE_SIZE)) || 0;
+  } catch (e) {
+    noteError(diag, "gl info", e);
+  }
+}
+
+/**
+ * Start one of Cesium's module workers the way Cesium does (same URL, `type: "module"`) and wait for its
+ * echo: tells whether tile decoding can work from this page's origin (file:// in the Android webview).
+ */
+function probeWorkers(C: Cesium, diag: GlobeDiag): () => void {
+  let worker: Worker | undefined;
+  const done = (state: GlobeDiag["workers"], err?: unknown) => {
+    if (diag.workers !== "pending") return;
+    diag.workers = state;
+    if (err !== undefined) noteError(diag, "worker", err);
+    worker?.terminate();
+  };
+  const timer = setTimeout(() => done("timeout"), WORKER_PROBE_MS);
+  try {
+    worker = new Worker(C.buildModuleUrl("Workers/transferTypedArrayTest.js"), { type: "module" });
+    worker.onmessage = () => done("ok");
+    worker.onerror = (e: ErrorEvent) => done("failed", e.message || "worker error event");
+    const array = new Int8Array([1]);
+    worker.postMessage({ array }, [array.buffer]);
+  } catch (e) {
+    done("failed", e);
+  }
+  return () => {
+    clearTimeout(timer);
+    worker?.terminate();
+  };
 }
 
 /** Does this browser give us a WebGL context at all? Cesium needs one (WebGL 2 preferred). */
@@ -88,48 +185,146 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
   const cleanups: (() => void)[] = [];
   let destroyed = false;
 
+  const diag = opts.diag ?? newGlobeDiag();
+  const createdAt = Date.now();
+  cleanups.push(probeWorkers(C, diag));
+
   const baseLayer = C.ImageryLayer.fromProviderAsync(C.ArcGisMapServerImageryProvider.fromUrl(ESRI_IMAGERY_URL));
+  const terrain = new C.Terrain(C.ArcGISTiledElevationTerrainProvider.fromUrl(ESRI_TERRAIN_URL));
   const widget: CesiumWidget = new C.CesiumWidget(opts.container, {
     baseLayer,
-    terrain: new C.Terrain(C.ArcGISTiledElevationTerrainProvider.fromUrl(ESRI_TERRAIN_URL)),
+    terrain,
     scene3DOnly: true,
   });
   const scene = widget.scene;
   scene.screenSpaceCameraController.enableInputs = false; // the camera is ours
   scene.globe.depthTestAgainstTerrain = true;
+  describeContext(scene, diag);
 
-  // --- readiness + imagery health ----------------------------------------------------------------
-  let imageryFailed = false;
+  // --- readiness, tile health, diagnostics ---------------------------------------------------------
+  // Tile errors go to the PROVIDER's errorEvent (the layer's errorEvent only covers creating the
+  // provider); with no listener Cesium merely console.logs them. So listen to both, and count requests.
   let imageryReported = false;
-  const reportImagery = (state: "loaded" | "failed") => {
-    if (imageryReported) return;
+  let firstFrameAt = 0;
+  const evaluateImagery = () => {
+    if (imageryReported || destroyed) return;
+    const drained = diag.queue === 0 && scene.globe.tilesLoaded;
+    const verdict = imageryVerdict(diag, firstFrameAt ? Date.now() - firstFrameAt : 0, drained);
+    if (!verdict) return;
     imageryReported = true;
-    opts.onImagery?.(state);
+    if (verdict.state === "failed") opts.onImagery?.("failed", verdict.reason);
+    else opts.onImagery?.("loaded");
+  };
+  interface TileError {
+    message?: string;
+    level?: number;
+    x?: number;
+    y?: number;
+    error?: unknown;
+  }
+  type ErrorSource = { errorEvent?: { addEventListener: (f: (e: TileError) => void) => () => void } };
+  const watchTileErrors = (provider: object, kind: string) => {
+    const errorEvent = (provider as ErrorSource).errorEvent;
+    if (!errorEvent) return;
+    cleanups.push(
+      errorEvent.addEventListener((err) => {
+        const where = err.level === undefined ? kind : `${kind} L${err.level} ${err.x}/${err.y}`;
+        noteError(diag, where, err.error ?? err.message);
+      }),
+    );
   };
   cleanups.push(
-    baseLayer.errorEvent.addEventListener(() => {
-      imageryFailed = true;
-      reportImagery("failed");
+    baseLayer.errorEvent.addEventListener((err: unknown) => {
+      diag.imageryLayerFailed = true;
+      noteError(diag, "imagery layer", err);
+      evaluateImagery();
+    }),
+  );
+  cleanups.push(
+    baseLayer.readyEvent.addEventListener((provider: object) => {
+      if (destroyed) return;
+      cleanups.push(countRequests(provider, "requestImage", diag.imagery));
+      watchTileErrors(provider, "imagery");
+    }),
+  );
+  cleanups.push(
+    terrain.errorEvent.addEventListener((err: unknown) => {
+      noteError(diag, "terrain provider", err);
+    }),
+  );
+  cleanups.push(
+    terrain.readyEvent.addEventListener((provider: object) => {
+      if (destroyed) return;
+      cleanups.push(countRequests(provider, "requestTileGeometry", diag.terrain));
+      watchTileErrors(provider, "terrain");
     }),
   );
   cleanups.push(
     scene.globe.tileLoadProgressEvent.addEventListener((queued: number) => {
-      if (queued === 0 && scene.globe.tilesLoaded && !imageryFailed && baseLayer.ready) reportImagery("loaded");
+      diag.queue = queued;
+      if (queued === 0) evaluateImagery();
     }),
   );
   cleanups.push(
     scene.renderError.addEventListener((_scene: Scene, err: unknown) => {
+      noteError(diag, "render", err);
       opts.onRenderError?.(err instanceof Error ? err.message : String(err));
     }),
   );
-  let firstFrame = true;
+  const canvas = scene.canvas;
+  const onContextLost = () => {
+    noteError(diag, "webgl", "context lost");
+    opts.onRenderError?.("the WebGL context was lost");
+  };
+  canvas.addEventListener("webglcontextlost", onContextLost);
+  cleanups.push(() => canvas.removeEventListener("webglcontextlost", onContextLost));
+
+  // Pixel probe: one pixel near the bottom centre (ground or sea from every camera we use), read right
+  // after a frame is drawn, once per DIAG_PROBE_MS. Pure black there means nothing reached the canvas.
+  let probeDue = false;
+  const probePixel = () => {
+    try {
+      const ctx = (scene as unknown as { context: { readPixels: (o: object) => Uint8Array } }).context;
+      const px = ctx.readPixels({
+        x: Math.floor(canvas.width / 2),
+        y: Math.floor(canvas.height * 0.2), // GL rows count from the bottom
+        width: 1,
+        height: 1,
+      });
+      notePixel(diag, [px[0] ?? 0, px[1] ?? 0, px[2] ?? 0]);
+    } catch (e) {
+      diag.blackProbes = -1; // can't tell: never hold "loaded" back on it
+      noteError(diag, "pixel probe", e);
+    }
+  };
   cleanups.push(
     scene.postRender.addEventListener(() => {
-      if (!firstFrame) return;
-      firstFrame = false;
+      diag.frames += 1;
+      if (probeDue) {
+        probeDue = false;
+        probePixel();
+      }
+      if (firstFrameAt) return;
+      firstFrameAt = Date.now();
+      diag.firstFrameMs = firstFrameAt - createdAt;
       opts.onFirstFrame?.();
     }),
   );
+
+  let diagTicks = 0;
+  let lastSummary = "";
+  const diagTimer = setInterval(() => {
+    if (destroyed) return;
+    probeDue = true;
+    evaluateImagery();
+    diagTicks += 1;
+    if (diagTicks > DIAG_FAST_TICKS && diagTicks % DIAG_SLOW_EVERY !== 0) return;
+    const summary = formatDiag(diag);
+    if (summary === lastSummary) return;
+    lastSummary = summary;
+    opts.onDiagnostic?.(summary);
+  }, DIAG_PROBE_MS);
+  cleanups.push(() => clearInterval(diagTimer));
 
   // --- camera -------------------------------------------------------------------------------------
   // "Straight ahead" marker: project a point FORWARD_PROBE_M along the direction of travel and draw it
@@ -255,6 +450,7 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
 
   return {
     scene,
+    diag,
     destroy: () => {
       if (destroyed) return;
       destroyed = true;

@@ -14,8 +14,12 @@
  *  - everything that needs the network with auth stays native: airport/port labels are fetched by the
  *    `loadOverlay` native action (an async function prop), so no token ever enters the webview;
  *  - state goes back through native actions: onReady (first frame rendered), onFailed (no WebGL, the
- *    engine didn't load, the render loop died), onImagery (Esri imagery loaded / failed), onLook (the
- *    drag offset at most 4 Hz, for the native Recenter chip).
+ *    engine didn't load, the render loop died), onImagery (Esri imagery loaded / failed and why),
+ *    onLook (the drag offset at most 4 Hz, for the native Recenter chip), onDiagnostic (the compact
+ *    health summary from src/sim/globeDiag.ts every few seconds: tile counts, WebGL renderer, worker
+ *    probe, pixel probe, the page's last error). The page's own console.error / window errors /
+ *    unhandled rejections are counted into it. The summary is also console.info'd here, so it shows in
+ *    logcat under the `chromium` tag ("[INFO:CONSOLE...] SkylensSim ...") even if the bridge is stuck.
  *
  * Cesium's runtime ships in the APK: Expo copies public/ (public/cesium from scripts/copy-cesium.mjs)
  * into the app's assets next to the exported DOM page (file:///android_asset/www.bundle/), so it loads
@@ -28,6 +32,7 @@ import type { DOMProps } from "expo/dom";
 import type { SatelliteOmm } from "@/api/types";
 import { buildSatrec, satelliteStateAt } from "@/ar/satellites";
 import { AIRPORT_COLOR } from "@/components/webmap/airportStyle";
+import { DIAG_TAG, formatDiag, newGlobeDiag, noteError, type GlobeDiag } from "@/sim/globeDiag";
 import { PORT_COLOR } from "@/components/webmap/portStyle";
 import { cesiumBaseUrl, loadCesium } from "@/sim/loadCesium";
 import type { Look } from "@/sim/look";
@@ -46,6 +51,27 @@ import { SimTracker } from "@/sim/tracker";
 /** How often the look offset may be reported to the native side. */
 const LOOK_REPORT_MS = 250;
 
+/**
+ * Count the page's own errors into `diag`: console.error, uncaught errors, unhandled rejections.
+ * Returns the undo.
+ */
+function captureErrors(diag: GlobeDiag): () => void {
+  const origError = console.error;
+  console.error = (...args: unknown[]) => {
+    noteError(diag, "console", args.map((a) => (typeof a === "string" ? a : String(a))).join(" "));
+    origError.apply(console, args);
+  };
+  const onError = (e: ErrorEvent) => noteError(diag, "window", e.error ?? e.message);
+  const onRejection = (e: PromiseRejectionEvent) => noteError(diag, "promise", e.reason);
+  window.addEventListener("error", onError);
+  window.addEventListener("unhandledrejection", onRejection);
+  return () => {
+    console.error = origError;
+    window.removeEventListener("error", onError);
+    window.removeEventListener("unhandledrejection", onRejection);
+  };
+}
+
 const LEVEL: Readonly<Look> = Object.freeze({ yaw: 0, pitch: 0 });
 
 export interface SimGlobeViewProps {
@@ -62,8 +88,10 @@ export interface SimGlobeViewProps {
   loadOverlay: (layer: OverlayLayerKind, lat: number, lon: number) => Promise<OverlayItem[]>;
   onReady: () => Promise<void>;
   onFailed: (message: string) => Promise<void>;
-  onImagery: (state: "loaded" | "failed") => Promise<void>;
+  onImagery: (state: "loaded" | "failed", reason?: string) => Promise<void>;
   onLook: (look: Look) => Promise<void>;
+  /** Native action: the diagnostic summary (formatDiag), throttled. */
+  onDiagnostic: (summary: string) => Promise<void>;
   dom?: DOMProps;
 }
 
@@ -113,9 +141,17 @@ export default function SimGlobeView(props: SimGlobeViewProps) {
     let cancelled = false;
     let globe: SimGlobe | null = null;
     let failed = false;
+    const diag = newGlobeDiag();
+    const stopCapture = captureErrors(diag);
+    const report = (summary: string) => {
+      console.info(`${DIAG_TAG} ${summary}`);
+      void actionsRef.current.onDiagnostic(summary);
+    };
     const fail = (message: string) => {
       if (cancelled || failed) return;
       failed = true;
+      noteError(diag, "failed", message);
+      report(formatDiag(diag));
       void actionsRef.current.onFailed(message);
     };
 
@@ -180,10 +216,16 @@ export default function SimGlobeView(props: SimGlobeViewProps) {
               onFirstFrame: () => {
                 if (!cancelled && !failed) void actionsRef.current.onReady();
               },
-              onImagery: (state) => {
-                if (!cancelled) void actionsRef.current.onImagery(state);
+              onImagery: (state, reason) => {
+                if (cancelled) return;
+                console.info(`${DIAG_TAG} imagery ${state}${reason ? `: ${reason}` : ""}`);
+                void actionsRef.current.onImagery(state, reason);
               },
               onRenderError: (message) => fail(`The 3D view stopped: ${message}`),
+              diag,
+              onDiagnostic: (summary) => {
+                if (!cancelled) report(summary);
+              },
             });
           } catch (e) {
             fail(`Couldn't start the 3D view: ${e instanceof Error ? e.message : String(e)}`);
@@ -198,6 +240,7 @@ export default function SimGlobeView(props: SimGlobeViewProps) {
       cancelled = true;
       clearInterval(lookTimer);
       stopGestures();
+      stopCapture();
       globe?.destroy();
       globe = null;
     };

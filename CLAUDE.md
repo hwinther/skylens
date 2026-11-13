@@ -126,8 +126,12 @@ npm run coverage:summary          # unit (../app/coverage) + e2e (monocart-cover
   (native HUD/buttons/loading + failure states/back button) around `src/components/SimGlobeView.tsx`, an
   Expo DOM component (`"use dom"`, @expo/dom-webview, separate JS context): it gets the latest sample /
   satellite OMM as JSON props, fetches labels through the `loadOverlay` native action (API + auth stay
-  native, no token in the webview) and reports back via `onReady`/`onFailed`/`onImagery`/`onLook`
-  (native testIDs `sim-globe-loading|ready|failed`). Cesium is NOT bundled by Metro:
+  native, no token in the webview) and reports back via `onReady`/`onFailed`/`onImagery`/`onLook`/
+  `onDiagnostic` (native testIDs `sim-globe-loading|ready|failed`). Globe health (tile counts, WebGL
+  renderer, worker + pixel probes, page errors) is counted in pure-TS `src/sim/globeDiag.ts`, logged with
+  the prefix `SkylensSim` (logcat) and, in builds with `EXPO_PUBLIC_SIM_DIAG=1` (the Maestro CI APK),
+  put on a hidden `sim-globe-diag` node; its `imageryVerdict` drives the "Map imagery unavailable
+  (reason)" note. Cesium is NOT bundled by Metro:
   `scripts/copy-cesium.mjs` (postinstall) copies its prebuilt runtime to `public/cesium/` (gitignored),
   and `src/sim/loadCesium.ts` loads it with a `<script>` tag from `cesiumBaseUrl(EXPO_BASE_URL)`: `/cesium/`
   on the web, and in a release APK `www.bundle/cesium/` next to the DOM page, because Expo's embed export
