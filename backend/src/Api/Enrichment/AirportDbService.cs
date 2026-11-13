@@ -35,7 +35,11 @@ public sealed class AirportDbService : IHostedService
     private readonly ILogger<AirportDbService> _logger;
 
     private AirportDto[] _airports = [];
+    private FrozenDictionary<string, AirportDto> _byCode = FrozenDictionary<string, AirportDto>.Empty;
     private Task? _loadTask;
+
+    /// <summary>Longest identifier <see cref="Lookup" /> accepts (OurAirports idents are at most ~8 characters).</summary>
+    public const int MaxIdentLength = 10;
 
     public AirportDbService(IOptions<AirportsOptions> options, IHostEnvironment env, ILogger<AirportDbService> logger)
     {
@@ -78,6 +82,62 @@ public sealed class AirportDbService : IHostedService
         return result;
     }
 
+    /// <summary>
+    ///     True for a plausible airport identifier: 3–<see cref="MaxIdentLength" /> ASCII letters, digits or
+    ///     dashes (ICAO <c>ENGM</c>, IATA <c>OSL</c>, OurAirports local idents like <c>NO-0003</c>).
+    /// </summary>
+    public static bool IsValidIdent(string? ident)
+    {
+        if (ident is null || ident.Length < 3 || ident.Length > MaxIdentLength)
+            return false;
+        foreach (var c in ident)
+            if (!(char.IsAsciiLetterOrDigit(c) || c == '-'))
+                return false;
+        return true;
+    }
+
+    /// <summary>
+    ///     One airport by identifier, case-insensitive: its OurAirports <c>ident</c> first (the ICAO code for
+    ///     most airports), then its <c>icao_code</c> where that differs from the ident, then its IATA code
+    ///     when exactly one airport carries it. Null when unknown, ambiguous, or before the dataset has loaded.
+    /// </summary>
+    public AirportDto? Lookup(string ident) =>
+        IsValidIdent(ident) && _byCode.TryGetValue(ident, out var airport) ? airport : null;
+
+    /// <summary>
+    ///     The <see cref="Lookup" /> index: idents win; an ICAO alias or IATA code is only added when it is
+    ///     not someone's ident and exactly one airport carries it (ambiguous codes are left out).
+    /// </summary>
+    internal static FrozenDictionary<string, AirportDto> BuildCodeIndex(
+        IReadOnlyList<AirportDto> airports,
+        IEnumerable<KeyValuePair<string, string>> icaoAliases)
+    {
+        var index = new Dictionary<string, AirportDto>(StringComparer.OrdinalIgnoreCase);
+        foreach (var a in airports)
+            index.TryAdd(a.Ident, a);
+
+        var byIdent = index.ToDictionary(StringComparer.OrdinalIgnoreCase);
+        AddUnambiguous(icaoAliases.Select(kv => (kv.Key, byIdent.GetValueOrDefault(kv.Value))));
+        AddUnambiguous(airports.Where(a => a.Iata is not null).Select(a => (a.Iata!, (AirportDto?)a)));
+        return index.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+        void AddUnambiguous(IEnumerable<(string Code, AirportDto? Airport)> candidates)
+        {
+            var found = new Dictionary<string, AirportDto?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (code, airport) in candidates)
+            {
+                if (airport is null || index.ContainsKey(code))
+                    continue;
+                // A second, different airport with the same code makes it ambiguous (null).
+                found[code] = found.TryGetValue(code, out var seen) && !ReferenceEquals(seen, airport) ? null : airport;
+            }
+
+            foreach (var (code, airport) in found)
+                if (airport is not null)
+                    index[code] = airport;
+        }
+    }
+
     public Task StartAsync(CancellationToken cancellationToken)
     {
         // Fire-and-forget: don't block host startup / healthz on the ~80k-row parse.
@@ -113,7 +173,9 @@ public sealed class AirportDbService : IHostedService
                 ? ParseFrequencies(frequenciesPath)
                 : new Dictionary<string, List<AirportFrequencyDto>>(StringComparer.Ordinal);
 
-            var airports = ParseAirports(airportsPath, runways, frequencies);
+            var icaoAliases = new List<KeyValuePair<string, string>>();
+            var airports = ParseAirports(airportsPath, runways, frequencies, icaoAliases);
+            _byCode = BuildCodeIndex(airports, icaoAliases);
             _airports = airports;
             Loaded = true;
             _logger.LogInformation("Loaded {Count} airports from {Path}", airports.Length, airportsPath);
@@ -129,16 +191,22 @@ public sealed class AirportDbService : IHostedService
     internal static AirportDto[] ParseAirports(
         string path,
         Dictionary<string, List<RunwayDto>> runways,
-        Dictionary<string, List<AirportFrequencyDto>> frequencies)
+        Dictionary<string, List<AirportFrequencyDto>> frequencies,
+        List<KeyValuePair<string, string>>? icaoAliases = null)
     {
         using var reader = OpenCsv(path);
-        return ParseAirports(reader, runways, frequencies);
+        return ParseAirports(reader, runways, frequencies, icaoAliases);
     }
 
+    /// <summary>
+    ///     Parse the airports CSV. When <paramref name="icaoAliases" /> is given it collects
+    ///     <c>icao_code → ident</c> for the kept airports whose ICAO code differs from their ident.
+    /// </summary>
     internal static AirportDto[] ParseAirports(
         TextReader reader,
         Dictionary<string, List<RunwayDto>> runways,
-        Dictionary<string, List<AirportFrequencyDto>> frequencies)
+        Dictionary<string, List<AirportFrequencyDto>> frequencies,
+        List<KeyValuePair<string, string>>? icaoAliases = null)
     {
         if (reader.ReadLine() is not { } header)
             return [];
@@ -152,6 +220,7 @@ public sealed class AirportDbService : IHostedService
         var elevIdx = Col(cols, "elevation_ft");
         var muniIdx = Col(cols, "municipality");
         var iataIdx = Col(cols, "iata_code");
+        var icaoIdx = Col(cols, "icao_code");
 
         var result = new List<AirportDto>();
         string? line;
@@ -173,6 +242,10 @@ public sealed class AirportDbService : IHostedService
             var ident = Get(f, identIdx);
             if (string.IsNullOrEmpty(ident))
                 continue;
+
+            if (icaoAliases is not null && Blank(Get(f, icaoIdx)) is { } icao &&
+                !string.Equals(icao, ident, StringComparison.OrdinalIgnoreCase))
+                icaoAliases.Add(new KeyValuePair<string, string>(icao, ident));
 
             var rwys = runways.TryGetValue(ident, out var r) ? (IReadOnlyList<RunwayDto>)r : [];
             var freqs = frequencies.TryGetValue(ident, out var fr) ? (IReadOnlyList<AirportFrequencyDto>)fr : [];

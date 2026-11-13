@@ -489,6 +489,16 @@ export default function SimScreen() {
         <Pressable testID="sim-exit" style={styles.exit} onPress={exit}>
           <Text style={styles.exitText}>Exit</Text>
         </Pressable>
+        {!(pose && layout.minimapFits) ? (
+          // The minimap is the way to the full Map; while it is hidden (an expanded card on a phone, or
+          // no position yet) this chip is, as on Android. The followed object's card has no map button.
+          <SimActionChip
+            testID="sim-open-map"
+            label="Map"
+            accessibilityLabel="Open on the map"
+            onPress={openOnMap}
+          />
+        ) : null}
         {canDeviceLook ? (
           <Pressable
             testID="sim-look-device"

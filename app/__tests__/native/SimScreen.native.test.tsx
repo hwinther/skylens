@@ -429,7 +429,65 @@ describe("SimScreen (Android) cockpit extras", () => {
     expect(screen.getByTestId("sim-nearest")).toHaveTextContent(/^ENKJ \d+ km E$/);
     expect(screen.getByTestId("sim-dest")).toHaveTextContent(/^ENGM \d+ km$/);
     expect(globe().destination).toMatchObject({ lat: 60.1939, lon: 11.1004 });
-    // Never the paid lookup.
+    // Never the paid lookup, and no single-airport lookup for a destination that is nearby.
     expect(requested).not.toContain("/api/aircraft/abc123/route");
+    expect(requested.filter((p) => p.startsWith("/api/airports/"))).toEqual([]);
+    // The followed aircraft's card: what it is, not the HUD's altitude / speed; no Show on map.
+    expect(screen.getByTestId("detail-card-summary")).toHaveTextContent(/^B738ESSA → ENGM$/);
+    expect(screen.queryByTestId("detail-show-on-map")).toBeNull();
+  });
+
+  describe("a destination beyond the nearby airports", () => {
+    const nearby = () =>
+      backendJson({
+        airports: [
+          { ident: "ENKJ", name: "Kjeller", type: "small_airport", lat: 59.9693, lon: 11.0361, runways: [], frequencies: [] },
+        ],
+      });
+
+    async function follow(destinationIcao: string, lookup: Record<string, () => Response>) {
+      useAuthStore.setState({ authRequired: false });
+      const requested = routeFetch({
+        "/api/aircraft/abc123": () => backendJson({ metadata: { hex: "abc123" } }),
+        "/api/aircraft/abc123/route/cached": () => backendJson({ originIcao: "ENGM", destinationIcao }),
+        "/api/airports": nearby,
+        ...lookup,
+      });
+      await renderSim();
+      await act(async () => {});
+      await tick(1000);
+      // Not ahead of the nearby airports: nothing is looked up before they are in.
+      expect(requested.filter((p) => p.startsWith("/api/airports/"))).toEqual([]);
+      await act(() => globe().loadOverlay("airports", 59.95, 10.8));
+      return requested;
+    }
+
+    it("is resolved once from the offline airport database, then the line and DEST row show", async () => {
+      const requested = await follow("KJFK", {
+        "/api/airports/KJFK": () =>
+          backendJson({ ident: "KJFK", name: "John F Kennedy Intl", type: "large_airport", lat: 40.6398, lon: -73.7789, elevationFt: 13, runways: [], frequencies: [] }),
+      });
+      await tick(1000);
+      await act(async () => {});
+      await tick(5000); // several more HUD ticks
+
+      expect(screen.getByTestId("sim-dest")).toHaveTextContent(/^KJFK \d{4} km$/);
+      expect(globe().destination).toMatchObject({ lat: 40.6398, lon: -73.7789 });
+      expect(requested.filter((p) => p === "/api/airports/KJFK")).toHaveLength(1);
+      expect(requested).not.toContain("/api/aircraft/abc123/route");
+    });
+
+    it("an unknown destination (404) is asked for once and draws no line", async () => {
+      const requested = await follow("ZZZZ", {
+        "/api/airports/ZZZZ": () => new Response(null, { status: 404, headers: { "X-Skylens-Api": "1" } }),
+      });
+      await tick(1000);
+      await act(async () => {});
+      await tick(5000);
+
+      expect(screen.getByTestId("sim-dest")).toHaveTextContent(/^ZZZZ$/);
+      expect(globe().destination).toBeNull();
+      expect(requested.filter((p) => p === "/api/airports/ZZZZ")).toHaveLength(1);
+    });
   });
 });

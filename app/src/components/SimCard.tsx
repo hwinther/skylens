@@ -5,8 +5,14 @@
  *
  * It shows the followed object at first. Tapping another aircraft or vessel in the 3D scene swaps it in,
  * with a "Follow this" action in place of "Cockpit view": following only ever happens on that explicit
- * press, never on the tap. The followed object's own card has no cockpit action (it is what is shown).
- * Other traffic's summary distance is measured from the followed object, not from the user.
+ * press, never on the tap. Other traffic's summary distance is measured from the followed object, not
+ * from the user.
+ *
+ * The followed object's own card is slimmer: its collapsed summary says what it is (type, registration,
+ * operator, route; vessel type and destination; orbit class) instead of the altitude / speed the HUD
+ * already shows and a distance from the user, and it has no actions row at all: no cockpit action (it is
+ * what is shown) and no "Show on map" / "Show ground track", which the screen's own Map chip (Android,
+ * and web while the minimap is hidden) or the minimap (web) already do with the same handoff.
  */
 
 import { alpha, color } from "@/theme";
@@ -74,6 +80,8 @@ export function SimCard({ target, selection, onClose, onFollow, followedLost, or
         cockpitAction={action(color.entity.air)}
         relativeTo={followed ? null : origin}
         onRoute={onRoute}
+        identitySummary={followed}
+        mapAction={!followed}
       />
       <VesselDetailSheet
         mmsi={mmsi}
@@ -82,8 +90,17 @@ export function SimCard({ target, selection, onClose, onFollow, followedLost, or
         signalLost={followed && followedLost}
         cockpitAction={action(color.entity.sea)}
         relativeTo={followed ? null : origin}
+        identitySummary={followed}
+        mapAction={!followed}
       />
-      <SatelliteDetailSheet noradId={noradId} observer={observer} onClose={onClose} cockpitAction={null} />
+      <SatelliteDetailSheet
+        noradId={noradId}
+        observer={observer}
+        onClose={onClose}
+        cockpitAction={null}
+        identitySummary={followed}
+        mapAction={!followed}
+      />
     </>
   );
 }
