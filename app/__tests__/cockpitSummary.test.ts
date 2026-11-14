@@ -34,10 +34,14 @@ describe("aircraftIdentityLines", () => {
     ).toEqual(["Boeing 737-800 · LN-RKF · SAS", "ENGM → EGLL"]);
   });
 
-  it("falls back to the type code and drops what is missing", () => {
+  it("falls back to the type table's name for the code, then the bare code, and drops what is missing", () => {
     expect(render(aircraftIdentityLines({ metadata: { typeCode: "B738", registration: " ", operator: null } }))).toEqual([
-      "B738",
+      "Boeing 737-800",
     ]);
+    // A long table name is shortened for the one-line summary.
+    expect(render(aircraftIdentityLines({ metadata: { typeCode: "EC35" } }))).toEqual(["Airbus EC-135/635"]);
+    // A designator the table does not know stays as it is.
+    expect(render(aircraftIdentityLines({ metadata: { typeCode: "ZZ99" } }))).toEqual(["ZZ99"]);
   });
 
   it("without any metadata shows the ICAO address when the title is the callsign, plus flags", () => {

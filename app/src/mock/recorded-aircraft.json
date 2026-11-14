@@ -21,6 +21,7 @@
           "track": 95,
           "baro_rate": 0,
           "category": "A3",
+          "t": "B738",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -34,6 +35,7 @@
           "track": 310,
           "baro_rate": 1408,
           "category": "A3",
+          "t": "B38M",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -47,6 +49,7 @@
           "track": 180,
           "baro_rate": -960,
           "category": "A2",
+          "t": "DH8D",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -60,6 +63,7 @@
           "track": 45,
           "baro_rate": 0,
           "category": "A5",
+          "t": "B748",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -73,6 +77,7 @@
           "track": 270,
           "baro_rate": -1200,
           "category": "A4",
+          "t": "A21N",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -99,6 +104,7 @@
           "track": 200,
           "baro_rate": 0,
           "category": "A7",
+          "t": "EC45",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -112,6 +118,7 @@
           "track": 300,
           "baro_rate": -100,
           "category": "B1",
+          "t": "GLID",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -125,6 +132,7 @@
           "track": 60,
           "baro_rate": 50,
           "category": "B2",
+          "t": "BALL",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -196,6 +204,7 @@
           "track": 95,
           "baro_rate": 0,
           "category": "A3",
+          "t": "B738",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -209,6 +218,7 @@
           "track": 310,
           "baro_rate": 1408,
           "category": "A3",
+          "t": "B38M",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -222,6 +232,7 @@
           "track": 180,
           "baro_rate": -960,
           "category": "A2",
+          "t": "DH8D",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -235,6 +246,7 @@
           "track": 45,
           "baro_rate": 0,
           "category": "A5",
+          "t": "B748",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -248,6 +260,7 @@
           "track": 270,
           "baro_rate": -1200,
           "category": "A4",
+          "t": "A21N",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -274,6 +287,7 @@
           "track": 200,
           "baro_rate": 0,
           "category": "A7",
+          "t": "EC45",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -287,6 +301,7 @@
           "track": 300,
           "baro_rate": -100,
           "category": "B1",
+          "t": "GLID",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -300,6 +315,7 @@
           "track": 60,
           "baro_rate": 50,
           "category": "B2",
+          "t": "BALL",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -371,6 +387,7 @@
           "track": 95,
           "baro_rate": 0,
           "category": "A3",
+          "t": "B738",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -384,6 +401,7 @@
           "track": 310,
           "baro_rate": 1408,
           "category": "A3",
+          "t": "B38M",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -397,6 +415,7 @@
           "track": 180,
           "baro_rate": -960,
           "category": "A2",
+          "t": "DH8D",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -410,6 +429,7 @@
           "track": 45,
           "baro_rate": 0,
           "category": "A5",
+          "t": "B748",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -423,6 +443,7 @@
           "track": 270,
           "baro_rate": -1200,
           "category": "A4",
+          "t": "A21N",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -449,6 +470,7 @@
           "track": 200,
           "baro_rate": 0,
           "category": "A7",
+          "t": "EC45",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -462,6 +484,7 @@
           "track": 300,
           "baro_rate": -100,
           "category": "B1",
+          "t": "GLID",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -475,6 +498,7 @@
           "track": 60,
           "baro_rate": 50,
           "category": "B2",
+          "t": "BALL",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -546,6 +570,7 @@
           "track": 95,
           "baro_rate": 0,
           "category": "A3",
+          "t": "B738",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -559,6 +584,7 @@
           "track": 310,
           "baro_rate": 1408,
           "category": "A3",
+          "t": "B38M",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -572,6 +598,7 @@
           "track": 180,
           "baro_rate": -960,
           "category": "A2",
+          "t": "DH8D",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -585,6 +612,7 @@
           "track": 45,
           "baro_rate": 0,
           "category": "A5",
+          "t": "B748",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -598,6 +626,7 @@
           "track": 270,
           "baro_rate": -1200,
           "category": "A4",
+          "t": "A21N",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -624,6 +653,7 @@
           "track": 200,
           "baro_rate": 0,
           "category": "A7",
+          "t": "EC45",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -637,6 +667,7 @@
           "track": 300,
           "baro_rate": -100,
           "category": "B1",
+          "t": "GLID",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -650,6 +681,7 @@
           "track": 60,
           "baro_rate": 50,
           "category": "B2",
+          "t": "BALL",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -721,6 +753,7 @@
           "track": 95,
           "baro_rate": 0,
           "category": "A3",
+          "t": "B738",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -734,6 +767,7 @@
           "track": 310,
           "baro_rate": 1408,
           "category": "A3",
+          "t": "B38M",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -747,6 +781,7 @@
           "track": 180,
           "baro_rate": -960,
           "category": "A2",
+          "t": "DH8D",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -760,6 +795,7 @@
           "track": 45,
           "baro_rate": 0,
           "category": "A5",
+          "t": "B748",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -773,6 +809,7 @@
           "track": 270,
           "baro_rate": -1200,
           "category": "A4",
+          "t": "A21N",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -799,6 +836,7 @@
           "track": 200,
           "baro_rate": 0,
           "category": "A7",
+          "t": "EC45",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -812,6 +850,7 @@
           "track": 300,
           "baro_rate": -100,
           "category": "B1",
+          "t": "GLID",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -825,6 +864,7 @@
           "track": 60,
           "baro_rate": 50,
           "category": "B2",
+          "t": "BALL",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -896,6 +936,7 @@
           "track": 95,
           "baro_rate": 0,
           "category": "A3",
+          "t": "B738",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -909,6 +950,7 @@
           "track": 310,
           "baro_rate": 1408,
           "category": "A3",
+          "t": "B38M",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -922,6 +964,7 @@
           "track": 180,
           "baro_rate": -960,
           "category": "A2",
+          "t": "DH8D",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -935,6 +978,7 @@
           "track": 45,
           "baro_rate": 0,
           "category": "A5",
+          "t": "B748",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -948,6 +992,7 @@
           "track": 270,
           "baro_rate": -1200,
           "category": "A4",
+          "t": "A21N",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -974,6 +1019,7 @@
           "track": 200,
           "baro_rate": 0,
           "category": "A7",
+          "t": "EC45",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -987,6 +1033,7 @@
           "track": 300,
           "baro_rate": -100,
           "category": "B1",
+          "t": "GLID",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -1000,6 +1047,7 @@
           "track": 60,
           "baro_rate": 50,
           "category": "B2",
+          "t": "BALL",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -1071,6 +1119,7 @@
           "track": 95,
           "baro_rate": 0,
           "category": "A3",
+          "t": "B738",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -1084,6 +1133,7 @@
           "track": 310,
           "baro_rate": 1408,
           "category": "A3",
+          "t": "B38M",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -1097,6 +1147,7 @@
           "track": 180,
           "baro_rate": -960,
           "category": "A2",
+          "t": "DH8D",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -1110,6 +1161,7 @@
           "track": 45,
           "baro_rate": 0,
           "category": "A5",
+          "t": "B748",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -1123,6 +1175,7 @@
           "track": 270,
           "baro_rate": -1200,
           "category": "A4",
+          "t": "A21N",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -1149,6 +1202,7 @@
           "track": 200,
           "baro_rate": 0,
           "category": "A7",
+          "t": "EC45",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -1162,6 +1216,7 @@
           "track": 300,
           "baro_rate": -100,
           "category": "B1",
+          "t": "GLID",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -1175,6 +1230,7 @@
           "track": 60,
           "baro_rate": 50,
           "category": "B2",
+          "t": "BALL",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -1246,6 +1302,7 @@
           "track": 95,
           "baro_rate": 0,
           "category": "A3",
+          "t": "B738",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -1259,6 +1316,7 @@
           "track": 310,
           "baro_rate": 1408,
           "category": "A3",
+          "t": "B38M",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -1272,6 +1330,7 @@
           "track": 180,
           "baro_rate": -960,
           "category": "A2",
+          "t": "DH8D",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -1285,6 +1344,7 @@
           "track": 45,
           "baro_rate": 0,
           "category": "A5",
+          "t": "B748",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -1298,6 +1358,7 @@
           "track": 270,
           "baro_rate": -1200,
           "category": "A4",
+          "t": "A21N",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -1324,6 +1385,7 @@
           "track": 200,
           "baro_rate": 0,
           "category": "A7",
+          "t": "EC45",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -1337,6 +1399,7 @@
           "track": 300,
           "baro_rate": -100,
           "category": "B1",
+          "t": "GLID",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -1350,6 +1413,7 @@
           "track": 60,
           "baro_rate": 50,
           "category": "B2",
+          "t": "BALL",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -1421,6 +1485,7 @@
           "track": 95,
           "baro_rate": 0,
           "category": "A3",
+          "t": "B738",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -1434,6 +1499,7 @@
           "track": 310,
           "baro_rate": 1408,
           "category": "A3",
+          "t": "B38M",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -1447,6 +1513,7 @@
           "track": 180,
           "baro_rate": -960,
           "category": "A2",
+          "t": "DH8D",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -1460,6 +1527,7 @@
           "track": 45,
           "baro_rate": 0,
           "category": "A5",
+          "t": "B748",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -1473,6 +1541,7 @@
           "track": 270,
           "baro_rate": -1200,
           "category": "A4",
+          "t": "A21N",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -1499,6 +1568,7 @@
           "track": 200,
           "baro_rate": 0,
           "category": "A7",
+          "t": "EC45",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -1512,6 +1582,7 @@
           "track": 300,
           "baro_rate": -100,
           "category": "B1",
+          "t": "GLID",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -1525,6 +1596,7 @@
           "track": 60,
           "baro_rate": 50,
           "category": "B2",
+          "t": "BALL",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -1596,6 +1668,7 @@
           "track": 95,
           "baro_rate": 0,
           "category": "A3",
+          "t": "B738",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -1609,6 +1682,7 @@
           "track": 310,
           "baro_rate": 1408,
           "category": "A3",
+          "t": "B38M",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -1622,6 +1696,7 @@
           "track": 180,
           "baro_rate": -960,
           "category": "A2",
+          "t": "DH8D",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -1635,6 +1710,7 @@
           "track": 45,
           "baro_rate": 0,
           "category": "A5",
+          "t": "B748",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -1648,6 +1724,7 @@
           "track": 270,
           "baro_rate": -1200,
           "category": "A4",
+          "t": "A21N",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -1674,6 +1751,7 @@
           "track": 200,
           "baro_rate": 0,
           "category": "A7",
+          "t": "EC45",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -1687,6 +1765,7 @@
           "track": 300,
           "baro_rate": -100,
           "category": "B1",
+          "t": "GLID",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -1700,6 +1779,7 @@
           "track": 60,
           "baro_rate": 50,
           "category": "B2",
+          "t": "BALL",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -1771,6 +1851,7 @@
           "track": 95,
           "baro_rate": 0,
           "category": "A3",
+          "t": "B738",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -1784,6 +1865,7 @@
           "track": 310,
           "baro_rate": 1408,
           "category": "A3",
+          "t": "B38M",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -1797,6 +1879,7 @@
           "track": 180,
           "baro_rate": -960,
           "category": "A2",
+          "t": "DH8D",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -1810,6 +1893,7 @@
           "track": 45,
           "baro_rate": 0,
           "category": "A5",
+          "t": "B748",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -1823,6 +1907,7 @@
           "track": 270,
           "baro_rate": -1200,
           "category": "A4",
+          "t": "A21N",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -1849,6 +1934,7 @@
           "track": 200,
           "baro_rate": 0,
           "category": "A7",
+          "t": "EC45",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -1862,6 +1948,7 @@
           "track": 300,
           "baro_rate": -100,
           "category": "B1",
+          "t": "GLID",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -1875,6 +1962,7 @@
           "track": 60,
           "baro_rate": 50,
           "category": "B2",
+          "t": "BALL",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -1946,6 +2034,7 @@
           "track": 95,
           "baro_rate": 0,
           "category": "A3",
+          "t": "B738",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -1959,6 +2048,7 @@
           "track": 310,
           "baro_rate": 1408,
           "category": "A3",
+          "t": "B38M",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -1972,6 +2062,7 @@
           "track": 180,
           "baro_rate": -960,
           "category": "A2",
+          "t": "DH8D",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -1985,6 +2076,7 @@
           "track": 45,
           "baro_rate": 0,
           "category": "A5",
+          "t": "B748",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -1998,6 +2090,7 @@
           "track": 270,
           "baro_rate": -1200,
           "category": "A4",
+          "t": "A21N",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -2024,6 +2117,7 @@
           "track": 200,
           "baro_rate": 0,
           "category": "A7",
+          "t": "EC45",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -2037,6 +2131,7 @@
           "track": 300,
           "baro_rate": -100,
           "category": "B1",
+          "t": "GLID",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -2050,6 +2145,7 @@
           "track": 60,
           "baro_rate": 50,
           "category": "B2",
+          "t": "BALL",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -2121,6 +2217,7 @@
           "track": 95,
           "baro_rate": 0,
           "category": "A3",
+          "t": "B738",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -2134,6 +2231,7 @@
           "track": 310,
           "baro_rate": 1408,
           "category": "A3",
+          "t": "B38M",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -2147,6 +2245,7 @@
           "track": 180,
           "baro_rate": -960,
           "category": "A2",
+          "t": "DH8D",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -2160,6 +2259,7 @@
           "track": 45,
           "baro_rate": 0,
           "category": "A5",
+          "t": "B748",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -2173,6 +2273,7 @@
           "track": 270,
           "baro_rate": -1200,
           "category": "A4",
+          "t": "A21N",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -2199,6 +2300,7 @@
           "track": 200,
           "baro_rate": 0,
           "category": "A7",
+          "t": "EC45",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -2212,6 +2314,7 @@
           "track": 300,
           "baro_rate": -100,
           "category": "B1",
+          "t": "GLID",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -2225,6 +2328,7 @@
           "track": 60,
           "baro_rate": 50,
           "category": "B2",
+          "t": "BALL",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -2296,6 +2400,7 @@
           "track": 95,
           "baro_rate": 0,
           "category": "A3",
+          "t": "B738",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -2309,6 +2414,7 @@
           "track": 310,
           "baro_rate": 1408,
           "category": "A3",
+          "t": "B38M",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -2322,6 +2428,7 @@
           "track": 180,
           "baro_rate": -960,
           "category": "A2",
+          "t": "DH8D",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -2335,6 +2442,7 @@
           "track": 45,
           "baro_rate": 0,
           "category": "A5",
+          "t": "B748",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -2348,6 +2456,7 @@
           "track": 270,
           "baro_rate": -1200,
           "category": "A4",
+          "t": "A21N",
           "seen": 0.2,
           "seen_pos": 0.2
         },
@@ -2374,6 +2483,7 @@
           "track": 200,
           "baro_rate": 0,
           "category": "A7",
+          "t": "EC45",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -2387,6 +2497,7 @@
           "track": 300,
           "baro_rate": -100,
           "category": "B1",
+          "t": "GLID",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -2400,6 +2511,7 @@
           "track": 60,
           "baro_rate": 50,
           "category": "B2",
+          "t": "BALL",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -2471,6 +2583,7 @@
           "track": 95,
           "baro_rate": 0,
           "category": "A3",
+          "t": "B738",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -2484,6 +2597,7 @@
           "track": 310,
           "baro_rate": 1408,
           "category": "A3",
+          "t": "B38M",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -2497,6 +2611,7 @@
           "track": 180,
           "baro_rate": -960,
           "category": "A2",
+          "t": "DH8D",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -2510,6 +2625,7 @@
           "track": 45,
           "baro_rate": 0,
           "category": "A5",
+          "t": "B748",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -2523,6 +2639,7 @@
           "track": 270,
           "baro_rate": -1200,
           "category": "A4",
+          "t": "A21N",
           "seen": 0.1,
           "seen_pos": 0.2
         },
@@ -2549,6 +2666,7 @@
           "track": 200,
           "baro_rate": 0,
           "category": "A7",
+          "t": "EC45",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -2562,6 +2680,7 @@
           "track": 300,
           "baro_rate": -100,
           "category": "B1",
+          "t": "GLID",
           "seen": 0.2,
           "seen_pos": 0.3
         },
@@ -2575,6 +2694,7 @@
           "track": 60,
           "baro_rate": 50,
           "category": "B2",
+          "t": "BALL",
           "seen": 0.2,
           "seen_pos": 0.3
         },

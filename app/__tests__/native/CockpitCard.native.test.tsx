@@ -73,7 +73,8 @@ describe("SimCard: the followed object's card", () => {
       [`/api/aircraft/${HEX}/route/cached`]: notFound,
     });
     await renderCard({});
-    expect(summaryText()).toEqual(["B738"]);
+    // The bare designator reads as the type table's name.
+    expect(summaryText()).toEqual(["Boeing 737-800"]);
   });
 
   it("aircraft while signed out: its ICAO address (the title is the callsign), fetching nothing", async () => {

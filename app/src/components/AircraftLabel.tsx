@@ -15,7 +15,7 @@ import { StyleSheet, Text, View } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { AircraftDto } from "@/api/types";
 import { formatAge, lostTag } from "@/ar/signalLost";
-import { aircraftAccent, iconForCategory } from "./aircraftIcon";
+import { aircraftAccent, iconForAircraft } from "./aircraftIcon";
 import { LabelPressable } from "./LabelPressable";
 
 export interface AircraftLabelProps {
@@ -72,7 +72,7 @@ function AircraftLabelBase({ aircraft, x, y, anchorY, rangeKm, lostAgeS = null, 
         <View style={styles.titleRow}>
           <MaterialCommunityIcons
             testID={`ac-icon-${aircraft.hex}`}
-            name={iconForCategory(aircraft.cat)}
+            name={iconForAircraft(aircraft)}
             size={13}
             color={alpha(accent, 0.95)}
             style={styles.icon}

@@ -21,7 +21,7 @@ import {
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { AircraftDto, AirportDto, FishingZone, LostGear, PortDto, VesselDto } from "@/api/types";
 import { PORT_COLOR, PORT_GLYPH, portGlyphSize, portSubtitle, portTitle } from "./portStyle";
-import { aircraftAccent, iconForCategory } from "@/components/aircraftIcon";
+import { aircraftAccent, iconForAircraft } from "@/components/aircraftIcon";
 import { iconForVessel } from "@/components/vesselIcon";
 import { lineLatLngs, pointLatLng, polygonRings, type GeoGeometry, type LatLngTuple } from "./geojson";
 import { FOCUS_ZOOM, type FocusTarget } from "./focus";
@@ -121,7 +121,7 @@ const glyphMap = (MaterialCommunityIcons as unknown as { getRawGlyphMap(): Recor
 
 /** Marker showing the aircraft's type icon (plane / helicopter / balloon / …), orange when military. */
 function aircraftIcon(a: AircraftDto): L.DivIcon {
-  const code = glyphMap[iconForCategory(a.cat)];
+  const code = glyphMap[iconForAircraft(a)];
   const glyph = code != null ? String.fromCodePoint(code) : "";
   return L.divIcon({
     className: "",
