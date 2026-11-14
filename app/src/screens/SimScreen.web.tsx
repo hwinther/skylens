@@ -41,10 +41,12 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import type { SatRec } from "satellite.js";
 import { SheetHeightContext } from "@/components/Sheet";
 import { SimCard } from "@/components/SimCard";
+import { SimCockpitFrame } from "@/components/SimCockpitFrame";
 import { SimActionChip, SimFilter, SimToggleChip } from "@/components/SimControls";
 import { SimHud } from "@/components/SimHud";
 import { MINIMAP_SIZE, SimMinimap } from "@/components/SimMinimap";
 import { SimPlaceCard } from "@/components/SimPlaceCard";
+import { useCockpitFrame } from "@/components/useCockpitFrame";
 import { useSimCockpit } from "@/components/useSimCockpit";
 import { useWebArSensors } from "@/components/useWebArSensors";
 import { AIRPORT_COLOR } from "@/components/webmap/airportStyle";
@@ -187,6 +189,9 @@ export default function SimScreen() {
     placeByKeyRef.current = placeByKey;
   }, [pick, placeByKey]);
   const [hint, setHint] = useState<Hint | null>(null);
+  // The cockpit window frame (src/sim/cockpitFrame.ts), moved every frame from the live look offset.
+  const frame = useCockpitFrame(target, cockpit.cameraMode);
+  const getLook = useCallback(() => lookRef.current, []);
   useEffect(() => {
     globeRef.current?.setVisibility(cockpit.visibility);
   }, [cockpit.visibility, engineReady]);
@@ -505,6 +510,9 @@ export default function SimScreen() {
         data-camera={cockpit.cameraMode}
         style={{ position: "absolute", inset: 0, touchAction: "none", cursor: "grab" }}
       />
+      {frame.shown && frame.variant && engineReady ? (
+        <SimCockpitFrame variant={frame.variant} width={win.width} height={win.height} look={hud.look} getLook={getLook} />
+      ) : null}
       {/* "Straight ahead" marker, positioned every frame by the render loop (src/sim/simGlobe.ts). */}
       <div
         ref={markerRef}
@@ -596,6 +604,15 @@ export default function SimScreen() {
           on={cockpit.cameraMode === "chase"}
           onPress={cockpit.toggleCamera}
         />
+        {frame.toggleShown ? (
+          <SimToggleChip
+            testID="sim-frame-toggle"
+            label="Frame"
+            accessibilityLabel="Cockpit frame: show the window frame"
+            on={frame.enabled}
+            onPress={frame.toggle}
+          />
+        ) : null}
         {cockpit.selection == null ? (
           <SimActionChip testID="sim-details" label="Details" onPress={cockpit.showDetails} />
         ) : null}

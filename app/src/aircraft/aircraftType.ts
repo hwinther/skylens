@@ -89,6 +89,15 @@ export function isRotorcraftType(code: string | null | undefined): boolean | nul
   return info.cls === "helicopter" || info.cls === "gyrocopter";
 }
 
+/**
+ * Rotor-borne or not, for one aircraft: the type table (`t`) decides where it knows the designator (the
+ * emitter category is often unset or wrong), else ADS-B emitter category A7 (rotorcraft). The one rule
+ * the cockpit view uses for its helicopter camera pitch and its helicopter canopy frame.
+ */
+export function isRotorcraft(ac: { t?: string | null; cat?: string | null }): boolean {
+  return isRotorcraftType(ac.t) ?? ac.cat === "A7";
+}
+
 /** All-caps short words that are names, not acronyms ("DE HAVILLAND", "AIR TRACTOR", "MIL"). */
 const SHORT_WORDS = new Set(["AIR", "MIL", "DE", "LA", "LE", "NEW", "FLY", "SKY", "SUD", "THE", "AND", "OF"]);
 

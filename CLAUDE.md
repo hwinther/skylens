@@ -194,7 +194,12 @@ npm run coverage:summary          # unit (../app/coverage) + e2e (monocart-cover
   name (`sim-place-hint`, one throttled `scene.pick`). E2E taps it via the globe's `skylensSimPlaces()`
   hook on `sim-view`. On Android these cross the webview as slim props (`traffic`, `layers`, `cameraMode`,
   `destination`, `targetKey`) and the `onPick` action (traffic `{kind,id}`, `{kind:"place",id:key}`, or
-  null for a miss). Maestro covers the Android screen in `app/.maestro/cockpit.yaml` (globe state
+  null for a miss). In the cockpit camera a generic window frame (aeroplane / helicopter / bridge, none for
+satellites; pure geometry + parallax in `src/sim/cockpitFrame.ts`, rotor rule `isRotorcraft` shared with
+`simPose`) is drawn as SVG over the globe (`SimCockpitFrame.tsx`, `pointerEvents` none, `sim-frame`,
+`sim-frame-<variant>`), sliding opposite to the look offset (web: rAF from the look ref; Android: a
+native-driver glide to each 4 Hz `onLook`); the `sim-frame-toggle` chip (hidden in the outside view and
+for satellites) persists `settingsStore.simCockpitFrame` (default on). Maestro covers the Android screen in `app/.maestro/cockpit.yaml` (globe state
   screenshot-only; the outside view is never switched on there, it hung the CI emulator's GPU; see its README).
 - **Ports layer** (`GET /api/ports`, `PortDbService`): an offline file committed at
   `data/ports/ports.csv.gz`, built by `node data/ports/extract-osm-ports.mjs [--wpi UpdatedPub150.csv]`:

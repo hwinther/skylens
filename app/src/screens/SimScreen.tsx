@@ -46,10 +46,12 @@ import { orbitInfo, type OrbitClass } from "@/ar/orbitClass";
 import { buildSatrec, satelliteStateAt } from "@/ar/satellites";
 import { SheetHeightContext } from "@/components/Sheet";
 import { SimCard } from "@/components/SimCard";
+import { SimCockpitFrame } from "@/components/SimCockpitFrame";
 import { SimPlaceCard } from "@/components/SimPlaceCard";
 import { SimActionChip, SimFilter, SimToggleChip } from "@/components/SimControls";
 import SimGlobeView from "@/components/SimGlobeView";
 import { SimHud, simHudStyles } from "@/components/SimHud";
+import { useCockpitFrame } from "@/components/useCockpitFrame";
 import { useSimCockpit } from "@/components/useSimCockpit";
 import { DIAG_TAG } from "@/sim/globeDiag";
 import { statusText } from "@/sim/hud";
@@ -143,6 +145,8 @@ export default function SimScreen() {
   );
   const cockpit = useSimCockpit({ target, focused, onTraffic });
   const { poseRef, onPlaces, pick } = cockpit;
+  // The cockpit window frame (src/sim/cockpitFrame.ts), gliding towards each onLook report.
+  const frame = useCockpitFrame(target, cockpit.cameraMode);
 
   const exit = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -434,6 +438,10 @@ export default function SimScreen() {
         ) : null}
       </View>
 
+      {frame.shown && frame.variant && phase === "ready" ? (
+        <SimCockpitFrame variant={frame.variant} width={win.width} height={win.height} look={look} />
+      ) : null}
+
       {phase === "loading" ? (
         <View style={styles.overlayCenter} pointerEvents="none" testID="sim-globe-spinner">
           <ActivityIndicator size="large" color={color.text} />
@@ -491,6 +499,15 @@ export default function SimScreen() {
           on={cockpit.cameraMode === "chase"}
           onPress={cockpit.toggleCamera}
         />
+        {frame.toggleShown ? (
+          <SimToggleChip
+            testID="sim-frame-toggle"
+            label="Frame"
+            accessibilityLabel="Cockpit frame: show the window frame"
+            on={frame.enabled}
+            onPress={frame.toggle}
+          />
+        ) : null}
         {cockpit.selection == null ? (
           <SimActionChip testID="sim-details" label="Details" onPress={cockpit.showDetails} />
         ) : null}
