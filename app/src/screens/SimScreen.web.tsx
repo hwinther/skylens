@@ -25,7 +25,9 @@
  * styled apart), refetched as the object moves, are labelled in the 3D scene, each class from its own
  * distance (src/sim/overlay.ts); the HUD shows the nearest one and, when the route is known, the
  * destination with a route line. Other aircraft/vessels nearby are drawn from the live stores
- * (src/sim/traffic.ts); a tap on one opens its card with "Follow this". A "Layers" filter hides layers.
+ * (src/sim/traffic.ts); a tap on one opens its card with "Follow this". A tap on an airport / port label
+ * opens a small place card (components/SimPlaceCard.tsx: full name, kind, codes, distance and bearing),
+ * and a resting mouse over one shows its full name as a hint. A "Layers" filter hides layers.
  *
  * The Cesium scene itself is src/sim/simGlobe.ts, the HUD box components/SimHud.tsx, the card
  * components/SimCard.tsx and the extras' state components/useSimCockpit.ts, all shared with the Android
@@ -41,7 +43,8 @@ import { SheetHeightContext } from "@/components/Sheet";
 import { SimCard } from "@/components/SimCard";
 import { SimActionChip, SimFilter, SimToggleChip } from "@/components/SimControls";
 import { SimHud } from "@/components/SimHud";
-import { SimMinimap } from "@/components/SimMinimap";
+import { MINIMAP_SIZE, SimMinimap } from "@/components/SimMinimap";
+import { SimPlaceCard } from "@/components/SimPlaceCard";
 import { useSimCockpit } from "@/components/useSimCockpit";
 import { useWebArSensors } from "@/components/useWebArSensors";
 import { AIRPORT_COLOR } from "@/components/webmap/airportStyle";
@@ -67,7 +70,8 @@ import { useVesselStore } from "@/state/vesselStore";
 import { useSimStore } from "@/state/simStore";
 import { loadCesium } from "@/sim/loadCesium";
 import { statusText } from "@/sim/hud";
-import { cockpitLayout, hudMaxWidth } from "@/sim/layout";
+import { cockpitLayout, hudMaxWidth, placeCardInset, placeCardWidth } from "@/sim/layout";
+import { placeHint } from "@/sim/place";
 import { attachLookGestures, createSimGlobe, type SimGlobe, type SimOverlayLayer } from "@/sim/simGlobe";
 import { aircraftSample, satelliteSample, vesselSample, type SimKind } from "@/sim/simPose";
 import { parseTarget } from "@/sim/target";
@@ -77,6 +81,17 @@ import { SimTracker, type TrackedPose } from "@/sim/tracker";
 const HUD_MS = 250;
 /** The HUD's left and the control column's right margin (SimHud's own top/left offset), px. */
 const HUD_EDGE = 16;
+/** The minimap's (and the place card's) distance from the bottom edge, px. */
+const BOTTOM_EDGE = 32;
+/** Hover hint: at most one pick per this many ms while the mouse moves (none while it rests). */
+const HOVER_MS = 120;
+
+/** The hover hint next to the mouse: a place's full name. */
+interface Hint {
+  x: number;
+  y: number;
+  text: string;
+}
 
 /** A phone/tablet browser with orientation sensors: the "Pan/tilt" look mode is offered there. */
 function deviceLookSupported(): boolean {
@@ -163,12 +178,15 @@ export default function SimScreen() {
     focused,
     onTraffic: (items) => globeRef.current?.setTraffic(items),
   });
-  const { select, poseRef, onPlaces } = cockpit;
-  // Read by the tap handler, which lives as long as the globe (a re-target must not rebuild it).
-  const selectRef = useRef(select);
+  const { pick, placeByKey, poseRef, onPlaces } = cockpit;
+  // Read by the tap / hover handlers, which live as long as the globe (a re-target must not rebuild it).
+  const pickRef = useRef(pick);
+  const placeByKeyRef = useRef(placeByKey);
   useEffect(() => {
-    selectRef.current = select;
-  }, [select]);
+    pickRef.current = pick;
+    placeByKeyRef.current = placeByKey;
+  }, [pick, placeByKey]);
+  const [hint, setHint] = useState<Hint | null>(null);
   useEffect(() => {
     globeRef.current?.setVisibility(cockpit.visibility);
   }, [cockpit.visibility, engineReady]);
@@ -369,7 +387,7 @@ export default function SimScreen() {
           if (!cancelled) setError(e instanceof Error ? e.message : "Couldn't start the 3D view.");
         });
 
-      // --- drag to look around (pan/tilt mode: the phone aims the view), tap to pick traffic -------
+      // --- drag to look around (pan/tilt mode: the phone aims the view), tap to pick traffic / a place
       cleanups.push(
         attachLookGestures(el, {
           get: () => lookRef.current,
@@ -379,11 +397,57 @@ export default function SimScreen() {
           enabled: () => !deviceActiveRef.current,
           onReset: recenter,
           onTap: (x, y) => {
-            const hit = globeRef.current?.pick(x, y);
-            if (hit) selectRef.current(hit);
+            // A miss (null) dismisses the place card.
+            pickRef.current(globeRef.current?.pick(x, y) ?? null);
           },
         }),
       );
+
+      // --- hover hint (mouse only): one pick per HOVER_MS while the mouse moves, none while it rests --
+      let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+      let hoverAt: { x: number; y: number } | null = null;
+      let lastHoverPick = -Infinity;
+      const clearHint = () => {
+        hoverAt = null;
+        if (hoverTimer) clearTimeout(hoverTimer);
+        hoverTimer = null;
+        el.style.cursor = "grab";
+        setHint((prev) => (prev ? null : prev));
+      };
+      const runHover = () => {
+        hoverTimer = null;
+        const at = hoverAt;
+        if (!at) return;
+        lastHoverPick = performance.now();
+        const key = globeRef.current?.hoverPlace(at.x, at.y) ?? null;
+        const place = key ? placeByKeyRef.current(key) : null;
+        el.style.cursor = place ? "pointer" : "grab";
+        const text = place ? placeHint(place) : null;
+        setHint((prev) => {
+          if (!text) return prev ? null : prev;
+          return prev?.text === text ? prev : { x: at.x, y: at.y, text };
+        });
+      };
+      const onHoverMove = (e: PointerEvent) => {
+        if (e.pointerType !== "mouse") return;
+        if (e.buttons !== 0) {
+          clearHint(); // dragging to look: no hint
+          return;
+        }
+        const rect = el.getBoundingClientRect();
+        hoverAt = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        if (hoverTimer) return;
+        hoverTimer = setTimeout(runHover, Math.max(0, HOVER_MS - (performance.now() - lastHoverPick)));
+      };
+      el.addEventListener("pointermove", onHoverMove);
+      el.addEventListener("pointerleave", clearHint);
+      el.addEventListener("pointerdown", clearHint);
+      cleanups.push(() => {
+        el.removeEventListener("pointermove", onHoverMove);
+        el.removeEventListener("pointerleave", clearHint);
+        el.removeEventListener("pointerdown", clearHint);
+        clearHint();
+      });
 
       return () => {
         cancelled = true;
@@ -409,6 +473,17 @@ export default function SimScreen() {
     cardOpen: cockpit.selection != null,
     cardHeight,
   });
+  // The place card sits bottom-left; the minimap (bottom-right) moves up only where they'd collide.
+  const [placeHeight, setPlaceHeight] = useState(0);
+  const onPlaceLayout = useCallback((e: LayoutChangeEvent) => setPlaceHeight(e.nativeEvent.layout.height), []);
+  const placeWidth = placeCardWidth(win.width, HUD_EDGE, HUD_EDGE);
+  const placeInset = cockpit.place
+    ? placeCardInset({
+        cardRight: HUD_EDGE + placeWidth,
+        cardHeight: placeHeight,
+        controlLeft: win.width - HUD_EDGE - layout.rightInset - MINIMAP_SIZE,
+      })
+    : 0;
 
   if (!target) {
     return (
@@ -476,7 +551,7 @@ export default function SimScreen() {
                 : color.entity.orbit
           }
           onPress={openOnMap}
-          style={{ right: 16 + layout.rightInset, bottom: 32 + layout.bottomInset }}
+          style={{ right: HUD_EDGE + layout.rightInset, bottom: BOTTOM_EDGE + layout.bottomInset + placeInset }}
         />
       ) : null}
 
@@ -553,6 +628,42 @@ export default function SimScreen() {
           onRoute={cockpit.onRoute}
         />
       </SheetHeightContext.Provider>
+
+      {cockpit.place ? (
+        <SimPlaceCard
+          place={cockpit.place}
+          origin={pose}
+          onClose={cockpit.closePlace}
+          onLayout={onPlaceLayout}
+          style={{ left: HUD_EDGE, bottom: BOTTOM_EDGE, width: placeWidth }}
+        />
+      ) : null}
+
+      {hint ? (
+        <div
+          data-testid="sim-place-hint"
+          role="tooltip"
+          style={{
+            position: "absolute",
+            top: hint.y + 18,
+            // Flipped to the left of the pointer near the right edge.
+            ...(hint.x > win.width - 240 ? { right: win.width - hint.x + 8 } : { left: hint.x + 12 }),
+            maxWidth: 260,
+            pointerEvents: "none",
+            background: color.sheetSurface,
+            color: color.text,
+            border: "1px solid " + color.handle,
+            borderRadius: 6,
+            padding: "4px 8px",
+            font: "600 12px sans-serif",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {hint.text}
+        </div>
+      ) : null}
     </View>
   );
 }

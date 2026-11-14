@@ -8,7 +8,8 @@
  * On top of that, driven through the returned handle (plain JSON in, so Android can call it from props):
  *  - other traffic (setTraffic, ~1 Hz): points + short labels, dead-reckoned per frame with the AR
  *    view's PositionTracker; the primitives are created, updated and removed in place per id;
- *  - picking (pick): which traffic point/label is under a tap;
+ *  - picking (pick): which traffic or airport / port label is under a tap (traffic wins, place.ts), and
+ *    hoverPlace: the place under a resting mouse (web hover hint), one single pick per call;
  *  - the layer filter (setVisibility): airports / ports / ferry quays shown or hidden in place;
  *  - the camera mode (setCameraMode): cockpit, or chase (behind and above, see chase.ts) with a point
  *    and heading chevron marking the followed object;
@@ -52,7 +53,8 @@ import { distanceKm, type OverlayGroup, type OverlayItem } from "./overlay";
 import { greatCirclePoints, type GeoPos } from "./route";
 import type { SimKind } from "./simPose";
 import type { TrackedPose } from "./tracker";
-import type { TrafficItem, TrafficKind, TrafficPick } from "./traffic";
+import { resolveSimPick, type PlacePrimitiveId, type SimPick, type TrafficPrimitiveId } from "./place";
+import type { TrafficItem } from "./traffic";
 
 export const ESRI_IMAGERY_URL = "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer";
 export const ESRI_TERRAIN_URL =
@@ -105,11 +107,17 @@ export interface SimOverlayLayer {
   allowed: () => boolean;
 }
 
-/** The id stamped on traffic primitives, so a pick can tell them from airport/port labels. */
-interface TrafficPrimitiveId {
-  simTraffic: true;
-  kind: TrafficKind;
-  id: string;
+/**
+ * One on-screen airport / port point, from the test hook the globe puts on its container
+ * (`container.skylensSimPlaces()`, computed only when called): e2e taps the real canvas there.
+ */
+export interface PlaceOnScreen {
+  key: string;
+  label: string;
+  group: OverlayGroup;
+  /** CSS px relative to the container. */
+  x: number;
+  y: number;
 }
 
 interface TrafficEntry {
@@ -158,8 +166,10 @@ export interface SimGlobe {
   setCameraMode: (mode: CameraMode) => void;
   /** Draw the route line to this destination, or none. */
   setDestination: (dest: GeoPos | null) => void;
-  /** The traffic under canvas position (x, y) in CSS px, or null. */
-  pick: (x: number, y: number) => TrafficPick | null;
+  /** The traffic or place under canvas position (x, y) in CSS px (traffic wins), or null. */
+  pick: (x: number, y: number) => SimPick | null;
+  /** The place key under a resting mouse at (x, y), or null (also null when traffic is on top). One pick. */
+  hoverPlace: (x: number, y: number) => string | null;
   /** Forget the traffic tracks (the followed object changed). */
   clearTraffic: () => void;
   destroy: () => void;
@@ -490,7 +500,7 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
     trafficTracks.clear();
   };
 
-  const pick = (x: number, y: number): TrafficPick | null => {
+  const pick = (x: number, y: number): SimPick | null => {
     if (destroyed) return null;
     let hits: unknown[];
     try {
@@ -498,11 +508,17 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
     } catch {
       return null;
     }
-    for (const hit of hits) {
-      const id = (hit as { id?: Partial<TrafficPrimitiveId> } | undefined)?.id;
-      if (id?.simTraffic && id.kind && id.id) return { kind: id.kind, id: id.id };
+    return resolveSimPick(hits);
+  };
+  // Hover: one plain pick (the topmost primitive), so a moving mouse costs a single pick pass.
+  const hoverPlace = (x: number, y: number): string | null => {
+    if (destroyed) return null;
+    try {
+      const hit = resolveSimPick([scene.pick(new C.Cartesian2(x, y), PICK_PX, PICK_PX)]);
+      return hit?.kind === "place" ? hit.id : null;
+    } catch {
+      return null;
     }
-    return null;
   };
 
   // --- camera -------------------------------------------------------------------------------------
@@ -673,6 +689,8 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
   // One pair of collections per filter group, so the filter hides a group in place (no refetch).
   let visibility: Partial<Record<OverlayGroup, boolean>> = {};
   const groups = new Map<OverlayGroup, { labels: LabelCollection; points: PointPrimitiveCollection }>();
+  // What each group draws now (for the e2e hook below; nothing reads it per frame).
+  const drawn = new Map<OverlayGroup, { item: OverlayItem; position: Cartesian3 }[]>();
   const collectionsFor = (group: OverlayGroup) => {
     let cols = groups.get(group);
     if (!cols) {
@@ -696,6 +714,7 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
         const cols = collectionsFor(g);
         cols.labels.removeAll();
         cols.points.removeAll();
+        drawn.delete(g);
       }
       for (const it of items) {
         owned.add(it.group);
@@ -703,7 +722,15 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
         const itemColor = it.color ? C.Color.fromCssColorString(it.color) : null;
         const position = C.Cartesian3.fromDegrees(it.lon, it.lat, it.altM);
         const shown = new C.DistanceDisplayCondition(0, it.rangeM);
+        // Stamped so a tap (or the web's hover) can name the place; the screen resolves the key.
+        const id: PlacePrimitiveId | undefined = it.key ? { simPlace: true, key: it.key } : undefined;
+        if (it.key) {
+          const list = drawn.get(it.group) ?? [];
+          list.push({ item: it, position });
+          drawn.set(it.group, list);
+        }
         points.add({
+          id,
           position,
           pixelSize: it.pixelSize,
           color: itemColor ?? layerColor,
@@ -714,6 +741,7 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
         });
         if (!it.label) continue;
         labels.add({
+          id,
           position,
           text: it.label,
           font: "600 13px sans-serif",
@@ -755,6 +783,32 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
     cleanups.push(() => clearInterval(timer));
   }
 
+  // Test hook (e2e): the airport / port points on screen now, in CSS px, so a test can tap the real
+  // canvas there. Computed only when called; a plain property, nothing to clean up but itself.
+  const camScratch = new C.Cartesian3();
+  const placesOnScreen = (): PlaceOnScreen[] => {
+    if (destroyed) return [];
+    const cam = widget.camera;
+    const out: PlaceOnScreen[] = [];
+    for (const [group, list] of drawn) {
+      if (visibility[group] === false) continue;
+      for (const { item, position } of list) {
+        const toPlace = C.Cartesian3.subtract(position, cam.positionWC, camScratch);
+        if (C.Cartesian3.dot(toPlace, cam.directionWC) <= 0) continue; // behind the camera
+        if (C.Cartesian3.magnitude(toPlace) > item.rangeM) continue; // beyond its display distance
+        const xy = scene.cartesianToCanvasCoordinates(position);
+        if (!xy || xy.x < 0 || xy.y < 0 || xy.x > canvas.clientWidth || xy.y > canvas.clientHeight) continue;
+        out.push({ key: item.key ?? "", label: item.label, group, x: xy.x, y: xy.y });
+      }
+    }
+    return out;
+  };
+  const hookHost = opts.container as HTMLElement & { skylensSimPlaces?: () => PlaceOnScreen[] };
+  hookHost.skylensSimPlaces = placesOnScreen;
+  cleanups.push(() => {
+    if (hookHost.skylensSimPlaces === placesOnScreen) delete hookHost.skylensSimPlaces;
+  });
+
   return {
     scene,
     diag,
@@ -775,6 +829,7 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
       drawRoute();
     },
     pick,
+    hoverPlace,
     clearTraffic,
     destroy: () => {
       if (destroyed) return;
@@ -794,7 +849,8 @@ export interface LookGestureHandlers {
   onReset: () => void;
   /**
    * A single tap (not a drag, not half of a double tap) at (x, y) in CSS px relative to `el`: picks
-   * traffic. Fired DOUBLE_TAP_MS after the tap, once it is clear no second tap follows.
+   * traffic or a place (or, on empty sky / ground, dismisses the place card). Fired DOUBLE_TAP_MS after
+   * the tap, once it is clear no second tap follows.
    */
   onTap?: (x: number, y: number) => void;
 }
