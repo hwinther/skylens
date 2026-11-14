@@ -5,15 +5,20 @@
  * (nearest airport/port, destination). The screens own the globe and feed it what this returns: the web
  * screen calls the SimGlobe handle, the Android screen passes props into the webview.
  *
- * No new backend calls: traffic comes from the live stores (centred on the followed object while the
- * session runs), places from the label fetches the globe already makes (handed in via `onPlaces`), and
- * a route only from the detail card (`onRoute`: its free cached read on open, or the user's own tap on
- * the paid "Route" button).
+ * Traffic comes from the live stores (centred on the followed object while the session runs), places
+ * from the label fetches the globe already makes (handed in via `onPlaces`), and a route only from the
+ * detail card (`onRoute`: its free cached read on open, or the user's own tap on the paid "Route"
+ * button). The one call of its own: when that route's destination is not among the nearby airports,
+ * one GET /api/airports/{ident} per code (offline database, free; behind the API gate, remembered for
+ * the screen's life, a failure just means no line), so the route line shows from any distance.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "expo-router";
+import { ApiClient } from "@/api/client";
+import { getApiBaseUrl } from "@/api/config";
 import type { RouteResponse } from "@/api/types";
+import { AirportLookup } from "@/sim/airportLookup";
 import type { CameraMode } from "@/sim/chase";
 import { hiddenSummary, simFilterChips, simLayerVisibility, type SimLayer } from "@/sim/layers";
 import type { OverlayLayerKind, OverlayPlace } from "@/sim/overlay";
@@ -22,6 +27,7 @@ import type { HudRow } from "@/sim/hud";
 import { selectTraffic, trafficKey, TRAFFIC_UPDATE_MS, type TrafficItem, type TrafficPick } from "@/sim/traffic";
 import type { TrackedPose } from "@/sim/tracker";
 import { useAircraftStore } from "@/state/aircraftStore";
+import { isApiAllowed } from "@/state/authStore";
 import { useSettingsStore } from "@/state/settingsStore";
 import { useSimStore, type SimTarget } from "@/state/simStore";
 import { useVesselStore } from "@/state/vesselStore";
@@ -85,6 +91,11 @@ export function useSimCockpit({ target, focused, onTraffic }: SimCockpitOptions)
   const onRoute = useCallback((hex: string, route: RouteResponse) => {
     routesRef.current[hex] = route;
   }, []);
+  // Destinations beyond the nearby airports: one offline lookup per code, kept for the screen's life.
+  const [airportLookup] = useState(() => {
+    const client = new ApiClient({ baseUrl: getApiBaseUrl() });
+    return new AirportLookup({ fetchAirport: (ident) => client.airport(ident), allowed: isApiAllowed });
+  });
 
   // --- the 1 Hz loop: traffic for the globe, nav aids for the HUD --------------------------------------
   /** The followed object's pose, kept current by the screen's HUD timer. */
@@ -136,7 +147,11 @@ export function useSimCockpit({ target, focused, onTraffic }: SimCockpitOptions)
       if (near) rows.push([target.kind === "aircraft" ? "APT" : "PORT", describeNearest(near), "sim-nearest"]);
       const code = target.kind === "aircraft" ? routesRef.current[target.id]?.destinationIcao?.trim() : null;
       if (code) {
-        const place = findPlaceByCode(placesRef.current.airports ?? [], code);
+        const nearbyAirports = placesRef.current.airports;
+        const nearby = findPlaceByCode(nearbyAirports ?? [], code);
+        // Only once the nearby airports are in (not ahead of them), and only for one that isn't among them.
+        const looked = nearby || !nearbyAirports ? null : airportLookup.resolve(code);
+        const place = nearby ?? (looked && looked !== "pending" ? looked : null);
         rows.push(["DEST", describeDestination(code, pose, place), "sim-dest"]);
         if (place) dest = { lat: place.lat, lon: place.lon, altM: place.altM };
       }
@@ -145,7 +160,7 @@ export function useSimCockpit({ target, focused, onTraffic }: SimCockpitOptions)
     setDestination((prev) =>
       prev?.lat === dest?.lat && prev?.lon === dest?.lon && prev?.altM === dest?.altM ? prev : dest,
     );
-  }, [target]);
+  }, [target, airportLookup]);
 
   useEffect(() => {
     if (!focused || !target) return;

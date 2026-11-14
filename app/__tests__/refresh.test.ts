@@ -85,7 +85,7 @@ test("concurrent callers share one refresh", async () => {
 
 test("a rejected refresh ends the session so the UI shows signed out", async () => {
   await tokens.setTokens(EXPIRED);
-  refreshAsync.mockRejectedValue(new Error("invalid_grant"));
+  refreshAsync.mockRejectedValue(Object.assign(new Error("invalid_grant"), { code: "invalid_grant" }));
 
   await expect(ensureFreshAccessToken()).resolves.toBeNull();
   expect(tokens.getTokensSync()).toBeNull();
@@ -145,7 +145,7 @@ test("a rejected refresh re-reads storage and adopts a set another tab rotated i
   refreshAsync.mockImplementation(async () => {
     // The other tab won the race: it rotated the refresh token, so ours is now rejected.
     await otherTabWrites(OTHER_TAB);
-    throw new Error("invalid_grant");
+    throw Object.assign(new Error("invalid_grant"), { code: "invalid_grant" });
   });
 
   await expect(ensureFreshAccessToken()).resolves.toBe("other-tab");
@@ -163,8 +163,58 @@ test("forceRefreshAccessToken refreshes a token that still looks valid", async (
 
 test("forceRefreshAccessToken ends the session when the refresh is rejected", async () => {
   await tokens.setTokens({ ...EXPIRED, accessToken: "rejected", expiresAt: Date.now() + 3_600_000 });
-  refreshAsync.mockRejectedValue(new Error("invalid_grant"));
+  refreshAsync.mockRejectedValue(Object.assign(new Error("invalid_grant"), { code: "invalid_grant" }));
 
   await expect(forceRefreshAccessToken()).resolves.toBeNull();
   expect(useAuthStore.getState().status).toBe("unauthenticated");
+});
+
+describe("only an OAuth rejection from the IdP ends the session", () => {
+  test("a rejected refresh says why the session ended", async () => {
+    await tokens.setTokens(EXPIRED);
+    useAuthStore.setState({ lastError: null });
+    refreshAsync.mockRejectedValue(Object.assign(new Error("long RFC text"), { code: "invalid_grant" }));
+
+    await expect(ensureFreshAccessToken()).resolves.toBeNull();
+    expect(useAuthStore.getState()).toMatchObject({
+      status: "unauthenticated",
+      lastError: "Your session has ended. Sign in again.",
+    });
+  });
+
+  test("an expired session without a refresh token ends, with the same reason", async () => {
+    await tokens.setTokens({ ...EXPIRED, refreshToken: null });
+
+    await expect(ensureFreshAccessToken()).resolves.toBeNull();
+    expect(useAuthStore.getState()).toMatchObject({
+      status: "unauthenticated",
+      lastError: "Your session has ended. Sign in again.",
+    });
+  });
+
+  test.each([
+    ["no network (an app resumed before its radio is back)", new TypeError("Network request failed")],
+    ["a proxy error page instead of JSON", new SyntaxError("JSON Parse error: Unexpected character: <")],
+    ["a temporary IdP error", Object.assign(new Error("busy"), { code: "temporarily_unavailable" })],
+    ["an unexpected expo error", Object.assign(new Error("boom"), { code: "ERR_SOMETHING" })],
+  ])("%s keeps the session and the next call refreshes", async (_name, err) => {
+    await tokens.setTokens(EXPIRED);
+    refreshAsync.mockRejectedValueOnce(err);
+
+    await expect(ensureFreshAccessToken()).resolves.toBe("stale");
+    expect(useAuthStore.getState().status).toBe("authenticated");
+    expect(tokens.getTokensSync()).toMatchObject({ refreshToken: "rt-1" });
+
+    refreshAsync.mockResolvedValue({ accessToken: "fresh", expiresIn: 3600 });
+    await expect(ensureFreshAccessToken()).resolves.toBe("fresh");
+  });
+
+  test("an answer without an access token is not stored and keeps the session", async () => {
+    await tokens.setTokens(EXPIRED);
+    refreshAsync.mockResolvedValue({ expiresIn: 3600 });
+
+    await expect(ensureFreshAccessToken()).resolves.toBe("stale");
+    expect(tokens.getTokensSync()).toMatchObject({ accessToken: "stale", refreshToken: "rt-1" });
+    expect(useAuthStore.getState().status).toBe("authenticated");
+  });
 });

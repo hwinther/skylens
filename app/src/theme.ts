@@ -24,7 +24,7 @@ export const color = {
   text: "#EAF6FF",
   textDim: "#9FC7E0",
   textLabel: "#7FA6C4",
-  textMuted: "#5C7A94",
+  textMuted: "#6A89A3", // 5.0:1 on bg, 4.6:1 on surface (WCAG AA); was #5C7A94, 4.1:1
 
   // Entity families (the semantic core — keep these names stable)
   entity: {

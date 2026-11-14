@@ -577,6 +577,68 @@ public sealed class SmokeTests
     }
 
     [Fact]
+    public async Task Api_airport_lookup_requires_authentication()
+    {
+        using var client = _factory.CreateClient();
+
+        using var resp = await client.GetAsync("/api/airports/ENGM", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("ENGM")]
+    [InlineData("osl")]
+    public async Task Api_airport_lookup_returns_the_airport_by_ident_or_iata_when_authenticated(string ident)
+    {
+        using var client = _authFactory.CreateClient();
+        var db = _authFactory.Services.GetRequiredService<Skylens.Api.Enrichment.AirportDbService>();
+        if (db.LoadTask is { } load)
+            await load;
+
+        using var resp = await client.GetAsync($"/api/airports/{ident}", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        var root = doc.RootElement;
+        Assert.Equal("ENGM", root.GetProperty("ident").GetString());
+        Assert.Equal("OSL", root.GetProperty("iata").GetString());
+        Assert.Equal("large_airport", root.GetProperty("type").GetString());
+        Assert.Equal(60.1939, root.GetProperty("lat").GetDouble(), 3);
+        Assert.Equal(11.1004, root.GetProperty("lon").GetDouble(), 3);
+        Assert.Equal(JsonValueKind.Array, root.GetProperty("runways").ValueKind);
+    }
+
+    [Theory]
+    [InlineData("ZZZZ")] // unknown
+    [InlineData("ENXX")] // closed: never loaded
+    public async Task Api_airport_lookup_is_404_for_an_unknown_airport(string ident)
+    {
+        using var client = _authFactory.CreateClient();
+        var db = _authFactory.Services.GetRequiredService<Skylens.Api.Enrichment.AirportDbService>();
+        if (db.LoadTask is { } load)
+            await load;
+
+        using var resp = await client.GetAsync($"/api/airports/{ident}", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("EN")]
+    [InlineData("ABCDEFGHIJK")]
+    [InlineData("EN%20GM")]
+    [InlineData("EN%3BGM")]
+    public async Task Api_airport_lookup_rejects_a_malformed_ident(string ident)
+    {
+        using var client = _authFactory.CreateClient();
+
+        using var resp = await client.GetAsync($"/api/airports/{ident}", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+    }
+
+    [Fact]
     public async Task Api_ports_requires_authentication()
     {
         using var client = _factory.CreateClient();

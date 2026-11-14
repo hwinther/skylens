@@ -18,6 +18,7 @@ import { flushClientLog, reportClientFailure } from "./clientLog";
 import type {
   AircraftDetail,
   AircraftDto,
+  AirportDto,
   AirportsResponse,
   LandmarksResponse,
   TerrainResponse,
@@ -244,6 +245,19 @@ export class ApiClient {
     return this.request<AirportsResponse>(
       `/api/airports?lat=${lat}&lon=${lon}&radiusKm=${radiusKm}`,
     );
+  }
+
+  /**
+   * GET /api/airports/{ident} — one airport from the same offline dataset by ident / ICAO code (or an
+   * unambiguous IATA code), or null when it is unknown (404). No upstream calls. Other failures throw.
+   */
+  async airport(ident: string): Promise<AirportDto | null> {
+    try {
+      return await this.request<AirportDto>(`/api/airports/${encodeURIComponent(ident)}`);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }
   }
 
   /** GET /api/ports — nearby harbours / marinas / ferry quays / ports (offline dataset) + attribution. */

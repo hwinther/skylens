@@ -12,7 +12,8 @@ import { color } from "@/theme";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { awaySourceCredit, creditText } from "./awaySource";
-import { Sheet, sheetActionStyle, SheetSummary } from "./Sheet";
+import { aircraftIdentityLines } from "./cockpitSummary";
+import { Sheet, sheetActionStyle, SheetSummary, sheetSummaryLines } from "./Sheet";
 import { ShowOnMapButton } from "./ShowOnMapButton";
 import { SimulatorButton } from "./SimulatorButton";
 import { useObserver } from "./useObserver";
@@ -42,6 +43,13 @@ export interface DetailSheetProps {
    * "Route" button. Never triggers a fetch itself (the cockpit view draws the route line from it).
    */
   onRoute?: (hex: string, route: RouteResponse) => void;
+  /**
+   * The collapsed summary says what the aircraft is (type, registration, operator, route) instead of
+   * its live altitude / speed / distance: the cockpit view's followed aircraft, whose HUD shows those.
+   */
+  identitySummary?: boolean;
+  /** False drops "Show on map" (the cockpit view's own Map chip / minimap does that). Default true. */
+  mapAction?: boolean;
 }
 
 export function DetailSheet({
@@ -53,6 +61,8 @@ export function DetailSheet({
   cockpitAction,
   relativeTo,
   onRoute,
+  identitySummary = false,
+  mapAction = true,
 }: DetailSheetProps) {
   const [detail, setDetail] = useState<AircraftDetail | null>(null);
   const [route, setRoute] = useState<RouteResponse | null>(null);
@@ -151,28 +161,43 @@ export function DetailSheet({
         </View>
       }
       summary={
-        <SheetSummary
-          parts={[
-            signalLost && "Signal lost",
-            detail?.metadata?.typeCode,
-            state?.alt != null ? `${state.alt.toLocaleString()} ft` : null,
-            state?.gs != null ? `${Math.round(state.gs)} kt` : null,
-            rel ? `${rel.distanceKm.toFixed(1)} km ${compass8(rel.bearingDeg)}` : null,
-          ]}
-        />
+        identitySummary ? (
+          sheetSummaryLines(
+            aircraftIdentityLines({
+              metadata: detail?.metadata,
+              route,
+              hex: state?.hex ?? hex,
+              hasCallsign: !!state?.flight?.trim(),
+              military: !!(detail?.metadata?.military || state?.mil),
+              signalLost,
+            }),
+          )
+        ) : (
+          <SheetSummary
+            parts={[
+              signalLost && "Signal lost",
+              detail?.metadata?.typeCode,
+              state?.alt != null ? `${state.alt.toLocaleString()} ft` : null,
+              state?.gs != null ? `${Math.round(state.gs)} kt` : null,
+              rel ? `${rel.distanceKm.toFixed(1)} km ${compass8(rel.bearingDeg)}` : null,
+            ]}
+          />
+        )
       }
       actions={
-        positioned ? (
+        positioned && (mapAction || cockpitAction !== null) ? (
           // The live position is enough to show it on the map, even when the detail fetch failed
           // (backend unreachable, unknown aircraft).
           <>
-            <ShowOnMapButton
-              testID="detail-show-on-map"
-              focus={{ kind: "aircraft", hex }}
-              accent={color.entity.air}
-              onClose={onClose}
-              style={sheetActionStyle}
-            />
+            {mapAction ? (
+              <ShowOnMapButton
+                testID="detail-show-on-map"
+                focus={{ kind: "aircraft", hex }}
+                accent={color.entity.air}
+                onClose={onClose}
+                style={sheetActionStyle}
+              />
+            ) : null}
             {cockpitAction !== undefined ? (
               cockpitAction
             ) : (

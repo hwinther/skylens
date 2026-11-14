@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
 import { probeAuthRequired } from "@/auth/access";
 import { ensureFreshAccessToken } from "@/auth/refresh";
+import { useRefreshOnResume } from "@/auth/useRefreshOnResume";
 import { hydrateTokens, TOKENS_KEY } from "@/auth/tokenStore";
 import { useApiAllowed, useAuthStore } from "@/state/authStore";
 import { useSettingsStore } from "@/state/settingsStore";
@@ -138,6 +139,8 @@ export default function RootLayout() {
     const id = setInterval(() => void ensureFreshAccessToken(), 60_000);
     return () => clearInterval(id);
   }, []);
+  // Native: timers pause in the background, so also refresh the moment the app is back in front.
+  useRefreshOnResume();
 
   // One-time onboarding: route to it once persisted settings have hydrated and the user hasn't been
   // through it. Waiting on `hydrated` is what stops the intro flashing for returning users.

@@ -14,10 +14,15 @@
  * token on use. So before refreshing, and again before giving up on a rejected refresh token, the
  * persisted set is re-read: if another tab already stored a newer one, this tab adopts it instead
  * of spending (or ending the session over) a refresh token that is no longer current.
+ *
+ * The session only ends when the IdP answers that the refresh token is invalid (an OAuth error such
+ * as `invalid_grant`, see ./errors). A refresh that gets no answer (offline, a phone resuming before
+ * its network is back) or a non-OAuth one (a proxy's error page) keeps the session for the next try.
  */
 
 import * as AuthSession from "expo-auth-session";
 import { OIDC_CLIENT_ID, OIDC_ISSUER } from "./config";
+import { isSessionEndingRefreshError, SESSION_ENDED_MESSAGE } from "./errors";
 import {
   clearTokens,
   getTokensSync,
@@ -49,10 +54,15 @@ function getDiscovery(): Promise<AuthSession.DiscoveryDocument> {
   return discoveryPromise;
 }
 
-/** Clear the session and show it as signed out (the sign-in prompt appears where sign-in is required). */
+/**
+ * The IdP ended the session: clear it and show it as signed out (the sign-in prompt appears where
+ * sign-in is required), with a message saying why on the sign-in surfaces.
+ */
 export async function endSession(): Promise<null> {
   await clearTokens();
-  useAuthStore.getState().setStatus("unauthenticated");
+  const auth = useAuthStore.getState();
+  auth.setLastError(SESSION_ENDED_MESSAGE);
+  auth.setStatus("unauthenticated");
   return null;
 }
 
@@ -96,10 +106,19 @@ async function refreshNow(): Promise<string | null> {
       { clientId: OIDC_CLIENT_ID, refreshToken: tokens.refreshToken },
       discovery,
     );
+    if (typeof refreshed.accessToken !== "string" || !refreshed.accessToken) {
+      throw new Error("the token endpoint answered without an access token");
+    }
     const next = toStored(refreshed);
     await setTokens({ ...next, refreshToken: next.refreshToken ?? tokens.refreshToken });
     return next.accessToken;
   } catch (err) {
+    if (!isSessionEndingRefreshError(err)) {
+      // No answer, or not an OAuth one: nothing says the refresh token is bad. Keep the session and
+      // try again on the next call, as for an unreachable discovery document above.
+      console.warn("token refresh failed; keeping the session", err);
+      return tokens.accessToken;
+    }
     // The IdP rejected the refresh token. Another tab may have rotated it meanwhile; if storage now
     // holds a different set, use that. Otherwise the session is over, so show it as signed out.
     const rotated = await adoptFromOtherTab(tokens, false);
