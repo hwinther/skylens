@@ -14,6 +14,8 @@
  */
 
 import { expect, test as setup } from '@playwright/test'
+import fs from 'node:fs'
+import path from 'node:path'
 import * as OTPAuth from 'otpauth'
 import { authFile } from './auth-paths'
 
@@ -64,5 +66,12 @@ setup('authenticate', async ({ page, baseURL }) => {
   await popup.getByRole('button', { name: 'Accept' }).click()
   await expect(page.getByTestId('signin-prompt')).toBeHidden({ timeout: 30_000 })
 
-  await page.context().storageState({ path: authFile })
+  // Keep the session, not the settings this setup wrote: specs decide onboarding themselves (the
+  // `onboarded` fixture option), and routes.spec.ts's first-run test needs a browser without it.
+  const state = await page.context().storageState()
+  for (const origin of state.origins) {
+    origin.localStorage = origin.localStorage.filter((item) => item.name !== SETTINGS_KEY)
+  }
+  fs.mkdirSync(path.dirname(authFile), { recursive: true })
+  fs.writeFileSync(authFile, JSON.stringify(state, null, 2))
 })
