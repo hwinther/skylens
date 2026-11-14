@@ -51,7 +51,5 @@ test('the filter chips and section headings persist across a reload', async ({ p
 test('the list is accessible', async ({ page }) => {
   await page.goto('/list')
   await expect(page.locator('[data-testid^="list-ac-"]').first()).toBeVisible({ timeout: 30_000 })
-  // color-contrast is off until the colours are adjusted (its own round, with before/after screenshots):
-  // the tab bar labels fall below 4.5:1.
-  await expectAccessible(page, { disableRules: ['color-contrast'] })
+  await expectAccessible(page)
 })
