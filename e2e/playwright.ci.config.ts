@@ -25,9 +25,17 @@
  */
 import { devices } from '@playwright/test'
 import { ciReporters, definePlaywrightConfig, isCI, localReporters, monocartReporter } from '@wshno/playwright-config'
+import { authFile } from './tests/auth-paths'
 
-const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8081'
+// BASE_URL = a deployed env (nightly-preview.yml, through reusable-workflows' playwright-e2e.yml): the
+// preview host is behind Authelia and the API runs real JwtBearer, so a `setup` project signs the e2e
+// user in first (tests/auth.setup.ts) and specs tagged @local-only (those that stub the IdP or need
+// DevAuth) are skipped. The preview runs the same replay fixtures and coarse FEED origin as the compose
+// stack, so the rest of the suite asserts the same data.
+const DEPLOYED = process.env.BASE_URL
+const BASE_URL = DEPLOYED ?? process.env.E2E_BASE_URL ?? 'http://localhost:8081'
 const ORIGIN = new URL(BASE_URL).origin
+const chromium = { ...devices['Desktop Chrome'] }
 
 // Shared defaults (testDir ./tests, forbidOnly, the github/html/json CI reporters at the paths the
 // reusable reads, trace, screenshot and video on failure) come from @wshno/playwright-config.
@@ -60,5 +68,11 @@ export default definePlaywrightConfig({
     permissions: ['geolocation'],
     geolocation: { latitude: 59.9, longitude: 11.1 },
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  grepInvert: DEPLOYED ? /@local-only/ : undefined,
+  projects: DEPLOYED
+    ? [
+        { name: 'setup', testMatch: /auth\.setup\.ts/ },
+        { name: 'chromium', use: { ...chromium, storageState: authFile }, dependencies: ['setup'] },
+      ]
+    : [{ name: 'chromium', use: chromium }],
 })

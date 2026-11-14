@@ -205,9 +205,10 @@ jobs:
       node_version: "26.x"
       comment_identifier: skylens-coverage-combined
 
+  # On main too (api:main-<sha7> and :main), for the manifests below.
   push:
-    needs: [build, scan, e2e]
-    if: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'deploy-feature') }}
+    needs: [main-tag, build, scan, e2e]
+    if: ${{ (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'deploy-feature')) || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     permissions:
       contents: read
       packages: write
@@ -219,9 +220,9 @@ jobs:
       container_registry: ghcr.io
       container_image_name_postfix: api
       artifact_name: ${{ needs.build.outputs.image }}
-      container_image_tags: ${{ needs.build.outputs.container_image_tags }}
+      container_image_tags: ${{ github.event_name == 'push' && format('ghcr.io/hwinther/skylens/api:{0},ghcr.io/hwinther/skylens/api:main', needs.main-tag.outputs.tag) || needs.build.outputs.container_image_tags }}
       image_digest: ${{ needs.build.outputs.image_digest }}
-      version: ${{ needs.build.outputs.version }}
+      version: ${{ github.event_name == 'push' && needs.main-tag.outputs.tag || needs.build.outputs.version }}
       sbom_artifact_name: ${{ needs.scan.outputs.sbom_artifact }}
       grype_artifact_name: ${{ needs.scan.outputs.grype_artifact }}
       sbom_cyclonedx_sha256: ${{ needs.scan.outputs.sbom_cyclonedx_sha256 }}
@@ -230,16 +231,19 @@ jobs:
   # The preview deploys from a rendered, signed manifest artifact (deploy/ + components/preview),
   # so manifest changes in a PR run in its preview before they reach a release. The cluster repo's
   # preview template pins it by digest and only accepts this workflow's signature.
+  # On main too (manifests:main-<sha7> and :main), for nightly-preview.yml, which deploys :main.
   manifests:
-    needs: [build, push]
-    if: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'deploy-feature') }}
+    needs: [main-tag, build, push]
+    if: ${{ (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'deploy-feature')) || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
       id-token: write
+    env:
+      TAG: ${{ github.event_name == 'push' && needs.main-tag.outputs.tag || format('pr-{0}', github.event.pull_request.number) }}
     outputs:
-      tag: pr-${{ github.event.pull_request.number }}
+      tag: ${{ env.TAG }}
       digest: ${{ steps.push.outputs.digest }}
     steps:
       - name: Checkout
@@ -253,9 +257,15 @@ jobs:
         with:
           mode: push
           artifact: ghcr.io/hwinther/skylens/manifests
-          tag: pr-${{ github.event.pull_request.number }}
-          images: ghcr.io/hwinther/skylens/api:${{ needs.build.outputs.version }}@${{ needs.push.outputs.image_digest }}
+          tag: ${{ env.TAG }}
+          images: ghcr.io/hwinther/skylens/api:${{ github.event_name == 'push' && needs.main-tag.outputs.tag || needs.build.outputs.version }}@${{ needs.push.outputs.image_digest }}
           renders: skylens.yaml=deploy,components/preview
+
+      # The nightly preview env deploys whatever :main points at. Same digest, so the signature
+      # made above covers it; flux and the registry login come from the step above.
+      - name: Move the main tag
+        if: github.event_name == 'push'
+        run: flux tag artifact "oci://ghcr.io/hwinther/skylens/manifests:${TAG}" --tag main
 
   deploy-preview:
     needs: [manifests]

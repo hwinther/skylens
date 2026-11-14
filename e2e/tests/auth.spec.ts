@@ -6,6 +6,9 @@
  * with 401; requests that carry a bearer go through to the DevAuth backend untouched. The identity
  * provider (auth.wsh.no) is stubbed: discovery, an authorization endpoint that redirects the popup
  * straight back to the app's /oauth page with a code, and a token endpoint.
+ *
+ * @local-only: a deployed env (BASE_URL) has the real IdP and starts every spec signed in through
+ * auth.setup.ts, which is that env's sign-in test.
  */
 
 import type { BrowserContext, Route } from '@playwright/test'
@@ -127,26 +130,30 @@ test.beforeEach(async ({ page, context }) => {
   await requireSignIn(page)
 })
 
-test('live and signed out: the sign-in card shows and nothing calls the API', async ({ page }) => {
-  const hub = watchHub(page)
-  await page.goto('/')
+test(
+  'live and signed out: the sign-in card shows and nothing calls the API',
+  { tag: '@local-only' },
+  async ({ page }) => {
+    const hub = watchHub(page)
+    await page.goto('/')
 
-  await expect(page.getByTestId('signin-prompt')).toBeVisible()
-  await expect(page.getByText('LIVE', { exact: true })).toBeVisible()
-  await page.screenshot({ path: test.info().outputPath('signin-prompt.png') })
+    await expect(page.getByTestId('signin-prompt')).toBeVisible()
+    await expect(page.getByText('LIVE', { exact: true })).toBeVisible()
+    await page.screenshot({ path: test.info().outputPath('signin-prompt.png') })
 
-  // The card floats over every tab. Opening the map (which loads airports, ports and fishing layers
-  // when it may) also gives a would-be hub connect plenty of time to have shown up.
-  await page.goto('/map')
-  await page.getByTestId('map-view-map').click()
-  await expect(page.getByTestId('signin-prompt')).toBeVisible()
-  await expect(page.getByTestId('map-aircraft-count')).toBeVisible()
+    // The card floats over every tab. Opening the map (which loads airports, ports and fishing layers
+    // when it may) also gives a would-be hub connect plenty of time to have shown up.
+    await page.goto('/map')
+    await page.getByTestId('map-view-map').click()
+    await expect(page.getByTestId('signin-prompt')).toBeVisible()
+    await expect(page.getByTestId('map-aircraft-count')).toBeVisible()
 
-  expect(hub.attempts, 'no hub connection while signed out').toEqual([])
-  await expect(page.getByTestId('api-issue-banner')).toHaveCount(0)
-})
+    expect(hub.attempts, 'no hub connection while signed out').toEqual([])
+    await expect(page.getByTestId('api-issue-banner')).toHaveCount(0)
+  },
+)
 
-test('"Continue in demo" hides the card and replays the demo feed', async ({ page }) => {
+test('"Continue in demo" hides the card and replays the demo feed', { tag: '@local-only' }, async ({ page }) => {
   await page.goto('/')
   await page.getByTestId('signin-prompt-demo').click()
 
@@ -157,41 +164,49 @@ test('"Continue in demo" hides the card and replays the demo feed', async ({ pag
   await expect(page.getByTestId('api-issue-banner')).toHaveCount(0)
 })
 
-test('signing in through the popup brings live data, and survives a reload', async ({ page }) => {
-  await page.goto('/')
-  const signIn = page.getByTestId('signin-prompt-signin')
-  await expect(signIn).toBeEnabled()
-  await signIn.click()
+test(
+  'signing in through the popup brings live data, and survives a reload',
+  { tag: '@local-only' },
+  async ({ page }) => {
+    await page.goto('/')
+    const signIn = page.getByTestId('signin-prompt-signin')
+    await expect(signIn).toBeEnabled()
+    await signIn.click()
 
-  await expect(page.getByTestId('signin-prompt')).toBeHidden({ timeout: 30_000 })
-  expect(idp.tokenRequests).toBe(1)
-  await expect
-    .poll(() => statusCount(page), {
-      message: 'aircraft should stream once signed in',
-      timeout: 30_000,
-    })
-    .toBeGreaterThan(0)
+    await expect(page.getByTestId('signin-prompt')).toBeHidden({ timeout: 30_000 })
+    expect(idp.tokenRequests).toBe(1)
+    await expect
+      .poll(() => statusCount(page), {
+        message: 'aircraft should stream once signed in',
+        timeout: 30_000,
+      })
+      .toBeGreaterThan(0)
 
-  // The session is in localStorage now, so a reload stays signed in.
-  await page.reload()
-  await expect.poll(() => statusCount(page), { timeout: 30_000 }).toBeGreaterThan(0)
-  await expect(page.getByTestId('signin-prompt')).toHaveCount(0)
-})
+    // The session is in localStorage now, so a reload stays signed in.
+    await page.reload()
+    await expect.poll(() => statusCount(page), { timeout: 30_000 }).toBeGreaterThan(0)
+    await expect(page.getByTestId('signin-prompt')).toHaveCount(0)
+  },
+)
 
-test('a rejected code exchange shows the error and the button works again', async ({ page }) => {
-  idp.tokenAnswer = 'error'
-  await page.goto('/')
-  const signIn = page.getByTestId('signin-prompt-signin')
-  await expect(signIn).toBeEnabled()
-  await signIn.click()
+test(
+  'a rejected code exchange shows the error and the button works again',
+  { tag: '@local-only' },
+  async ({ page }) => {
+    idp.tokenAnswer = 'error'
+    await page.goto('/')
+    const signIn = page.getByTestId('signin-prompt-signin')
+    await expect(signIn).toBeEnabled()
+    await signIn.click()
 
-  await expect(page.getByTestId('signin-prompt-error')).toBeVisible({ timeout: 30_000 })
-  await expect(page.getByTestId('signin-prompt-error')).toContainText('Sign-in failed')
-  await expect(signIn).toBeEnabled()
+    await expect(page.getByTestId('signin-prompt-error')).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByTestId('signin-prompt-error')).toContainText('Sign-in failed')
+    await expect(signIn).toBeEnabled()
 
-  // A second attempt goes through once the IdP accepts the code.
-  idp.tokenAnswer = 'ok'
-  await signIn.click()
-  await expect(page.getByTestId('signin-prompt')).toBeHidden({ timeout: 30_000 })
-  expect(idp.tokenRequests).toBe(2)
-})
+    // A second attempt goes through once the IdP accepts the code.
+    idp.tokenAnswer = 'ok'
+    await signIn.click()
+    await expect(page.getByTestId('signin-prompt')).toBeHidden({ timeout: 30_000 })
+    expect(idp.tokenRequests).toBe(2)
+  },
+)

@@ -6,3 +6,4 @@ node_modules/
 /otel-out/
 /monocart-report/
 /monocart-coverage/
+/playwright/.auth/

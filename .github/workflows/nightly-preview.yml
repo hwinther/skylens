@@ -1,0 +1,49 @@
+name: Nightly preview E2E
+
+# Every night: deploys main (manifests:main, pushed and signed by pr-e2e.yml on every merge) to an
+# ephemeral preview env, skylens-nightly.preview.wsh.no, runs the e2e suite against it, then tears it
+# down. Unlike the compose run in pr-e2e.yml (DevAuth, no edge) this goes through the real chain: the
+# OPNsense/NAXSI edge, Traefik and TLS, Authelia forward-auth, the app's own OIDC sign-in with real
+# JwtBearer, Flux's signature check and the network policies. The data is the same replay fixtures.
+# A failure opens (or comments on) an issue labelled `nightly-preview`; the next green run closes it.
+# The steps live in reusable-workflows' nightly-preview-e2e.yml.
+#
+# Needs pr-e2e.yml's PROXMOX_GITOPS_* app, and the e2e user as repo secrets (E2E_USERNAME,
+# E2E_PASSWORD, E2E_OTP_SECRET, as in ClutterStock): e2e/tests/auth.setup.ts signs it in.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 02:30 UTC: after ClutterStock's (01:00), romslig's (01:30) and test's (02:00) nightly runs.
+    - cron: "30 2 * * *"
+
+permissions: {}
+
+concurrency:
+  group: nightly-preview
+  cancel-in-progress: false
+
+jobs:
+  nightly:
+    permissions:
+      contents: read
+      packages: read
+      actions: read
+      pull-requests: write
+      issues: write
+    uses: hwinther/reusable-workflows/.github/workflows/nightly-preview-e2e.yml@8b08a959630464cef264fef5b518e1ce39d7d769 # v2.37.0
+    with:
+      app_name: skylens
+      # Anonymous, and bypasses Authelia on skylens-nightly (as on skylens.wsh.no it carries no data).
+      health_path: /healthz
+      client_id: ${{ vars.PROXMOX_GITOPS_CLIENT_ID }}
+      # The e2e user comes in through the secrets below, so the e2e job needs no environment.
+      environment: ""
+      # Container mode against BASE_URL: the setup project signs in, @local-only specs are skipped.
+      playwright_run_command: npx playwright test --config playwright.ci.config.ts
+      coverage_paths_json: '["monocart-coverage"]'
+    secrets:
+      app_private_key: ${{ secrets.PROXMOX_GITOPS_APP_PRIVATE_KEY }}
+      e2e_username: ${{ secrets.E2E_USERNAME }}
+      e2e_password: ${{ secrets.E2E_PASSWORD }}
+      e2e_otp_secret: ${{ secrets.E2E_OTP_SECRET }}

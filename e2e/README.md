@@ -45,6 +45,21 @@ API_IMAGE=... docker compose -f docker-compose.e2e.yml up -d --wait
 API_IMAGE=... docker compose -f docker-compose.e2e.yml --profile e2e run --rm playwright
 ```
 
+## Against a deployed env (nightly preview)
+
+`.github/workflows/nightly-preview.yml` deploys main to `skylens-nightly.preview.wsh.no` every night
+and runs `playwright.ci.config.ts` against it with `BASE_URL` set. That host is behind Authelia and
+the API runs real JwtBearer, so with `BASE_URL` the config:
+
+- runs a `setup` project first (`tests/auth.setup.ts`): it signs the e2e user in through Authelia
+  (password and TOTP from `E2E_USERNAME`, `E2E_PASSWORD`, `E2E_OTP_SECRET`), then through the app's
+  sign-in popup (Authelia always asks for consent, since the client requests `offline_access`), and
+  saves the storage state the `chromium` project starts from;
+- skips specs tagged `@local-only` (`auth.spec.ts`, which stubs the IdP).
+
+The preview replays the same fixtures from the same coarse feed origin, so the other specs assert the
+same data as in the compose run.
+
 ## Coverage (container mode)
 
 `playwright.ci.config.ts` adds `monocartReporter()` from `@wshno/playwright-config` after the shared
