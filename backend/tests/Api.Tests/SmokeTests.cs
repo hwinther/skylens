@@ -729,6 +729,70 @@ public sealed class SmokeTests
     }
 
     [Fact]
+    public async Task Api_terrain_requires_authentication()
+    {
+        using var client = _factory.CreateClient();
+
+        using var resp = await client.GetAsync("/api/terrain?lat=59.9&lon=10.75",
+                                               TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task Api_terrain_returns_a_grid_with_sea_and_mountains_around_oslo_when_authenticated()
+    {
+        using var client = _authFactory.CreateClient();
+
+        // Development reads the committed ETOPO grids (data/terrain/terrain.bin.gz). Await the background load.
+        var db = _authFactory.Services.GetRequiredService<Skylens.Api.Enrichment.TerrainDbService>();
+        if (db.LoadTask is { } load)
+            await load;
+
+        using var resp = await client.GetAsync(
+            "/api/terrain?lat=59.9&lon=10.75&radiusKm=150", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        var root = doc.RootElement;
+        Assert.Equal(Skylens.Api.Enrichment.TerrainDbService.Attribution, root.GetProperty("attribution").GetString());
+        Assert.Equal(150, root.GetProperty("radiusKm").GetDouble());
+        var size = root.GetProperty("size").GetInt32();
+        Assert.Equal(Skylens.Api.Enrichment.TerrainDbService.MaxCells, size);
+        var heights = root.GetProperty("heights").EnumerateArray().Select(static h => h.GetInt32()).ToArray();
+        Assert.Equal(size * size, heights.Length);
+        // The Oslofjord and the Skagerrak are sea; Gaustatoppen's massif (~117 km west) rises well above 1 000 m.
+        Assert.Contains(0, heights);
+        Assert.True(heights.Max() > 1200, $"max height {heights.Max()} m");
+    }
+
+    [Fact]
+    public async Task Api_terrain_clamps_the_radius()
+    {
+        using var client = _authFactory.CreateClient();
+
+        using var resp = await client.GetAsync(
+            "/api/terrain?lat=59.9&lon=10.75&radiusKm=9999", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(Skylens.Api.Enrichment.TerrainDbService.MaxRadiusKm, doc.RootElement.GetProperty("radiusKm").GetDouble());
+    }
+
+    [Theory]
+    [InlineData("lat=91&lon=10")]
+    [InlineData("lat=59.9&lon=-181")]
+    [InlineData("lat=NaN&lon=10")]
+    public async Task Api_terrain_rejects_out_of_range_coordinates(string query)
+    {
+        using var client = _authFactory.CreateClient();
+
+        using var resp = await client.GetAsync($"/api/terrain?{query}", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+    }
+
+    [Fact]
     public async Task Healthz_includes_the_airport_fields()
     {
         // The airports vertical extends healthz ADDITIVELY, like the AIS and satellite fields. On

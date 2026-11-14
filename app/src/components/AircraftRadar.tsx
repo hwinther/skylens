@@ -1,22 +1,44 @@
 /**
  * Plan-position (radar) view: you at the centre, range rings + cardinal cross, and each positioned
- * aircraft plotted by bearing & distance as its type icon. Pure react-native Views (no SVG, no map
- * tiles) so it works offline on web and native. Tapping a blip opens the detail sheet.
+ * aircraft plotted by bearing & distance as its type icon. Tapping a blip opens the detail sheet.
  *
  * Range: by default the outer ring auto-scales to the farthest blip, so a harbour cluster collapses
  * into the centre. The zoom control (`rangeKm` + `onRangeChange`) locks the ring to a fixed range so
  * those blips separate; targets beyond the ring pin to its edge (dimmed) at their true bearing.
+ *
+ * Tilt (`tiltDeg` + `onTiltChange`): the tilt control swings the scope into an oblique view and, from
+ * the first tilt on, fetches a coarse elevation grid for the area (useRadarTerrain) that is drawn as
+ * a land tint, the coastline and east–west ridge profiles raised to their height, so the tilted scope
+ * reads as simplified relief (coastline, fjords, valleys, mountains). Everything — terrain, rings, labels, blips and their tap targets —
+ * goes through one RadarProjection (src/radar/projection.ts). Flat (0°) is the classic plain-View scope,
+ * unchanged. The terrain geometry is built once per grid / range / position; a tilt change only
+ * re-projects it.
  */
 
 import { alpha, color } from "@/theme";
-import { useEffect, useRef, useState, type ComponentRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
 import { Platform, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import type { ApiClient } from "@/api/client";
 import type { AircraftDto, AirportDto, VesselDto } from "@/api/types";
+import {
+  SCOPE_PADDING_PX,
+  boxAt,
+  makeRadarProjection,
+  polarToKm,
+  projectPoint,
+  type RadarProjection,
+} from "@/radar/projection";
+import { buildTerrainGeometry, ridgeRowsFor } from "@/radar/terrainGeometry";
+import { terrainPaths } from "@/radar/terrainPaths";
+import { gridOffsetKm, heightAtKm } from "@/radar/terrainGrid";
 import { aircraftAccent, iconForCategory } from "./aircraftIcon";
 import { iconForVessel } from "./vesselIcon";
 import { EmptyState } from "./EmptyState";
 import { isAutoRange, zoomIn, zoomOut } from "./radarRange";
+import { RadarScopeSvg } from "./RadarScopeSvg";
+import { RadarTiltControl } from "./RadarTiltControl";
+import { useRadarTerrain } from "./useRadarTerrain";
 import { relativePosition, type Observer } from "./webmap/relative";
 import { AIRPORT_COLOR } from "./webmap/airportStyle";
 import {
@@ -48,43 +70,37 @@ export interface AircraftRadarProps {
   showCourseVectors?: boolean;
   /** Extra right offset for the zoom control, e.g. while a side-panel detail card covers the edge. */
   controlsRightInset?: number;
+  /** Scope tilt in degrees (0 = flat). */
+  tiltDeg?: number;
+  /** Called with the new tilt when the user changes it; omit to hide the tilt control (always flat). */
+  onTiltChange?: (deg: number) => void;
+  /** API client for the terrain grid; without it the tilted scope has no relief (demo mode needs none). */
+  terrainClient?: ApiClient | null;
+  /** Demo mode: the relief comes from the bundled sample instead of the API. */
+  demoMode?: boolean;
 }
 
 /**
- * A thin rotated bar from a blip toward its heading — the radar's pixel projection of the physical km
- * leader. A default horizontal View points east (+x); rotating by `bearingDeg - 90` about its centre
- * aims it along the true bearing (0 = N → up). Centred on the blip→endpoint midpoint so it spans the leg.
+ * A thin rotated bar between two projected points — a course leader. A default horizontal View points
+ * east (+x); rotating it about its centre by the segment's screen angle aims it from the blip to the tip.
  */
-function RadarLeader({
-  x,
-  y,
-  leadPx,
-  bearingDeg,
-  color,
-}: {
-  x: number;
-  y: number;
-  leadPx: number;
-  bearingDeg: number;
-  color: string;
-}) {
-  const rad = (bearingDeg * Math.PI) / 180;
-  const ex = x + leadPx * Math.sin(rad);
-  const ey = y - leadPx * Math.cos(rad);
-  const midX = (x + ex) / 2;
-  const midY = (y + ey) / 2;
+function RadarLeader({ x1, y1, x2, y2, color }: { x1: number; y1: number; x2: number; y2: number; color: string }) {
+  const len = Math.hypot(x2 - x1, y2 - y1);
+  const angle = (Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI;
+  const midX = (x1 + x2) / 2;
+  const midY = (y1 + y2) / 2;
   return (
     <View
       style={{
         position: "absolute",
-        left: midX - leadPx / 2,
+        left: midX - len / 2,
         top: midY - 1,
-        width: leadPx,
+        width: len,
         height: 2,
         backgroundColor: color,
         opacity: 0.8,
         borderRadius: 1,
-        transform: [{ rotate: `${bearingDeg - 90}deg` }],
+        transform: [{ rotate: `${angle}deg` }],
         pointerEvents: "none",
       }}
     />
@@ -102,6 +118,9 @@ function niceMax(km: number): number {
 
 const RINGS = [1 / 3, 2 / 3, 1];
 
+/** The observer's offset from the grid centre is quantised to this fraction of the range (no rebuild on jitter). */
+const OFFSET_QUANTUM = 0.005;
+
 export function AircraftRadar({
   aircraft,
   observer,
@@ -114,6 +133,10 @@ export function AircraftRadar({
   onRangeChange,
   showCourseVectors = false,
   controlsRightInset = 0,
+  tiltDeg = 0,
+  onTiltChange,
+  terrainClient = null,
+  demoMode = false,
 }: AircraftRadarProps) {
   const [size, setSize] = useState(0);
   const [boxWidth, setBoxWidth] = useState(0);
@@ -146,6 +169,46 @@ export function AircraftRadar({
   // A manual range is already a tidy preset value — use it exactly, no niceMax rounding.
   const maxRange = auto ? autoRange : (rangeKm as number);
 
+  // Tilt: the persisted value, overridden by the live value while the control is being dragged.
+  const [dragTilt, setDragTilt] = useState<number | null>(null);
+  const tilt = onTiltChange ? (dragTilt ?? tiltDeg) : 0;
+  const commitTilt = useCallback(
+    (deg: number) => {
+      setDragTilt(null);
+      onTiltChange?.(deg);
+    },
+    [onTiltChange],
+  );
+  // Terrain is lazy: nothing is fetched until the scope has been tilted (this session, or a persisted tilt).
+  const [terrainWanted, setTerrainWanted] = useState(tilt > 0);
+  if (tilt > 0 && !terrainWanted) setTerrainWanted(true);
+  const terrain = useRadarTerrain({
+    client: terrainClient,
+    observer,
+    rangeKm: maxRange,
+    enabled: terrainWanted && onTiltChange != null,
+    demoMode,
+  });
+  const grid = terrain.grid;
+  // Where the grid's centre sits relative to the observer, quantised so GPS jitter doesn't rebuild it.
+  const offsetDx = grid ? quantise(gridOffsetKm(grid, observer).dx, maxRange) : 0;
+  const offsetDy = grid ? quantise(gridOffsetKm(grid, observer).dy, maxRange) : 0;
+  const ridgeRows = ridgeRowsFor(size / 2 - SCOPE_PADDING_PX);
+  const geometry = useMemo(
+    () => (grid ? buildTerrainGeometry(grid, { dx: offsetDx, dy: offsetDy }, maxRange, { ridgeRows }) : null),
+    [grid, offsetDx, offsetDy, maxRange, ridgeRows],
+  );
+  const showTerrain = geometry != null && tilt > 0;
+  const reliefMaxM = showTerrain ? geometry.maxM : 0;
+  const projection: RadarProjection = useMemo(
+    () => makeRadarProjection({ size, rangeKm: maxRange, tiltDeg: tilt, reliefMaxM }),
+    [size, maxRange, tilt, reliefMaxM],
+  );
+  const paths = useMemo(
+    () => (showTerrain && size > 0 ? terrainPaths(geometry, projection) : null),
+    [showTerrain, geometry, projection, size],
+  );
+
   // Mouse-wheel zoom on web only (RN Views expose no onWheel — attach to the host DOM node directly).
   // Re-attaching when the reference ranges change keeps the closure current; the cost is negligible.
   const rootRef = useRef<ComponentRef<typeof View>>(null);
@@ -164,9 +227,20 @@ export function AircraftRadar({
     return () => node.removeEventListener("wheel", onWheel);
   }, [current, autoRange, onRangeChange]);
 
-  const cx = size / 2;
-  const cy = size / 2;
-  const R = size / 2 - 18;
+  const { cx, cy, R } = projection;
+  const tilted = tilt > 0;
+
+  /** Screen position of a target at a bearing/distance (pinned to the rim beyond the range), on the relief. */
+  const place = (distanceKm: number, bearingDeg: number) => {
+    const { xKm, yKm } = polarToKm(Math.min(distanceKm, maxRange), bearingDeg);
+    const z = showTerrain && grid ? heightAtKm(grid, { dx: offsetDx, dy: offsetDy }, xKm, yKm) : 0;
+    return { ...projectPoint(projection, xKm, yKm, z), xKm, yKm, z };
+  };
+  /** Tip of a course leader: `leadKm` (clamped to the range) along `courseDeg` from a placed target. */
+  const leaderTip = (from: { xKm: number; yKm: number; z: number }, leadKm: number, courseDeg: number) => {
+    const d = polarToKm(Math.min(leadKm, maxRange), courseDeg);
+    return projectPoint(projection, from.xKm + d.xKm, from.yKm + d.yKm, from.z);
+  };
 
   const inTarget = zoomIn(current, autoRange);
   const outTarget = zoomOut(current, autoRange);
@@ -174,49 +248,60 @@ export function AircraftRadar({
   const canZoomOut = outTarget !== current;
   const rangeLabel = auto ? `Auto (${Math.round(maxRange)} km)` : `${maxRange} km`;
 
+  const north = projectPoint(projection, 0, maxRange);
+  const south = projectPoint(projection, 0, -maxRange);
+  const east = projectPoint(projection, maxRange, 0);
+  const west = projectPoint(projection, -maxRange, 0);
+  const origin = place(0, 0);
+
   return (
     <View testID="radar" ref={rootRef} style={styles.root} onLayout={onLayout}>
       {size > 0 && (
         <View style={{ width: size, height: size }}>
+          {/* Flat: the classic plain-View rings and cross. Tilted: they move into the SVG layer. */}
+          {!tilted &&
+            RINGS.map((f) => {
+              const d = 2 * R * f;
+              return (
+                <View
+                  key={`ring-${f}`}
+                  style={[styles.ring, { width: d, height: d, borderRadius: d / 2, left: cx - R * f, top: cy - R * f }]}
+                />
+              );
+            })}
+          {!tilted && <View style={[styles.axis, { left: cx - 0.5, top: cy - R, width: 1, height: 2 * R }]} />}
+          {!tilted && <View style={[styles.axis, { left: cx - R, top: cy - 0.5, width: 2 * R, height: 1 }]} />}
+          {tilted && (
+            <RadarScopeSvg size={size} projection={projection} rings={RINGS} rangeKm={maxRange} terrain={paths} />
+          )}
+
           {RINGS.map((f) => {
-            const d = 2 * R * f;
+            const pt = projectPoint(projection, 0, maxRange * f);
             return (
-              <View
-                key={`ring-${f}`}
-                style={[styles.ring, { width: d, height: d, borderRadius: d / 2, left: cx - R * f, top: cy - R * f }]}
-              />
+              <Text key={`lbl-${f}`} style={[styles.rangeLabel, { left: pt.x + 3, top: pt.y - 13 }]}>
+                {Math.round(maxRange * f)} km
+              </Text>
             );
           })}
-          <View style={[styles.axis, { left: cx - 0.5, top: cy - R, width: 1, height: 2 * R }]} />
-          <View style={[styles.axis, { left: cx - R, top: cy - 0.5, width: 2 * R, height: 1 }]} />
 
-          {RINGS.map((f) => (
-            <Text key={`lbl-${f}`} style={[styles.rangeLabel, { left: cx + 3, top: cy - R * f - 13 }]}>
-              {Math.round(maxRange * f)} km
-            </Text>
-          ))}
+          <Text style={[styles.cardinal, styles.cardinalPrimary, { left: north.x - 5, top: north.y - 17 }]}>N</Text>
+          <Text style={[styles.cardinal, { left: east.x + 3, top: east.y - 8 }]}>E</Text>
+          <Text style={[styles.cardinal, styles.cardinalPrimary, { left: south.x - 4, top: south.y + 3 }]}>S</Text>
+          <Text style={[styles.cardinal, { left: west.x - 15, top: west.y - 8 }]}>W</Text>
 
-          <Text style={[styles.cardinal, styles.cardinalPrimary, { left: cx - 5, top: cy - R - 17 }]}>N</Text>
-          <Text style={[styles.cardinal, { left: cx + R + 3, top: cy - 8 }]}>E</Text>
-          <Text style={[styles.cardinal, styles.cardinalPrimary, { left: cx - 4, top: cy + R + 3 }]}>S</Text>
-          <Text style={[styles.cardinal, { left: cx - R - 15, top: cy - 8 }]}>W</Text>
-
-          <View style={[styles.observer, { left: cx - 4, top: cy - 4 }]} />
+          <View style={[styles.observer, { left: origin.x - 4, top: origin.y - 4 }]} />
 
           {/* Airport reference diamonds, drawn before the traffic blips. In-range only — a fixed reference
               is never pinned to the rim (that would lie about where it is). */}
           {airportRel.map(({ ap, distanceKm, bearingDeg }) => {
             if (distanceKm > maxRange) return null;
-            const rr = Math.min(distanceKm / maxRange, 1) * R;
-            const rad = (bearingDeg * Math.PI) / 180;
-            const x = cx + rr * Math.sin(rad);
-            const y = cy - rr * Math.cos(rad);
+            const pt = place(distanceKm, bearingDeg);
             return (
               <Pressable
                 key={`apt-${ap.ident}`}
                 testID={`map-airport-${ap.ident}`}
                 onPress={() => onSelectAirport?.(ap.ident)}
-                style={[styles.airport, { left: x - 12, top: y - 12 }]}
+                style={[styles.airport, boxAt(pt, 24)]}
                 hitSlop={6}
               >
                 <View style={styles.airportDiamond} />
@@ -224,25 +309,21 @@ export function AircraftRadar({
             );
           })}
 
-          {/* Course leaders under the blips: same physical km lead as the geographic maps, in px. */}
+          {/* Course leaders under the blips: same physical km lead as the geographic maps, projected. */}
           {showCourseVectors &&
             rel.map(({ a, distanceKm, bearingDeg }) => {
               if (distanceKm > maxRange || a.trk == null || a.gs == null || a.gs < MIN_COURSE_SPEED_KN) {
                 return null;
               }
-              const rr = Math.min(distanceKm / maxRange, 1) * R;
-              const rad = (bearingDeg * Math.PI) / 180;
-              const x = cx + rr * Math.sin(rad);
-              const y = cy - rr * Math.cos(rad);
-              // Clamp so a fast target at close range doesn't shoot the leader off the scope.
-              const leadPx = Math.min(leadDistanceKm(a.gs, AIRCRAFT_LEAD_SECONDS) * (R / maxRange), R);
+              const pt = place(distanceKm, bearingDeg);
+              const tip = leaderTip(pt, leadDistanceKm(a.gs, AIRCRAFT_LEAD_SECONDS), a.trk);
               return (
                 <RadarLeader
                   key={`ac-course-${a.hex}`}
-                  x={x}
-                  y={y}
-                  leadPx={leadPx}
-                  bearingDeg={a.trk}
+                  x1={pt.x}
+                  y1={pt.y}
+                  x2={tip.x}
+                  y2={tip.y}
                   color={AIRCRAFT_COURSE_COLOR}
                 />
               );
@@ -259,18 +340,15 @@ export function AircraftRadar({
               ) {
                 return null;
               }
-              const rr = Math.min(distanceKm / maxRange, 1) * R;
-              const rad = (bearingDeg * Math.PI) / 180;
-              const x = cx + rr * Math.sin(rad);
-              const y = cy - rr * Math.cos(rad);
-              const leadPx = Math.min(leadDistanceKm(v.sog, SHIP_LEAD_SECONDS) * (R / maxRange), R);
+              const pt = place(distanceKm, bearingDeg);
+              const tip = leaderTip(pt, leadDistanceKm(v.sog, SHIP_LEAD_SECONDS), course);
               return (
                 <RadarLeader
                   key={`ship-course-${v.mmsi}`}
-                  x={x}
-                  y={y}
-                  leadPx={leadPx}
-                  bearingDeg={course}
+                  x1={pt.x}
+                  y1={pt.y}
+                  x2={tip.x}
+                  y2={tip.y}
                   color={SHIP_COURSE_COLOR}
                 />
               );
@@ -278,19 +356,20 @@ export function AircraftRadar({
 
           {rel.map(({ a, distanceKm, bearingDeg }) => {
             const beyond = distanceKm > maxRange;
-            const rr = Math.min(distanceKm / maxRange, 1) * R;
-            const rad = (bearingDeg * Math.PI) / 180;
-            const x = cx + rr * Math.sin(rad);
-            const y = cy - rr * Math.cos(rad);
+            const pt = place(distanceKm, bearingDeg);
             return (
               <Pressable
                 key={a.hex}
                 testID={`map-ac-${a.hex}`}
                 onPress={() => onSelect(a.hex)}
-                style={[styles.blip, beyond && styles.blipBeyond, { left: x - 12, top: y - 12 }]}
+                style={[styles.blip, beyond && styles.blipBeyond, boxAt(pt, 24)]}
                 hitSlop={6}
               >
-                <MaterialCommunityIcons name={iconForCategory(a.cat)} size={18} color={alpha(aircraftAccent(a), 0.95)} />
+                <MaterialCommunityIcons
+                  name={iconForCategory(a.cat)}
+                  size={18}
+                  color={alpha(aircraftAccent(a), 0.95)}
+                />
               </Pressable>
             );
           })}
@@ -298,17 +377,14 @@ export function AircraftRadar({
           {/* Vessel blips in their per-class maritime colour; tappable → the vessel detail sheet. */}
           {vesselRel.map(({ v, distanceKm, bearingDeg }) => {
             const beyond = distanceKm > maxRange;
-            const rr = Math.min(distanceKm / maxRange, 1) * R;
-            const rad = (bearingDeg * Math.PI) / 180;
-            const x = cx + rr * Math.sin(rad);
-            const y = cy - rr * Math.cos(rad);
+            const pt = place(distanceKm, bearingDeg);
             const { name, color } = iconForVessel(v);
             return (
               <Pressable
                 key={v.mmsi}
                 testID={`map-ship-${v.mmsi}`}
                 onPress={() => onSelectVessel?.(v.mmsi)}
-                style={[styles.blip, beyond && styles.blipBeyond, { left: x - 12, top: y - 12 }]}
+                style={[styles.blip, beyond && styles.blipBeyond, boxAt(pt, 24)]}
                 hitSlop={6}
               >
                 <MaterialCommunityIcons name={name} size={16} color={color} />
@@ -316,14 +392,20 @@ export function AircraftRadar({
             );
           })}
 
+          {/* The ETOPO credit, whenever the relief is drawn. */}
+          {paths && grid ? (
+            <Text testID="radar-terrain-attribution" style={styles.attribution}>
+              Relief: {grid.attribution}
+              {terrain.demo ? " · demo sample" : ""}
+            </Text>
+          ) : null}
+
+          {/* Tilt control, top-left: drag up to tilt into the relief view, tap to toggle flat. */}
+          {onTiltChange && <RadarTiltControl tiltDeg={tilt} onLive={setDragTilt} onCommit={commitTilt} />}
+
           {/* Range-zoom control, top-right. `+` / `−` step the fixed ladder; the chip resets to Auto. */}
           {onRangeChange && (
-            <View
-              style={[
-                styles.zoomControl,
-                { pointerEvents: "box-none", right: 4 + zoomShift },
-              ]}
-            >
+            <View style={[styles.zoomControl, { pointerEvents: "box-none", right: 4 + zoomShift }]}>
               <Pressable
                 testID="radar-range-label"
                 onPress={() => onRangeChange(0)}
@@ -355,23 +437,45 @@ export function AircraftRadar({
 
           {/* Empty scope: a compact centred caption over the rings. absoluteFill + box-none, so it
               never eats a blip tap when traffic is present. */}
-          {scopeEmpty ? (
-            <EmptyState compact icon="radar" title="No traffic in range" />
-          ) : null}
+          {scopeEmpty ? <EmptyState compact icon="radar" title="No traffic in range" /> : null}
         </View>
       )}
     </View>
   );
 }
 
+/** Snaps an offset (km) to a step that scales with the range, so tiny moves reuse the same geometry. */
+function quantise(km: number, rangeKm: number): number {
+  const q = Math.max(rangeKm * OFFSET_QUANTUM, 0.01);
+  return Math.round(km / q) * q;
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, alignItems: "center", justifyContent: "center", padding: 8 },
-  ring: { position: "absolute", borderWidth: StyleSheet.hairlineWidth, borderColor: alpha(color.entity.air, 0.28), pointerEvents: "none" },
+  ring: {
+    position: "absolute",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: alpha(color.entity.air, 0.28),
+    pointerEvents: "none",
+  },
   axis: { position: "absolute", backgroundColor: alpha(color.entity.air, 0.18), pointerEvents: "none" },
   rangeLabel: { position: "absolute", color: alpha(color.textDim, 0.75), fontSize: 10, pointerEvents: "none" },
-  cardinal: { position: "absolute", color: alpha(color.text, 0.5), fontSize: 12, fontWeight: "600", pointerEvents: "none" },
+  cardinal: {
+    position: "absolute",
+    color: alpha(color.text, 0.5),
+    fontSize: 12,
+    fontWeight: "600",
+    pointerEvents: "none",
+  },
   cardinalPrimary: { color: alpha(color.text, 0.9), fontWeight: "800" },
-  observer: { position: "absolute", width: 8, height: 8, borderRadius: 4, backgroundColor: color.status.ok, pointerEvents: "none" },
+  observer: {
+    position: "absolute",
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: color.status.ok,
+    pointerEvents: "none",
+  },
   blip: { position: "absolute", width: 24, height: 24, alignItems: "center", justifyContent: "center" },
   // Beyond the fixed range: pinned to the outer ring at true bearing, dimmed so it reads as clamped.
   blipBeyond: { opacity: 0.4 },
@@ -384,6 +488,14 @@ const styles = StyleSheet.create({
     borderColor: AIRPORT_COLOR,
     opacity: 0.7,
     transform: [{ rotate: "45deg" }],
+  },
+  attribution: {
+    position: "absolute",
+    left: 4,
+    bottom: 2,
+    color: alpha(color.textMuted, 0.95),
+    fontSize: 9,
+    pointerEvents: "none",
   },
   zoomControl: { position: "absolute", top: 4, right: 4, alignItems: "center", gap: 4 },
   rangeChip: {

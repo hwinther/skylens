@@ -138,3 +138,22 @@ test("the map satellites layer defaults on, and a saved choice (only a boolean) 
   installLocalStorage({ [KEY]: JSON.stringify({ state: { showMapSatellites: "nope" }, version: 0 }) });
   expect((await loadStore()).getState().showMapSatellites).toBe(true);
 });
+
+test("the radar tilt survives a restart, sanitised to whole degrees within range", async () => {
+  installLocalStorage({ [KEY]: JSON.stringify({ state: { radarTiltDeg: 37.6 }, version: 0 }) });
+  expect((await loadStore()).getState().radarTiltDeg).toBe(38);
+
+  installLocalStorage({ [KEY]: JSON.stringify({ state: { radarTiltDeg: 400 }, version: 0 }) });
+  expect((await loadStore()).getState().radarTiltDeg).toBe(60);
+
+  installLocalStorage({ [KEY]: JSON.stringify({ state: { radarTiltDeg: "steep" }, version: 0 }) });
+  expect((await loadStore()).getState().radarTiltDeg).toBe(0);
+
+  installLocalStorage();
+  const store = await loadStore();
+  expect(store.getState().radarTiltDeg).toBe(0);
+  store.getState().setRadarTiltDeg(-10);
+  expect(store.getState().radarTiltDeg).toBe(0);
+  store.getState().setRadarTiltDeg(45);
+  expect(store.getState().radarTiltDeg).toBe(45);
+});

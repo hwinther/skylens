@@ -125,6 +125,13 @@ export type LandmarksResponse = Omit<
   attribution: string;
 };
 
+/**
+ * GET /api/terrain — the Radar's relief grid (bundled ETOPO 2022): `size` × `size` heights in metres
+ * (0 = sea) every `cellKm`, row-major from the north-west corner, centred on (lat, lon). `size` is 0 when
+ * the server has no terrain DB. Validated into a TerrainGrid by src/radar/terrainGrid.ts.
+ */
+export type TerrainResponse = Schemas["Skylens.Api.Enrichment.TerrainResponse"];
+
 /** GET /api/aircraft/{hex}/route — AeroAPI route by callsign. */
 export type RouteResponse = Schemas["Skylens.Api.Enrichment.FlightRoute"];
 

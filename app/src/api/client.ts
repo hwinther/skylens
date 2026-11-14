@@ -21,6 +21,7 @@ import type {
   AirportDto,
   AirportsResponse,
   LandmarksResponse,
+  TerrainResponse,
   PortsResponse,
   FishingZonesResponse,
   HealthResponse,
@@ -269,5 +270,10 @@ export class ApiClient {
     return this.request<LandmarksResponse>(
       `/api/landmarks?lat=${lat}&lon=${lon}&radiusKm=${radiusKm}`,
     );
+  }
+
+  /** GET /api/terrain — a coarse elevation grid around the point (offline ETOPO 2022) for the Radar's relief. */
+  terrain(lat: number, lon: number, radiusKm: number): Promise<TerrainResponse> {
+    return this.request<TerrainResponse>(`/api/terrain?lat=${lat}&lon=${lon}&radiusKm=${radiusKm}`);
   }
 }

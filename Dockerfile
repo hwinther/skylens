@@ -111,6 +111,10 @@ ENV Ports__PortsPath=/app/data/ports.csv.gz
 # data/landmarks/extract-geonames-landmarks.mjs. Same env-var override as the ports.
 COPY data/landmarks/landmarks.csv.gz /app/data/landmarks.csv.gz
 ENV Landmarks__LandmarksPath=/app/data/landmarks.csv.gz
+# Elevation grids for the tiltable Radar's relief (ETOPO 2022, NOAA NCEI, public domain), committed by
+# data/terrain/build-etopo-terrain.mjs. Same env-var override as the ports.
+COPY data/terrain/terrain.bin.gz /app/data/terrain.bin.gz
+ENV Terrain__TerrainPath=/app/data/terrain.bin.gz
 # Public ADS-B capture replayed by Mqtt__Replay + Mqtt__ReplayFile in preview/e2e envs (never in prod;
 # replay is gated on Development). ADS-B is broadcast data, so committing/baking the capture is fine.
 COPY backend/tests/Api.Tests/fixtures/aircraft.json /app/fixtures/aircraft.json

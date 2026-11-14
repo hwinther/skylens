@@ -9,6 +9,7 @@
  */
 import { act, fireEvent, render, screen, within } from "@testing-library/react-native";
 import Constants from "expo-constants";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { router } from "expo-router";
 import MapScreen from "@/screens/MapScreen";
 import { isMapAvailable } from "@/components/webmap/mapAvailable";
@@ -29,6 +30,14 @@ import {
 jest.mock("@/components/webmap/mapAvailable", () => ({ isMapAvailable: jest.fn(() => true) }));
 const mapAvailable = jest.mocked(isMapAvailable);
 
+/** The app root wraps every screen in a GestureHandlerRootView (the radar's tilt control is a gesture). */
+const renderScreen = () =>
+  render(
+    <GestureHandlerRootView>
+      <MapScreen />
+    </GestureHandlerRootView>,
+  );
+
 const onMap = () => screen.queryByTestId("native-map") != null;
 
 /** The radar sizes its scope from onLayout, which never fires under jest: give it a phone's box. */
@@ -46,7 +55,7 @@ describe("MapScreen (native)", () => {
   });
 
   it("opens on the map, with Map first and selected in the toggle", async () => {
-    await render(<MapScreen />);
+    await renderScreen();
 
     expect(onMap()).toBe(true);
     expect(screen.getByTestId("map-view-map")).toBeSelected();
@@ -59,7 +68,7 @@ describe("MapScreen (native)", () => {
 
   it("opens on the radar when the build has no Maps key", async () => {
     mapAvailable.mockReturnValue(false);
-    await render(<MapScreen />);
+    await renderScreen();
 
     expect(onMap()).toBe(false);
     expect(screen.getByTestId("map-view-radar")).toBeSelected();
@@ -67,7 +76,7 @@ describe("MapScreen (native)", () => {
   });
 
   it("switches between map and radar with the toggle", async () => {
-    await render(<MapScreen />);
+    await renderScreen();
 
     await fireEvent.press(screen.getByTestId("map-view-radar"));
     expect(onMap()).toBe(false);
@@ -80,7 +89,7 @@ describe("MapScreen (native)", () => {
   });
 
   it("opens the detail card from an aircraft marker on the map", async () => {
-    await render(<MapScreen />);
+    await renderScreen();
     expect(screen.queryByTestId("detail-card")).not.toBeOnTheScreen();
 
     await fireEvent.press(screen.getByTestId("map-ac-abc123"));
@@ -88,7 +97,7 @@ describe("MapScreen (native)", () => {
   });
 
   it("goes back to the map from the radar on Show on map", async () => {
-    await render(<MapScreen />);
+    await renderScreen();
     await fireEvent.press(screen.getByTestId("map-view-radar"));
     await layoutRadar();
 
@@ -103,7 +112,7 @@ describe("MapScreen (native)", () => {
   });
 
   it("snaps to the map for a ground track selected while on the radar", async () => {
-    await render(<MapScreen />);
+    await renderScreen();
     await fireEvent.press(screen.getByTestId("map-view-radar"));
 
     await act(async () => useSatelliteTrackStore.getState().setTracked(25544));
@@ -112,7 +121,7 @@ describe("MapScreen (native)", () => {
 
   it("stays on the radar for Show on map when the build can't draw the map", async () => {
     mapAvailable.mockReturnValue(false);
-    await render(<MapScreen />);
+    await renderScreen();
 
     await act(async () => useMapFocusStore.getState().setFocus({ kind: "aircraft", hex: "abc123" }));
     expect(onMap()).toBe(false);
@@ -142,7 +151,7 @@ describe("MapScreen (native) — satellites layer", () => {
   });
 
   async function renderMap() {
-    await render(<MapScreen />);
+    await renderScreen();
     await act(async () => {}); // the satellites fetch resolves, the first tick places them
   }
 
@@ -213,5 +222,29 @@ describe("isMapAvailable (Android)", () => {
     expect(actual()).toBe(false);
     config.extra = { ...saved, hasMapsKey: undefined };
     expect(actual()).toBe(false);
+  });
+});
+
+describe("MapScreen (native) radar tilt", () => {
+  beforeEach(() => {
+    resetStores();
+    seedAircraft([aircraft("abc123", { flight: "SAS123" })]);
+    mapAvailable.mockReturnValue(false);
+    useSettingsStore.setState({ radarTiltDeg: 0, demoMode: true });
+  });
+
+  it("tilts the radar from its control, remembers the tilt in settings and draws the demo relief", async () => {
+    await renderScreen();
+    await layoutRadar();
+    expect(screen.queryByTestId("radar-terrain")).not.toBeOnTheScreen();
+
+    await fireEvent(screen.getByTestId("radar-tilt"), "accessibilityAction", {
+      nativeEvent: { actionName: "increment" },
+    });
+
+    expect(useSettingsStore.getState().radarTiltDeg).toBe(15);
+    expect(screen.getByTestId("radar-tilt-value")).toHaveTextContent("15°");
+    expect(screen.getByTestId("radar-terrain")).toBeOnTheScreen();
+    expect(screen.getByTestId("map-ac-abc123")).toBeOnTheScreen();
   });
 });

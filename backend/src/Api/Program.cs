@@ -38,6 +38,7 @@ builder.Services.AddOptions<AircraftDbOptions>().Bind(configuration.GetSection(A
 builder.Services.AddOptions<AirportsOptions>().Bind(configuration.GetSection(AirportsOptions.SectionName));
 builder.Services.AddOptions<PortsOptions>().Bind(configuration.GetSection(PortsOptions.SectionName));
 builder.Services.AddOptions<LandmarksOptions>().Bind(configuration.GetSection(LandmarksOptions.SectionName));
+builder.Services.AddOptions<TerrainOptions>().Bind(configuration.GetSection(TerrainOptions.SectionName));
 builder.Services.AddOptions<BarentsWatchOptions>().Bind(configuration.GetSection(BarentsWatchOptions.SectionName));
 builder.Services.AddOptions<FiskInfoOptions>().Bind(configuration.GetSection(FiskInfoOptions.SectionName));
 builder.Services.AddOptions<SatellitesOptions>().Bind(configuration.GetSection(SatellitesOptions.SectionName));
@@ -191,6 +192,10 @@ builder.Services.AddHostedService(static sp => sp.GetRequiredService<PortDbServi
 // Offline landmarks gazetteer (GeoNames peaks + populated places) for the AR identify feature.
 builder.Services.AddSingleton<LandmarkDbService>();
 builder.Services.AddHostedService(static sp => sp.GetRequiredService<LandmarkDbService>());
+
+// Offline elevation grids (ETOPO 2022) for the tiltable Radar's relief.
+builder.Services.AddSingleton<TerrainDbService>();
+builder.Services.AddHostedService(static sp => sp.GetRequiredService<TerrainDbService>());
 
 // Per-provider budgets: ADSBx monthly, AeroAPI/adsb.lol daily. Keyed so the clients pull the right one.
 builder.Services.AddKeyedSingleton("adsbx", static (sp, _) =>
