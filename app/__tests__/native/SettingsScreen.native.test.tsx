@@ -67,6 +67,24 @@ describe("SettingsScreen", () => {
     expect(settings()[key]).toBe(!before);
   });
 
+  it("credits the cockpit view's 3D models behind one compact row in About", async () => {
+    await renderSettings();
+    await openAbout();
+    const row = screen.getByTestId("settings-model-credits");
+    expect(row).toHaveTextContent(/3D models.*11 models · CC BY 3\.0 \/ CC0/);
+    expect(screen.queryByTestId("settings-model-credits-list")).toBeNull();
+
+    await fireEvent.press(row);
+    expect(screen.getByTestId("settings-model-credit-airliner")).toHaveTextContent(
+      /Narrow-body jet.*Airplane by jeremy · CC BY 3\.0 · via Poly Pizza/,
+    );
+    expect(screen.getByTestId("settings-model-credit-turboprop")).toHaveTextContent(/by mfonasd · CC0/);
+    expect(screen.getByText(/Modified: reoriented, rescaled/)).toBeOnTheScreen();
+
+    await fireEvent.press(row);
+    expect(screen.queryByTestId("settings-model-credits-list")).toBeNull();
+  });
+
   it("toggles the map's satellites layer, which needs the satellites master switch", async () => {
     useSettingsStore.setState({ showSatellites: true, showMapSatellites: true });
     await renderSettings();

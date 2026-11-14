@@ -149,6 +149,24 @@ export function pitchFor(sample: SimSample): number {
   return sample.basePitchDeg + clamped;
 }
 
+/** Bank angles stay within this (a coordinated turn rarely goes past it; the model shows a gentle bank). */
+export const MAX_BANK_DEG = 30;
+
+/** Below this ground speed (taxiing, hovering) the model stays wings-level. */
+export const MIN_BANK_SPEED_MPS = 20;
+
+const GRAVITY_MPS2 = 9.81;
+
+/**
+ * The bank of a coordinated turn at `speedMps` turning `turnRateDegS` (clockwise positive): tan(bank) =
+ * v·ω / g, right wing down positive, clamped to ±MAX_BANK_DEG; 0 when slow or not finite.
+ */
+export function bankForTurn(speedMps: number, turnRateDegS: number): number {
+  if (!finite(speedMps) || !finite(turnRateDegS) || speedMps < MIN_BANK_SPEED_MPS) return 0;
+  const bank = rad2deg(Math.atan((speedMps * (turnRateDegS * Math.PI)) / 180 / GRAVITY_MPS2));
+  return Math.max(-MAX_BANK_DEG, Math.min(MAX_BANK_DEG, bank));
+}
+
 /** Keep the camera at least MIN_CLEARANCE_M above the terrain height when that is known. */
 export function clampToTerrain(altM: number, terrainM: number | null | undefined): number {
   if (!finite(terrainM)) return altM;

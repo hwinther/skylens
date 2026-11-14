@@ -184,7 +184,14 @@ npm run coverage:summary          # unit (../app/coverage) + e2e (monocart-cover
   traffic from the live stores (`src/sim/traffic.ts`: aircraft ≤ 50 km, vessels ≤ 20 km, 60 points / 20
   labels, nearest first, lost targets and AtoNs left out, ~1 Hz, dead-reckoned in the globe); a persisted
   "Layers" filter (`settingsStore.simHiddenLayers`, `src/sim/layers.ts`; ferry quays split from ports);
-  an outside/chase camera (`src/sim/chase.ts`); nearest airport/port and destination in the HUD plus a
+  an outside/chase camera (`src/sim/chase.ts`) that draws the followed object as a generic low-poly 3D model
+  of its class (pure `src/sim/models.ts` sizes/places/turns it, `modelClass.ts` picks it from the type table /
+  emitter category / AIS ship type, resolved app-side and passed to Android as the `model` prop; Cesium side
+  `simModel.ts`: lazy load, point + chevron fallback while loading or on failure, `data-sim-model[-state]` on
+  `sim-view` for e2e). The GLBs are baked in `app/public/models/sim/` (~270 kB, served via `modelBaseUrl`;
+  the API maps `.glb` in `StaticContentTypes`), built by `node data/models3d/build-models.mjs` (by hand, see its
+  README); CC BY credits in `public/models/sim/ATTRIBUTION.md` + Settings → About → "3D models"
+  (`src/sim/modelCredits.ts`), keep all three in step; nearest airport/port and destination in the HUD plus a
   great-circle route line (`src/sim/route.ts`) only from places already fetched for labels and a route the
   card already knows (free cached read on open or the user tapping the paid Route button). A tap on an
   airport / port / ferry-quay label or point opens the light place card (`SimPlaceCard.tsx`,

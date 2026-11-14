@@ -1,7 +1,8 @@
 /**
  * Pure-TS pose math for the cockpit view's outside ("chase") camera: instead of riding in the followed
- * object, the camera sits behind and above it and looks at it. There is no 3D model: the object is a
- * point plus a flat chevron along its heading (chevronEnu), drawn by src/sim/simGlobe.ts.
+ * object, the camera sits behind and above it and looks at it. The object is drawn as a generic 3D model
+ * of its class (src/sim/models.ts, src/sim/simModel.ts); while that loads, or if it fails or the object
+ * has no class, as a point plus a flat chevron along its heading (chevronEnu), drawn by src/sim/simGlobe.ts.
  *
  * Look-around keeps its meaning: the look offset orbits the camera around the object. Yaw turns the
  * view (looking 30° right puts the camera so it looks 30° right of the heading, at the object); pitch
@@ -26,8 +27,30 @@ export interface ChaseSpec {
   elevationDeg: number;
 }
 
-/** Per kind: close enough to see the object's motion against the ground, far enough to see around it. */
-export function chaseSpec(kind: SimKind): ChaseSpec {
+/** The camera stays at least this many drawn model lengths away, so a long ship never fills the view. */
+export const CHASE_MODEL_LENGTHS = 2.5;
+
+/** With a model, the camera comes in to this many drawn lengths (small craft), never past the kind's base. */
+export const CHASE_FRAME_LENGTHS = 8;
+
+/** ...but no closer than this, so some ground or sea stays in view around the object. */
+export const MIN_CHASE_DISTANCE_M: Readonly<Record<SimKind, number>> = { aircraft: 160, vessel: 120, satellite: 4000 };
+
+/**
+ * Per kind: close enough to see the object's motion against the ground, far enough to see around it.
+ * With the drawn model's extent (src/sim/models.ts drawnExtentM) the distance fits the model: small craft
+ * are framed closer (CHASE_FRAME_LENGTHS of it, at least MIN_CHASE_DISTANCE_M: a helicopter at ~190 m,
+ * an airliner at ~300 m), and a long ship pushes the camera out to CHASE_MODEL_LENGTHS of it (a 120 m
+ * ferry to 300 m, a 200 m container ship to 500 m). Satellites keep their distance.
+ */
+export function chaseSpec(kind: SimKind, modelExtentM?: number | null): ChaseSpec {
+  const base = baseChaseSpec(kind);
+  if (!modelExtentM || !(modelExtentM > 0)) return base;
+  const framed = Math.min(base.distanceM, Math.max(MIN_CHASE_DISTANCE_M[kind], modelExtentM * CHASE_FRAME_LENGTHS));
+  return { ...base, distanceM: Math.max(framed, modelExtentM * CHASE_MODEL_LENGTHS) };
+}
+
+function baseChaseSpec(kind: SimKind): ChaseSpec {
   switch (kind) {
     case "aircraft":
       return { distanceM: 350, elevationDeg: 12 };

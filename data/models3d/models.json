@@ -1,0 +1,133 @@
+{
+  "comment": "Cockpit view 3D models: sources (pinned by SHA-256), licences and the per-model normalisation. Built by data/models3d/build-models.mjs into app/public/models/sim/<class>.glb; see README.md. Credits: app/public/models/sim/ATTRIBUTION.md and app/src/sim/modelCredits.ts.",
+  "models": [
+    {
+      "class": "airliner",
+      "title": "Airplane",
+      "author": "jeremy",
+      "licence": "CC BY 3.0",
+      "page": "https://poly.pizza/m/9Ev6pklkSYp",
+      "url": "https://static.poly.pizza/7823e338-576d-49b1-82e1-30fa6cbdb57e.glb",
+      "sha256": "7be3ac286c45111b40bb8dfbf0a70139efbb0c1d21b55275a28073ab2c43cdf1",
+      "yawDeg": -90,
+      "lengthM": 38
+    },
+    {
+      "class": "widebody",
+      "title": "Boeing 747",
+      "author": "Miha Lunar",
+      "licence": "CC BY 3.0",
+      "page": "https://poly.pizza/m/49CLof4tP2V",
+      "url": "https://static.poly.pizza/f9afa9f0-92a5-41c1-afa4-c0b7d3444f35.glb",
+      "sha256": "361d9a1be6b520c56e1e26a28e367139ef50e07270de180858e7f44a8f508d04",
+      "yawDeg": 0,
+      "lengthM": 70,
+      "preComment": "The source is tilted: this rotation (column-major) levels it, found by align-tilted.mjs (up = least-variance axis, then the yaw of best mirror symmetry, nose away from the fin).",
+      "pre": [-0.94747, 0.20556, 0.24503, 0, 0.08441, 0.89966, -0.42835, 0, -0.3085, -0.38517, -0.86975, 0, 0, 0, 0, 1]
+    },
+    {
+      "class": "turboprop",
+      "title": "Twin turboprop rigged airplane. Low poly.",
+      "author": "mfonasd",
+      "licence": "CC0 1.0",
+      "page": "https://opengameart.org/content/twin-turboprop-rigged-airplane-low-poly",
+      "url": "https://opengameart.org/sites/default/files/twin_turboprop_rigged.blend",
+      "sha256": "24a3ae2e0ae934a56678378d41271cca16acc728bc65836c31c1b1af33dbc190",
+      "blendObject": "an24",
+      "yawDeg": 180,
+      "lengthM": 29
+    },
+    {
+      "class": "twin-prop",
+      "title": "Low poly twin prop airplane",
+      "author": "mfonasd",
+      "licence": "CC0 1.0",
+      "page": "https://opengameart.org/content/low-poly-twin-prop-airplane",
+      "url": "https://opengameart.org/sites/default/files/low_poly_twin_prop_airplane.blend",
+      "sha256": "8418b2172c2daeaf5209284ad1d6777a0c84485dfda01b128440412d415d8413",
+      "blendObject": "fus.001",
+      "blendReset": true,
+      "yawDeg": 180,
+      "lengthM": 20
+    },
+    {
+      "class": "light-single",
+      "title": "Small Airplane",
+      "author": "Vojtěch Balák",
+      "licence": "CC BY 3.0",
+      "page": "https://poly.pizza/m/7cvx6ex-xfL",
+      "url": "https://static.poly.pizza/077afae1-24b7-4bac-a31d-53d367002a04.glb",
+      "sha256": "020086413ab6cdd26662bafe564ca55cd3d8de8d1b5411c0109e2136be9c3f39",
+      "yawDeg": 180,
+      "lengthM": 8.3,
+      "keepNodes": ["Propeller_Cone"]
+    },
+    {
+      "class": "bizjet",
+      "title": "Jet",
+      "author": "Poly by Google",
+      "licence": "CC BY 3.0",
+      "page": "https://poly.pizza/m/bgUY8zN2Bq9",
+      "url": "https://static.poly.pizza/cda2ef4d-a255-4626-937e-8097ce453b0c.glb",
+      "sha256": "f8c2598d4c0edf9b921c5e527566ad36113d8d316293ed29ea6f5a7d6202cd0c",
+      "yawDeg": 0,
+      "lengthM": 20,
+      "texSize": 128
+    },
+    {
+      "class": "helicopter",
+      "title": "Helicopter",
+      "author": "jeremy",
+      "licence": "CC BY 3.0",
+      "page": "https://poly.pizza/m/eb7b31pjGtQ",
+      "url": "https://static.poly.pizza/7899f9de-bd5d-452f-9248-a96d447ff133.glb",
+      "sha256": "16528510f50ba32383d139a29d50eca9deec4b48d416482b7c559279d616058c",
+      "yawDeg": -90,
+      "lengthM": 12
+    },
+    {
+      "class": "cargo-ship",
+      "title": "Container Ship",
+      "author": "Alex Safayan",
+      "licence": "CC BY 3.0",
+      "page": "https://poly.pizza/m/3AmDGcCu6Ll",
+      "url": "https://static.poly.pizza/df197d9f-5d8c-4744-bc03-75ee514e8df3.glb",
+      "sha256": "a6f5e74082c8dfe8d251b7d70af5c2bd8570d108b3ca2a97c3d55f38871fcb4b",
+      "yawDeg": 0,
+      "lengthM": 200
+    },
+    {
+      "class": "ferry",
+      "title": "Cruise liner",
+      "author": "jeremy",
+      "licence": "CC BY 3.0",
+      "page": "https://poly.pizza/m/aOikPp4rz68",
+      "url": "https://static.poly.pizza/d51c2fe4-6d94-4f83-bd5c-bb99e1bd926e.glb",
+      "sha256": "8b5c472668941405086696c65647238c251dfb93aa60868148c2b8948fa81c31",
+      "yawDeg": 180,
+      "lengthM": 120
+    },
+    {
+      "class": "small-boat",
+      "title": "Boat",
+      "author": "Poly by Google",
+      "licence": "CC BY 3.0",
+      "page": "https://poly.pizza/m/8vekojz4Abf",
+      "url": "https://static.poly.pizza/abb2068b-98de-4485-b7fd-0d5ca55c510c.glb",
+      "sha256": "e062b5c999f0a9c5ee8b32a3723de29d3e278e155c23a43f6867b692b39f0312",
+      "yawDeg": 90,
+      "lengthM": 8
+    },
+    {
+      "class": "satellite",
+      "title": "Satellite",
+      "author": "Poly by Google",
+      "licence": "CC BY 3.0",
+      "page": "https://poly.pizza/m/fmYHY1leH_P",
+      "url": "https://static.poly.pizza/06e36157-284e-46df-8889-cb2b6b03bd2b.glb",
+      "sha256": "d4312b7f1f1a5ef9c344b4ba77625f9bb7ee003a8be31fefc05accf6b5feba17",
+      "yawDeg": 0,
+      "lengthM": 10
+    }
+  ]
+}

@@ -131,6 +131,19 @@ public sealed class SmokeTests
     }
 
     [Fact]
+    public void Static_files_map_the_cockpit_models()
+    {
+        // The static-file middleware skips extensions it can't map, and ASP.NET's default table has no
+        // .glb: the cockpit view's baked models (wwwroot/models/sim/*.glb) need the explicit entry.
+        var provider = Skylens.Api.Extensions.StaticContentTypes.Create();
+
+        Assert.True(provider.TryGetContentType("models/sim/airliner.glb", out var type));
+        Assert.Equal("model/gltf-binary", type);
+        Assert.True(provider.TryGetContentType("index.html", out var html));
+        Assert.Equal("text/html", html);
+    }
+
+    [Fact]
     public async Task Every_api_endpoint_except_client_log_requires_auth()
     {
         // The app decides whether to show its sign-in card by probing an anonymous GET /api/me, and

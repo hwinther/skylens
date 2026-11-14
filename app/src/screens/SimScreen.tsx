@@ -425,6 +425,7 @@ export default function SimScreen() {
             traffic={traffic}
             layers={cockpit.visibility}
             cameraMode={cockpit.cameraMode}
+            model={cockpit.modelClass}
             destination={cockpit.destination}
             loadOverlay={loadOverlay}
             onReady={onReady}

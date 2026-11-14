@@ -36,6 +36,7 @@ import { isApiAllowed } from "@/state/authStore";
 import { useSettingsStore } from "@/state/settingsStore";
 import { useSimStore, type SimTarget } from "@/state/simStore";
 import { useVesselStore } from "@/state/vesselStore";
+import { useSimModelClass } from "./useSimModelClass";
 
 /** What the cockpit's detail card shows: the followed object, or another one the user tapped. */
 export type SimSelection = SimTarget;
@@ -92,6 +93,8 @@ export function useSimCockpit({ target, focused, onTraffic }: SimCockpitOptions)
   // --- camera mode ------------------------------------------------------------------------------
   const [cameraMode, setCameraMode] = useState<CameraMode>("cockpit");
   const toggleCamera = useCallback(() => setCameraMode((m) => (m === "cockpit" ? "chase" : "cockpit")), []);
+  /** The followed object's 3D model class for the outside view (src/sim/modelClass.ts). */
+  const modelClass = useSimModelClass(target);
 
   // --- layer filter (persisted) ---------------------------------------------------------------------
   const hidden = useSettingsStore((s) => s.simHiddenLayers);
@@ -234,6 +237,7 @@ export function useSimCockpit({ target, focused, onTraffic }: SimCockpitOptions)
     follow,
     cameraMode,
     toggleCamera,
+    modelClass,
     chips,
     toggleLayer: toggleLayer as (layer: SimLayer) => void,
     visibility,

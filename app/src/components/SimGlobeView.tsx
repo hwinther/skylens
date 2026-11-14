@@ -12,8 +12,9 @@
  *  - data comes in as props (JSON only): the latest sample (~1 Hz), the satellite's OMM, a recenter
  *    counter, whether API calls are allowed, and the cockpit extras: the other traffic (slim items,
  *    re-selected natively at ~1 Hz and only re-sent when changed), the layer visibility, the camera
- *    mode and the route destination. `targetKey` names the followed object: when "Follow this" changes
- *    it the tracker and traffic start over, without reloading the engine;
+ *    mode, the followed object's 3D model class (a key resolved natively; the files load from
+ *    www.bundle/models/sim/ next to Cesium) and the route destination. `targetKey` names the followed
+ *    object: when "Follow this" changes it the tracker and traffic start over, without reloading the engine;
  *  - a tap is picked here (scene picking) and reported by the `onPick` native action: traffic as
  *    { kind, id }, an airport / port label as { kind: "place", id: <its key> } (the native side holds
  *    the fetched places and resolves the key), and a tap on nothing as null (closes the place card);
@@ -43,6 +44,7 @@ import { PORT_COLOR } from "@/components/webmap/portStyle";
 import type { CameraMode } from "@/sim/chase";
 import type { SimLayerVisibility } from "@/sim/layers";
 import { cesiumBaseUrl, loadCesium } from "@/sim/loadCesium";
+import { modelBaseUrl, type SimModelClass } from "@/sim/models";
 import type { Look } from "@/sim/look";
 import type { GeoPos } from "@/sim/route";
 import type { SimPick } from "@/sim/place";
@@ -94,6 +96,8 @@ export interface SimGlobeViewProps {
   /** Which airport / port / ferry-quay layers are drawn. */
   layers: SimLayerVisibility;
   cameraMode: CameraMode;
+  /** The followed object's 3D model class for the outside view (src/sim/modelClass.ts), or null. */
+  model: SimModelClass | null;
   /** The route line's destination, or null. */
   destination: GeoPos | null;
   /** Native action: the user tapped this traffic or airport / port label in the scene, or nothing (null). */
@@ -118,7 +122,8 @@ export interface SimGlobeViewProps {
 }
 
 export default function SimGlobeView(props: SimGlobeViewProps) {
-  const { kind, targetKey, sample, omm, recenter, apiAllowed, traffic, layers, cameraMode, destination } = props;
+  const { kind, targetKey, sample, omm, recenter, apiAllowed, traffic, layers, cameraMode, model, destination } =
+    props;
   const globeRef = useRef<SimGlobe | null>(null);
   const kindRef = useRef(kind);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -180,6 +185,11 @@ export default function SimGlobeView(props: SimGlobeViewProps) {
     cameraRef.current = cameraMode;
     globeRef.current?.setCameraMode(cameraMode);
   }, [cameraMode]);
+  const modelRef = useRef(model);
+  useEffect(() => {
+    modelRef.current = model;
+    globeRef.current?.setModel(model);
+  }, [model]);
   const destinationRef = useRef(destination);
   const destinationKey = JSON.stringify(destination);
   useEffect(() => {
@@ -284,6 +294,7 @@ export default function SimGlobeView(props: SimGlobeViewProps) {
               },
               look: () => lookRef.current,
               overlays,
+              modelBaseUrl: modelBaseUrl(process.env.EXPO_BASE_URL),
               onFirstFrame: () => {
                 if (!cancelled && !failed) void actionsRef.current.onReady();
               },
@@ -303,6 +314,7 @@ export default function SimGlobeView(props: SimGlobeViewProps) {
             globe.setTraffic(trafficRef.current);
             globe.setVisibility(layersRef.current);
             globe.setCameraMode(cameraRef.current);
+            globe.setModel(modelRef.current);
             globe.setDestination(destinationRef.current);
           } catch (e) {
             fail(`Couldn't start the 3D view: ${e instanceof Error ? e.message : String(e)}`);
