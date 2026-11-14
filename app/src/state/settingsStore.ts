@@ -18,6 +18,7 @@ import {
   type ListSection,
 } from "./listFilter";
 import { SIM_LAYERS, type SimLayer } from "@/sim/layers";
+import { AR_GROUPS, type ArGroup } from "./arFilter";
 import { clampTilt } from "@/radar/projection";
 
 interface SettingsState {
@@ -79,6 +80,8 @@ interface SettingsState {
   listCollapsedSections: ListSection[];
   /** Cockpit view filter: layers hidden from the 3D scene (see src/sim/layers.ts). */
   simHiddenLayers: SimLayer[];
+  /** AR view filter: label groups hidden from the AR overlay only (see ./arFilter). */
+  arHiddenGroups: ArGroup[];
   /** First-run onboarding completed (or skipped). Gates the one-time intro flow. */
   onboarded: boolean;
   /** True once persisted settings have finished rehydrating — the onboarding gate waits for this so a
@@ -114,6 +117,8 @@ interface SettingsState {
   setListHiddenKinds: (kinds: ListKind[]) => void;
   toggleListSection: (section: ListSection) => void;
   toggleSimLayer: (layer: SimLayer) => void;
+  toggleArGroup: (group: ArGroup) => void;
+  setArHiddenGroups: (groups: ArGroup[]) => void;
   setOnboarded: (on: boolean) => void;
 }
 
@@ -167,6 +172,8 @@ export const useSettingsStore = create<SettingsState>()(
       listCollapsedSections: [],
       // The cockpit view starts with every layer drawn.
       simHiddenLayers: [],
+      // The AR view starts with every group drawn.
+      arHiddenGroups: [],
       onboarded: false,
       _hydrated: false,
       setAzimuthTrim: (azimuthTrimDeg) => set({ azimuthTrimDeg }),
@@ -196,6 +203,8 @@ export const useSettingsStore = create<SettingsState>()(
       toggleListSection: (section) =>
         set({ listCollapsedSections: toggleId(get().listCollapsedSections, section, LIST_SECTIONS) }),
       toggleSimLayer: (layer) => set({ simHiddenLayers: toggleId(get().simHiddenLayers, layer, SIM_LAYERS) }),
+      toggleArGroup: (group) => set({ arHiddenGroups: toggleId(get().arHiddenGroups, group, AR_GROUPS) }),
+      setArHiddenGroups: (groups) => set({ arHiddenGroups: sanitizeIds(groups, AR_GROUPS) }),
       setOnboarded: (onboarded) => set({ onboarded }),
       setShowPlanets: (showPlanets) => set({ showPlanets }),
       setShowEcliptic: (showEcliptic) => set({ showEcliptic }),
@@ -205,7 +214,7 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: "skylens.settings.v1",
       storage: createJSONStorage(() => settingsStorage),
-      // Default shallow merge, except the List's and the cockpit filter's id arrays: older settings lack
+      // Default shallow merge, except the List's, the cockpit's and the AR filter's id arrays: older settings lack
       // them (→ the empty defaults) and ids a later build no longer knows are dropped, so no version
       // bump is needed.
       merge: (persisted, current) => {
@@ -216,6 +225,8 @@ export const useSettingsStore = create<SettingsState>()(
           listHiddenKinds: sanitizeIds(p.listHiddenKinds, LIST_KINDS),
           listCollapsedSections: sanitizeIds(p.listCollapsedSections, LIST_SECTIONS),
           simHiddenLayers: sanitizeIds(p.simHiddenLayers, SIM_LAYERS),
+          // Added later: older settings lack it (→ nothing hidden); unknown groups are dropped.
+          arHiddenGroups: sanitizeIds(p.arHiddenGroups, AR_GROUPS),
           // Added later: older settings lack it (→ the default), and a non-boolean is ignored.
           showMapSatellites:
             typeof p.showMapSatellites === "boolean" ? p.showMapSatellites : current.showMapSatellites,
