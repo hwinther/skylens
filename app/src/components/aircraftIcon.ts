@@ -1,5 +1,6 @@
 import type { ComponentProps } from "react";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { lookupAircraftType } from "@/aircraft/aircraftType";
 import { color } from "@/theme";
 
 export type AircraftIconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
@@ -25,6 +26,32 @@ const CATEGORY_ICON: Partial<Record<string, AircraftIconName>> = {
 
 export function iconForCategory(cat: string | null | undefined): AircraftIconName {
   return (cat ? CATEGORY_ICON[cat] : undefined) ?? "airplane";
+}
+
+/**
+ * Icon for one aircraft: the ICAO type designator (`t`, looked up in the bundled type table) decides
+ * rotor vs wing where it is known, since the emitter category is often unset (A0) or wrong; everything
+ * else, and aircraft without a known type, keep the category icon.
+ */
+export function iconForAircraft(ac: { cat?: string | null; t?: string | null }): AircraftIconName {
+  const byCategory = iconForCategory(ac.cat);
+  switch (lookupAircraftType(ac.t)?.cls) {
+    case "helicopter":
+    case "gyrocopter":
+      return "helicopter";
+    case "landplane":
+    case "seaplane":
+    case "amphibian":
+    case "tiltrotor":
+      // A registered aeroplane type broadcasting "rotorcraft" is an aeroplane.
+      return byCategory === "helicopter" ? "airplane" : byCategory;
+    case "lighter-than-air":
+      return "airballoon";
+    case "drone":
+      return "quadcopter";
+    default:
+      return byCategory;
+  }
 }
 
 /** Accent colour for an aircraft: orange for military airframes (`mil`), else the aircraft blue. */

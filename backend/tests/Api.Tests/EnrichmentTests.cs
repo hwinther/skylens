@@ -168,4 +168,74 @@ public sealed class AircraftDbServiceTests
         Assert.Contains("\"mil\":true", json);
         // Away-mode DTOs serialize the same way (the attribute is on the record, not the mapper).
     }
+
+    [Fact]
+    public void TypeCode_reads_the_offline_registry_and_misses_cleanly()
+    {
+        var db = new AircraftDbService(
+            Microsoft.Extensions.Options.Options.Create(new Skylens.Api.Options.AircraftDbOptions()),
+            new Microsoft.Extensions.Hosting.Internal.HostingEnvironment { ContentRootPath = Path.GetTempPath() },
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<AircraftDbService>.Instance);
+        var path = Path.Combine(Path.GetTempPath(), $"skylens-acdb-{Guid.NewGuid():N}.csv.gz");
+        try
+        {
+            using (var gz = new System.IO.Compression.GZipStream(File.Create(path), System.IO.Compression.CompressionLevel.Fastest))
+            using (var w = new StreamWriter(gz))
+                w.Write("4ca7b5;EI-EBA;B738;0;BOEING 737-800;;;\n478a01;LN-OOI;EC35;0;;;;\n");
+            db.Load(path);
+
+            Assert.Equal("B738", db.TypeCode("4CA7B5")); // hex is case-insensitive
+            Assert.Equal("EC35", db.TypeCode("478a01"));
+            Assert.Null(db.TypeCode("000000"));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Dto_carries_t_only_when_the_type_is_known()
+    {
+        var states = new[]
+        {
+            new AircraftState { Hex = "4ca7b5", Lat = 59.9, Lon = 10.7 },
+            new AircraftState { Hex = "000000", Lat = 59.9, Lon = 10.8 },
+        };
+        var dtos = Skylens.Api.Broadcast.SnapshotBroadcaster.FilterOwnFeed(
+            states, 59.9, 10.75, 50, typeOf: hex => hex == "4ca7b5" ? "B738" : null);
+
+        Assert.Equal("B738", dtos.Single(d => d.Hex == "4ca7b5").Type);
+        Assert.Null(dtos.Single(d => d.Hex == "000000").Type);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(dtos, new System.Text.Json.JsonSerializerOptions
+        {
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+        });
+        // The short wire name, and only for the aircraft whose type is known.
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(json, "\"t\":"));
+        Assert.Contains("\"t\":\"B738\"", json);
+    }
+
+    [Fact]
+    public void WithTypeCodes_fills_only_missing_away_types()
+    {
+        IReadOnlyList<AircraftDto> away =
+        [
+            new() { Hex = "aaa001", Type = "A320", Src = "adsblol" },
+            new() { Hex = "aaa002", Src = "adsblol" },
+            new() { Hex = "aaa003", Src = "adsblol" },
+        ];
+
+        var filled = Skylens.Api.Broadcast.SnapshotBroadcaster.WithTypeCodes(
+            away, hex => hex switch { "aaa001" => "B738", "aaa002" => "EC35", _ => null });
+
+        Assert.Equal("A320", filled[0].Type); // the aggregator's own value wins
+        Assert.Equal("EC35", filled[1].Type); // gap filled from the registry
+        Assert.Null(filled[2].Type);
+        Assert.Null(away[1].Type); // the cached list is not mutated
+
+        // Nothing to fill: the same list comes back (no copy).
+        Assert.Same(away, Skylens.Api.Broadcast.SnapshotBroadcaster.WithTypeCodes(away, _ => null));
+    }
 }

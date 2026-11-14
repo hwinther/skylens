@@ -178,6 +178,7 @@ public abstract class ReadsbPointSource : IAwayModeSource
                 Cat = a.Category,
                 // readsb dbFlags bitmask: 1 = military (2 interesting, 4 PIA, 8 LADD).
                 Mil = (a.DbFlags & 1) == 1 ? true : null,
+                Type = string.IsNullOrWhiteSpace(a.Type) ? null : a.Type.Trim().ToUpperInvariant(),
                 Src = SourceTag,
             });
         }
@@ -253,5 +254,6 @@ public abstract class ReadsbPointSource : IAwayModeSource
         [property: JsonPropertyName("category")] string? Category,
         [property: JsonPropertyName("seen")] double? Seen,
         [property: JsonPropertyName("seen_pos")] double? SeenPos,
-        [property: JsonPropertyName("dbFlags")] int? DbFlags);
+        [property: JsonPropertyName("dbFlags")] int? DbFlags,
+        [property: JsonPropertyName("t")] string? Type = null);
 }

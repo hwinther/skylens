@@ -29,7 +29,8 @@ import {
   useOverheadSatellites,
   useSkyEvents,
 } from "@/components";
-import { aircraftAccent, iconForCategory } from "@/components/aircraftIcon";
+import { aircraftAccent, iconForAircraft } from "@/components/aircraftIcon";
+import { AIRCRAFT_TYPES_ATTRIBUTION, aircraftTypeLine, lookupAircraftType } from "@/aircraft/aircraftType";
 import { useObserver } from "@/components/useObserver";
 import { useDetailSelection } from "@/components/useDetailSelection";
 import { useSheetRightInset } from "@/components/Sheet";
@@ -86,6 +87,7 @@ const AircraftRow = memo(function AircraftRow({
   hex,
   mil,
   title,
+  typeLine,
   icon,
   distance,
   level,
@@ -94,6 +96,8 @@ const AircraftRow = memo(function AircraftRow({
 }: {
   hex: string;
   title: string;
+  /** "Boeing 737-800 · B738" from the type table, or the bare designator; null when unknown. */
+  typeLine?: string | null;
   icon: IconName;
   distance: string;
   level: string;
@@ -103,15 +107,23 @@ const AircraftRow = memo(function AircraftRow({
   onSelect: (hex: string) => void;
 }) {
   return (
-    <Pressable testID={`list-ac-${hex}`} onPress={() => onSelect(hex)} style={styles.row}>
-      <MaterialCommunityIcons name={icon} size={18} color={aircraftAccent({ mil })} />
-      <Text style={styles.callsign} numberOfLines={1}>
-        {title}
-        {mil ? <Text testID={`list-mil-${hex}`} style={styles.milBadge}> MIL</Text> : null}
-      </Text>
-      <Text style={styles.meta}>{distance}</Text>
-      <Text style={styles.meta}>{level}</Text>
-      <Text style={styles.meta}>{speed}</Text>
+    <Pressable testID={`list-ac-${hex}`} onPress={() => onSelect(hex)} style={[styles.row, styles.rowStacked]}>
+      <View style={styles.rowLine}>
+        <MaterialCommunityIcons name={icon} size={18} color={aircraftAccent({ mil })} />
+        <Text style={styles.callsign} numberOfLines={1}>
+          {title}
+          {mil ? <Text testID={`list-mil-${hex}`} style={styles.milBadge}> MIL</Text> : null}
+        </Text>
+        <Text style={styles.meta}>{distance}</Text>
+        <Text style={styles.meta}>{level}</Text>
+        <Text style={styles.meta}>{speed}</Text>
+      </View>
+      {/* Under the callsign, across the whole row: room for "Airbus Helicopters EC-135/635 · EC35". */}
+      {typeLine ? (
+        <Text testID={`list-typeline-${hex}`} style={styles.acType} numberOfLines={1}>
+          {typeLine}
+        </Text>
+      ) : null}
     </Pressable>
   );
 });
@@ -359,7 +371,8 @@ export default function ListScreen() {
                       hex={row.a.hex}
                       mil={row.a.mil ?? false}
                       title={row.a.flight?.trim() || row.a.hex.toUpperCase()}
-                      icon={iconForCategory(row.a.cat)}
+                      typeLine={aircraftTypeLine(row.a.t)}
+                      icon={iconForAircraft(row.a)}
                       distance={`${row.distanceKm.toFixed(1)} km ${compass8(row.bearingDeg)}`}
                       level={row.a.fl != null ? `FL${String(row.a.fl).padStart(3, "0")}` : "—"}
                       speed={row.a.gs != null ? `${Math.round(row.a.gs)} kt` : "—"}
@@ -382,6 +395,13 @@ export default function ListScreen() {
                   ),
                 )
               )}
+              {/* ODC-By credit for the type names above (src/aircraft/aircraftType). */}
+              {sections.traffic.expanded &&
+              trafficRows.some((row) => row.kind === "aircraft" && lookupAircraftType(row.a.t)) ? (
+                <Text testID="list-type-credit" style={styles.typeCredit}>
+                  {AIRCRAFT_TYPES_ATTRIBUTION}
+                </Text>
+              ) : null}
             </>
           )}
 
@@ -603,6 +623,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   callsign: { color: color.text, fontSize: 14, fontWeight: "600", flex: 1 },
+  // An aircraft row: the usual line, plus its type line below (indented past the 18 px icon + 10 px gap).
+  rowStacked: { flexDirection: "column", alignItems: "stretch", gap: 1 },
+  rowLine: { flexDirection: "row", alignItems: "center", gap: 10 },
+  acType: { color: color.textDim, fontSize: 11, marginLeft: 28 },
+  typeCredit: { color: color.textMuted, fontSize: 11, paddingHorizontal: 16, paddingVertical: 8 },
   milBadge: { color: color.military, fontSize: 11, fontWeight: "700" },
   marineLabel: { flex: 1, flexDirection: "row", alignItems: "center", gap: 6 },
   shipName: { color: color.text, fontSize: 14, fontWeight: "600", flexShrink: 1 },

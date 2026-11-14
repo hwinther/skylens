@@ -7,7 +7,9 @@ namespace Skylens.Api.State;
 ///     Short property names keep cellular payloads small: flight=callsign, fl=flight level (hundreds
 ///     of feet), gs=ground speed, trk=track, vr=vertical rate, cat=category, src=data source
 ///     ("adsb" own feed / "adsbx" away). seen = seconds since any message; seenPos = seconds since the
-///     last position (what dead reckoning and the simulator time the position by).
+///     last position (what dead reckoning and the simulator time the position by). t = ICAO type
+///     designator (e.g. "B738"), which the app turns into a readable name / aeroplane-vs-helicopter icon
+///     from its own bundled type table.
 /// </summary>
 public sealed record AircraftDto
 {
@@ -30,9 +32,18 @@ public sealed record AircraftDto
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? Mil { get; init; }
+
+    /// <summary>
+    ///     ICAO type designator ("B738", "EC35") from the offline aircraft DB (own feed) or the aggregator's
+    ///     own <c>t</c> field (away mode); omitted when unknown. About 11 bytes per aircraft on the wire.
+    /// </summary>
+    [JsonPropertyName("t")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Type { get; init; }
+
     public string Src { get; init; } = "adsb";
 
-    public static AircraftDto FromState(AircraftState s, string src = "adsb", bool military = false) => new()
+    public static AircraftDto FromState(AircraftState s, string src = "adsb", bool military = false, string? type = null) => new()
     {
         Hex = s.Hex,
         Flight = s.Flight,
@@ -48,6 +59,7 @@ public sealed record AircraftDto
         SeenPos = s.SeenPos,
         Cat = s.Category,
         Mil = military ? true : null,
+        Type = type,
         Src = src,
     };
 }

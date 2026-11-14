@@ -33,6 +33,10 @@ public sealed class AircraftDbService : IHostedService
     public bool IsMilitary(string hex) =>
         _db.TryGetValue(hex.ToLowerInvariant(), out var m) && m.Military;
 
+    /// <summary>ICAO type designator ("B738") for this airframe, or null (offline lookup, no upstream call).</summary>
+    public string? TypeCode(string hex) =>
+        _db.TryGetValue(hex.ToLowerInvariant(), out var m) ? m.TypeCode : null;
+
     public bool TryGet(string hex, out AircraftMetadata? metadata)
     {
         var ok = _db.TryGetValue(hex.ToLowerInvariant(), out var m);

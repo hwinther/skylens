@@ -72,6 +72,10 @@ describe("aircraftSample", () => {
   it("looks a little down, and further down from a helicopter", () => {
     expect(aircraftSample(ac(), T0)!.basePitchDeg).toBe(AIRCRAFT_PITCH_DEG);
     expect(aircraftSample(ac({ cat: "A7" }), T0)!.basePitchDeg).toBe(HELICOPTER_PITCH_DEG);
+    // A known type designator decides over the emitter category.
+    expect(aircraftSample(ac({ cat: "A1", t: "EC35" }), T0)!.basePitchDeg).toBe(HELICOPTER_PITCH_DEG);
+    expect(aircraftSample(ac({ cat: "A7", t: "B738" }), T0)!.basePitchDeg).toBe(AIRCRAFT_PITCH_DEG);
+    expect(aircraftSample(ac({ cat: "A7", t: "ZZ99" }), T0)!.basePitchDeg).toBe(HELICOPTER_PITCH_DEG);
   });
 
   it("times the position by seenPos, not by the age of the last message", () => {

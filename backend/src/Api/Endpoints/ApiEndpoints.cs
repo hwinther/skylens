@@ -68,7 +68,8 @@ public static class ApiEndpoints
                                                      Geo.DistanceKm(la, lo, a.Lat!.Value, a.Lon!.Value) <= r);
                        }
 
-                       var dtos = filtered.Select(a => AircraftDto.FromState(a, military: aircraftDb.IsMilitary(a.Hex)))
+                       var dtos = filtered.Select(a => AircraftDto.FromState(a, military: aircraftDb.IsMilitary(a.Hex),
+                                                                              type: aircraftDb.TypeCode(a.Hex)))
                                           .ToArray();
                        return TypedResults.Ok<IReadOnlyList<AircraftDto>>(dtos);
                    })
@@ -88,7 +89,7 @@ public static class ApiEndpoints
                        if (state is null && meta is null)
                            return TypedResults.NotFound();
 
-                       var dto = state is null ? null : AircraftDto.FromState(state, military: meta?.Military ?? false);
+                       var dto = state is null ? null : AircraftDto.FromState(state, military: meta?.Military ?? false, type: meta?.TypeCode);
                        return TypedResults.Ok(new AircraftDetail(dto, meta));
                    })
            .WithName("AircraftDetail");

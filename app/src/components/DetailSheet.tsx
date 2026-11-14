@@ -8,6 +8,12 @@
  * what the live snapshot already carries.
  */
 
+import {
+  AIRCRAFT_TYPES_ATTRIBUTION,
+  aircraftTypeLabel,
+  describeAircraftType,
+  lookupAircraftType,
+} from "@/aircraft/aircraftType";
 import { color } from "@/theme";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from "react-native";
@@ -138,6 +144,15 @@ export function DetailSheet({
     state?.flight?.trim() || (state?.hex ?? detail?.metadata?.hex ?? hex ?? "").toUpperCase();
   const positioned = hex != null && state?.lat != null && state?.lon != null;
   const rel = positioned ? relativePosition(origin, state!.lat!, state!.lon!) : null;
+  // The type: the detail's designator, else the live snapshot's `t` (so it shows before the fetch, and in
+  // demo mode). Names prefer the airframe's own metadata, then the bundled type table (ODC-By credit).
+  const typeCode = (detail?.metadata?.typeCode?.trim() || state?.t?.trim() || "").toUpperCase() || null;
+  const typeInfo = lookupAircraftType(typeCode);
+  const typeNames = { typeName: detail?.metadata?.typeName, typeCode };
+  const typeShort = aircraftTypeLabel(typeNames, { short: true });
+  const typeFull = aircraftTypeLabel(typeNames);
+  const typeRow = typeFull && typeCode && typeFull !== typeCode ? `${typeFull} (${typeCode})` : typeFull;
+  const typeClass = describeAircraftType(typeInfo);
 
   return (
     <Sheet
@@ -164,7 +179,7 @@ export function DetailSheet({
         identitySummary ? (
           sheetSummaryLines(
             aircraftIdentityLines({
-              metadata: detail?.metadata,
+              metadata: { ...detail?.metadata, typeCode },
               route,
               hex: state?.hex ?? hex,
               hasCallsign: !!state?.flight?.trim(),
@@ -176,7 +191,7 @@ export function DetailSheet({
           <SheetSummary
             parts={[
               signalLost && "Signal lost",
-              detail?.metadata?.typeCode,
+              typeShort,
               state?.alt != null ? `${state.alt.toLocaleString()} ft` : null,
               state?.gs != null ? `${Math.round(state.gs)} kt` : null,
               rel ? `${rel.distanceKm.toFixed(1)} km ${compass8(rel.bearingDeg)}` : null,
@@ -222,7 +237,8 @@ export function DetailSheet({
         {ready && (
           <>
             <Row label="Registration" value={detail?.metadata?.registration} />
-            <Row label="Type" value={detail?.metadata?.typeName ?? detail?.metadata?.typeCode} />
+            <Row label="Type" value={typeRow} testID="detail-type" />
+            {typeClass ? <Row label="Class" value={typeClass} testID="detail-type-class" /> : null}
             <Row label="Operator" value={detail?.metadata?.operator} />
             {detail?.metadata?.military || state?.mil ? (
               <Row label="Military" value="Yes (registry flag)" />
@@ -266,6 +282,11 @@ export function DetailSheet({
           </>
         )}
 
+        {ready && typeInfo ? (
+          <Text testID="detail-type-credit" style={styles.typeCredit}>
+            {AIRCRAFT_TYPES_ATTRIBUTION}
+          </Text>
+        ) : null}
         {credit && (
           <Pressable testID="detail-source-credit" onPress={() => void Linking.openURL(credit.url)}>
             <Text style={styles.attribution}>{creditText(credit)}</Text>
@@ -275,11 +296,13 @@ export function DetailSheet({
   );
 }
 
-function Row({ label, value }: { label: string; value: string | null | undefined }) {
+function Row({ label, value, testID }: { label: string; value: string | null | undefined; testID?: string }) {
   return (
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.rowValue}>{value ?? "—"}</Text>
+      <Text testID={testID} style={styles.rowValue}>
+        {value ?? "—"}
+      </Text>
     </View>
   );
 }
@@ -289,7 +312,8 @@ const styles = StyleSheet.create({
   title: { color: color.text, fontSize: 20, fontWeight: "700", flexShrink: 1 },
   row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
   rowLabel: { color: color.textLabel, fontSize: 14 },
-  rowValue: { color: color.text, fontSize: 14, fontWeight: "500" },
+  // Long values (a type name, its class in words) wrap on the right instead of pushing the label out.
+  rowValue: { color: color.text, fontSize: 14, fontWeight: "500", flexShrink: 1, marginLeft: 12, textAlign: "right" },
   error: { color: color.status.error, marginVertical: 8 },
   lost: { color: color.status.warn, fontSize: 13, fontWeight: "600", marginBottom: 6 },
   hint: { color: color.textMuted, fontSize: 12, marginTop: 12 },
@@ -305,4 +329,5 @@ const styles = StyleSheet.create({
   routeText: { color: color.text, fontSize: 16, fontWeight: "600" },
   routeSub: { color: color.textDim, fontSize: 12, marginTop: 2 },
   attribution: { color: color.textMuted, fontSize: 11, marginTop: 12, textDecorationLine: "underline" },
+  typeCredit: { color: color.textMuted, fontSize: 11, marginTop: 12 },
 });

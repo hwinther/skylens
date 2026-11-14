@@ -433,7 +433,7 @@ describe("SimScreen (Android) cockpit extras", () => {
     expect(requested).not.toContain("/api/aircraft/abc123/route");
     expect(requested.filter((p) => p.startsWith("/api/airports/"))).toEqual([]);
     // The followed aircraft's card: what it is, not the HUD's altitude / speed; no Show on map.
-    expect(screen.getByTestId("detail-card-summary")).toHaveTextContent(/^B738ESSA → ENGM$/);
+    expect(screen.getByTestId("detail-card-summary")).toHaveTextContent(/^Boeing 737-800ESSA → ENGM$/);
     expect(screen.queryByTestId("detail-show-on-map")).toBeNull();
   });
 

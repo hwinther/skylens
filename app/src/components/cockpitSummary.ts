@@ -9,6 +9,7 @@
  */
 
 import type { AircraftMetadata, RouteResponse, VesselMetadata } from "@/api/types";
+import { aircraftTypeLabel } from "@/aircraft/aircraftType";
 import { ORBIT_CLASS_NAMES, formatOrbitPeriod, type OrbitInfo } from "@/ar/orbitClass";
 
 /** Parts of one summary line; falsy parts are left out. */
@@ -41,7 +42,8 @@ export interface AircraftIdentityInput {
  * airframe) just the ICAO address, e.g. ["ICAO 4CA123"].
  */
 export function aircraftIdentityLines(i: AircraftIdentityInput): SummaryParts[] {
-  const type = text(i.metadata?.typeName) ?? text(i.metadata?.typeCode);
+  // Readable and short ("Boeing 737-800", "Airbus EC-135/635"): the airframe's own name, else the type table's.
+  const type = aircraftTypeLabel(i.metadata ?? {}, { short: true });
   const reg = text(i.metadata?.registration);
   const operator = text(i.metadata?.operator);
   const identified = !!(type || reg || operator);
