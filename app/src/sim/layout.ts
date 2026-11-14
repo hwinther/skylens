@@ -68,3 +68,34 @@ export function hudMaxWidth({ windowWidth, hudLeft, columnRight, columnWidth }: 
   const column = columnWidth > 0 ? columnWidth : CONTROL_COLUMN_FALLBACK_WIDTH;
   return Math.max(HUD_MIN_WIDTH, Math.floor(windowWidth - hudLeft - columnRight - column - HUD_COLUMN_GAP));
 }
+
+/** The place card (airport / port label tapped) never grows wider than this. */
+export const PLACE_CARD_MAX_WIDTH = 340;
+/** Assumed width of a bottom-centred control (Android's Recenter chip) for the overlap check. */
+export const CENTRED_CONTROL_WIDTH = 190;
+
+/**
+ * The place card's width: compact, bottom-left, at most PLACE_CARD_MAX_WIDTH and never past the
+ * window's side margins (`left` / `right` offsets from the edges, px).
+ */
+export function placeCardWidth(windowWidth: number, left: number, right: number): number {
+  return Math.max(0, Math.min(PLACE_CARD_MAX_WIDTH, Math.floor(windowWidth - left - right)));
+}
+
+export interface PlaceCardInsetInput {
+  /** The card's right edge (left offset + width), px from the window's left. */
+  cardRight: number;
+  /** The card's measured height (0 until measured, or closed). */
+  cardHeight: number;
+  /** The bottom control's left edge (web minimap, Android Recenter), px from the window's left. */
+  controlLeft: number;
+}
+
+/**
+ * How far a bottom control must move up so the open place card (bottom-left) doesn't cover it: only
+ * when they would overlap side by side (a phone); on a wide window both stay on the bottom line.
+ */
+export function placeCardInset({ cardRight, cardHeight, controlLeft }: PlaceCardInsetInput): number {
+  if (cardHeight <= 0) return 0;
+  return cardRight + CARD_GAP > controlLeft ? cardHeight + CARD_GAP : 0;
+}

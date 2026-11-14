@@ -3,7 +3,10 @@
  * and the HUD follows the target with live numbers.
  *
  * The cockpit extras (card, Layers filter, outside view) are asserted by testID and ARIA state; picking
- * traffic in the scene needs pixels/WebGL picking, so it is covered by the jest tests, not here.
+ * traffic in the scene needs pixels/WebGL picking, so it is covered by the jest tests, not here. The
+ * place card is the exception: the globe's test hook (`skylensSimPlaces()` on the view, see
+ * src/sim/simGlobe.ts) says where the airport points are on screen, and the test taps the real canvas
+ * there, through the real gesture handler and Cesium pick.
  *
  * Asserts on the HUD and the canvas, not on pixels: headless Chromium renders WebGL in software and the
  * Esri tiles need internet access, so imagery may or may not arrive. The CSP guard still fails the spec
@@ -147,6 +150,114 @@ test('the cockpit card shows the followed aircraft, closes, and Details brings i
   await expect(card).toHaveCount(0)
   await page.getByTestId('sim-details').click()
   await expect(card).toBeVisible()
+})
+
+interface PlaceOnScreen {
+  key: string
+  label: string
+  group: string
+  x: number
+  y: number
+}
+
+/** The airport points on screen now (from the globe's test hook), clear of the edges. */
+async function airportsOnScreen(page: Page): Promise<PlaceOnScreen[]> {
+  return page.getByTestId('sim-view').evaluate((el) => {
+    const hook = (el as HTMLElement & { skylensSimPlaces?: () => PlaceOnScreen[] }).skylensSimPlaces
+    const rect = el.getBoundingClientRect()
+    // Keep clear of the edges, where the HUD / controls / minimap sit over the canvas.
+    return (hook?.() ?? []).filter(
+      (p) => p.group === 'airports' && p.x > 40 && p.x < rect.width - 40 && p.y > 40 && p.y < rect.height - 40,
+    )
+  })
+}
+
+/** An airport point on screen, waiting up to `ms` for one; null when none shows in this direction. */
+async function airportOnScreen(page: Page, ms: number): Promise<PlaceOnScreen | null> {
+  let found = null as PlaceOnScreen | null
+  try {
+    await expect
+      .poll(
+        async () => {
+          found = (await airportsOnScreen(page))[0] ?? null
+          return found
+        },
+        { timeout: ms, intervals: [250] },
+      )
+      .not.toBeNull()
+  } catch {
+    // None this way: the caller looks elsewhere.
+  }
+  return found
+}
+
+/** Look 45° further right (a 300 px drag at 0.15°/px), dispatched straight to the view like the tests above. */
+async function lookRight45(page: Page) {
+  await page.getByTestId('sim-view').evaluate((el) => {
+    const send = (type: string, x: number) =>
+      el.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: 300, pointerId: 1, bubbles: true }))
+    send('pointerdown', 600)
+    for (let x = 550; x >= 300; x -= 50) send('pointermove', x)
+    send('pointerup', 300)
+  })
+}
+
+/** An airport point on screen in some direction: straight ahead first, then in 45° steps to the right. */
+async function findAirport(page: Page): Promise<PlaceOnScreen | null> {
+  let target = await airportOnScreen(page, 15_000)
+  for (let turn = 1; turn < 8 && !target; turn++) {
+    await lookRight45(page)
+    target = await airportOnScreen(page, 3_000)
+  }
+  return target
+}
+
+test('tapping an airport label opens its place card with the full name; × closes it', async ({ page }) => {
+  // The names come from the same /api/airports answer the labels were drawn from.
+  const airportsAnswer = page.waitForResponse((r) => /\/api\/airports\?/.test(r.url()) && r.ok(), { timeout: 60_000 })
+  await openAircraftCockpit(page)
+  const body = (await (await airportsAnswer).json()) as { airports: { ident: string; name: string }[] }
+  const names = new Map(body.airports.map((a) => [`airport:${a.ident}`, a.name]))
+
+  // The followed aircraft's card closed, so the whole canvas is free.
+  await page.getByTestId('detail-card-close').click()
+  await expect(page.getByTestId('detail-card')).toHaveCount(0)
+
+  // Find an airport point on screen, looking around if none is ahead.
+  const target = await findAirport(page)
+  expect(target, 'an airport point on screen in some direction').not.toBeNull()
+  const place = target as PlaceOnScreen
+  expect(names.has(place.key)).toBe(true)
+
+  // Hover (mouse resting on the point): the hint names it.
+  const view = page.getByTestId('sim-view')
+  await view.evaluate((el, at) => {
+    const r = el.getBoundingClientRect()
+    el.dispatchEvent(
+      new PointerEvent('pointermove', { clientX: r.left + at.x, clientY: r.top + at.y, pointerType: 'mouse', buttons: 0, bubbles: true }),
+    )
+  }, place)
+  await expect(page.getByTestId('sim-place-hint')).toContainText(names.get(place.key) as string, { timeout: 10_000 })
+
+  // A tap on it (pointer down/up in place): the real gesture handler and Cesium pick.
+  await view.evaluate((el, at) => {
+    const r = el.getBoundingClientRect()
+    const init = { clientX: r.left + at.x, clientY: r.top + at.y, pointerId: 2, pointerType: 'mouse', bubbles: true }
+    el.dispatchEvent(new PointerEvent('pointerdown', init))
+    el.dispatchEvent(new PointerEvent('pointerup', init))
+  }, place)
+  const card = page.getByTestId('sim-place-card')
+  await expect(card).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('sim-place-name')).toHaveText(names.get(place.key) as string)
+  await expect(page.getByTestId('sim-place-kind')).toContainText(/airport/i)
+  await expect(page.getByTestId('sim-place-range')).toHaveText(/^\d+(\.\d)? km [NESW]{1,2} · \d{3}°$/)
+
+  await page.getByTestId('sim-place-close').click()
+  await expect(card).toHaveCount(0)
+
+  // Details brings the followed aircraft's card back.
+  await page.getByTestId('sim-details').click()
+  await expect(page.getByTestId('detail-card')).toBeVisible()
 })
 
 test('the Layers filter unfolds, toggles a layer and remembers it', async ({ page }) => {

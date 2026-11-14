@@ -186,9 +186,15 @@ npm run coverage:summary          # unit (../app/coverage) + e2e (monocart-cover
   "Layers" filter (`settingsStore.simHiddenLayers`, `src/sim/layers.ts`; ferry quays split from ports);
   an outside/chase camera (`src/sim/chase.ts`); nearest airport/port and destination in the HUD plus a
   great-circle route line (`src/sim/route.ts`) only from places already fetched for labels and a route the
-  card already knows (free cached read on open or the user tapping the paid Route button). On Android these
-  cross the webview as slim props (`traffic`, `layers`, `cameraMode`, `destination`, `targetKey`) and the
-  `onPick` action. Maestro covers the Android screen in `app/.maestro/cockpit.yaml` (globe state
+  card already knows (free cached read on open or the user tapping the paid Route button). A tap on an
+  airport / port / ferry-quay label or point opens the light place card (`SimPlaceCard.tsx`,
+  `sim-place-card|name|close`: name, kind, codes, distance/bearing, credit), resolved by key from the
+  places already fetched (pure `src/sim/place.ts`: traffic wins a shared pick, a miss closes it, Android
+  back closes it first, it and the traffic card replace each other); on the web a resting mouse shows the
+  name (`sim-place-hint`, one throttled `scene.pick`). E2E taps it via the globe's `skylensSimPlaces()`
+  hook on `sim-view`. On Android these cross the webview as slim props (`traffic`, `layers`, `cameraMode`,
+  `destination`, `targetKey`) and the `onPick` action (traffic `{kind,id}`, `{kind:"place",id:key}`, or
+  null for a miss). Maestro covers the Android screen in `app/.maestro/cockpit.yaml` (globe state
   screenshot-only; the outside view is never switched on there, it hung the CI emulator's GPU; see its README).
 - **Ports layer** (`GET /api/ports`, `PortDbService`): an offline file committed at
   `data/ports/ports.csv.gz`, built by `node data/ports/extract-osm-ports.mjs [--wpi UpdatedPub150.csv]`:
