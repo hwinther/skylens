@@ -3,7 +3,8 @@
  * as an Expo DOM component (components/SimGlobeView.tsx, scene code shared in src/sim/simGlobe.ts);
  * everything around it is native: the HUD (shared components/SimHud.tsx), the detail card (shared
  * components/SimCard.tsx), Exit / Map / Outside view / Layers / Recenter, the loading and failure
- * states, and the Android back button (closes the card first, then leaves).
+ * states, the place card (a tapped airport / port label, components/SimPlaceCard.tsx), and the Android
+ * back button (closes the place or detail card first, then leaves).
  *
  * Data flow mirrors the web screen, but the webview shares no JS state with the app, so this screen
  * reads the live stores (the root layout re-centres the hub subscription on the target via simStore)
@@ -14,7 +15,8 @@
  * their places kept for the HUD's nearest airport/port. The cockpit extras (components/useSimCockpit.ts)
  * cross as slim props: other traffic (only when it changed, ≤ 1 Hz), layer visibility, camera mode and
  * route destination; a tap on traffic comes back through the `onPick` action and opens its card, whose
- * "Follow this" re-targets the session (the globe stays up and starts a fresh tracker).
+ * "Follow this" re-targets the session (the globe stays up and starts a fresh tracker). A tapped label
+ * comes back as { kind: "place", id: key }, resolved from the places this screen already holds.
  *
  * The session (target, tracker, subscriptions) and the globe's lifetime are separate focus effects
  * (tabs stay mounted), so a re-target doesn't reload the webview. Not on Android (yet): the minimap
@@ -44,20 +46,22 @@ import { orbitInfo, type OrbitClass } from "@/ar/orbitClass";
 import { buildSatrec, satelliteStateAt } from "@/ar/satellites";
 import { SheetHeightContext } from "@/components/Sheet";
 import { SimCard } from "@/components/SimCard";
+import { SimPlaceCard } from "@/components/SimPlaceCard";
 import { SimActionChip, SimFilter, SimToggleChip } from "@/components/SimControls";
 import SimGlobeView from "@/components/SimGlobeView";
 import { SimHud, simHudStyles } from "@/components/SimHud";
 import { useSimCockpit } from "@/components/useSimCockpit";
 import { DIAG_TAG } from "@/sim/globeDiag";
 import { statusText } from "@/sim/hud";
-import { cockpitLayout, hudMaxWidth } from "@/sim/layout";
+import { CENTRED_CONTROL_WIDTH, cockpitLayout, hudMaxWidth, placeCardInset, placeCardWidth } from "@/sim/layout";
 import { describeLook, isCentred, type Look } from "@/sim/look";
 import type { OverlayItem, OverlayLayerKind } from "@/sim/overlay";
 import { fetchOverlay } from "@/sim/overlayData";
 import { aircraftSample, satelliteSample, vesselSample, type SimSample } from "@/sim/simPose";
 import { parseTarget } from "@/sim/target";
 import { SimTracker, type TrackedPose } from "@/sim/tracker";
-import type { TrafficItem, TrafficPick } from "@/sim/traffic";
+import type { SimPick } from "@/sim/place";
+import type { TrafficItem } from "@/sim/traffic";
 import { useAircraftStore } from "@/state/aircraftStore";
 import { isApiAllowed, useApiAllowed } from "@/state/authStore";
 import { useMapFocusStore } from "@/state/mapFocusStore";
@@ -138,7 +142,7 @@ export default function SimScreen() {
     [],
   );
   const cockpit = useSimCockpit({ target, focused, onTraffic });
-  const { poseRef, onPlaces, select } = cockpit;
+  const { poseRef, onPlaces, pick } = cockpit;
 
   const exit = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -156,23 +160,26 @@ export default function SimScreen() {
     router.push("/map");
   }, [target, setMapFocus, setTrackedSatellite, router]);
 
-  // Android back: an open card closes first (as everywhere in the app), then back leaves the cockpit
-  // view the same way Exit does (the tab navigator would otherwise jump to the first tab). This
-  // listener can be registered after the card's own one, so it handles the card itself.
+  // Android back: an open card (place or detail) closes first (as everywhere in the app), then back
+  // leaves the cockpit view the same way Exit does (the tab navigator would otherwise jump to the first
+  // tab). This listener can be registered after the card's own one, so it handles the card itself.
   const cardOpenRef = useRef(false);
+  const placeOpenRef = useRef(false);
   useEffect(() => {
     cardOpenRef.current = cockpit.selection != null;
-  }, [cockpit.selection]);
-  const closeCard = cockpit.closeCard;
+    placeOpenRef.current = cockpit.place != null;
+  }, [cockpit.selection, cockpit.place]);
+  const { closeCard, closePlace } = cockpit;
   useFocusEffect(
     useCallback(() => {
       const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-        if (cardOpenRef.current) closeCard();
+        if (placeOpenRef.current) closePlace();
+        else if (cardOpenRef.current) closeCard();
         else exit();
         return true;
       });
       return () => sub.remove();
-    }, [exit, closeCard]),
+    }, [exit, closeCard, closePlace]),
   );
 
   // --- the session: target, tracker, subscriptions (re-run on "Follow this") ------------------------
@@ -332,10 +339,10 @@ export default function SimScreen() {
     setLook(next);
   }, []);
   const onPick = useCallback(
-    async (pick: TrafficPick) => {
-      select(pick);
+    async (hit: SimPick | null) => {
+      pick(hit);
     },
-    [select],
+    [pick],
   );
   const recenter = useCallback(() => {
     setLook(LEVEL);
@@ -364,6 +371,8 @@ export default function SimScreen() {
     cardOpen: cockpit.selection != null,
     cardHeight,
   });
+  const [placeHeight, setPlaceHeight] = useState(0);
+  const onPlaceLayout = useCallback((e: LayoutChangeEvent) => setPlaceHeight(e.nativeEvent.layout.height), []);
 
   if (!target) {
     return (
@@ -380,6 +389,16 @@ export default function SimScreen() {
   const hudLeft = insets.left + 12;
   const columnRight = insets.right + 12 + layout.rightInset;
   const pose = hud.pose;
+  // The place card sits bottom-left; Recenter (bottom-centre) moves above it where they'd collide.
+  const placeWidth = placeCardWidth(win.width, hudLeft, insets.right + 12);
+  const placeBottom = insets.bottom + 24;
+  const placeInset = cockpit.place
+    ? placeCardInset({
+        cardRight: hudLeft + placeWidth,
+        cardHeight: placeHeight,
+        controlLeft: (win.width - CENTRED_CONTROL_WIDTH) / 2,
+      })
+    : 0;
   return (
     <View style={styles.root} testID="sim-screen">
       <View
@@ -493,7 +512,7 @@ export default function SimScreen() {
       {!isCentred(look) ? (
         <Pressable
           testID="sim-recenter"
-          style={[styles.recenter, { bottom: insets.bottom + 24 + layout.bottomInset }]}
+          style={[styles.recenter, { bottom: insets.bottom + 24 + layout.bottomInset + placeInset }]}
           onPress={recenter}
         >
           <Text style={styles.recenterText}>↺ Recenter</Text>
@@ -514,6 +533,16 @@ export default function SimScreen() {
           onRoute={cockpit.onRoute}
         />
       </SheetHeightContext.Provider>
+
+      {cockpit.place ? (
+        <SimPlaceCard
+          place={cockpit.place}
+          origin={pose}
+          onClose={closePlace}
+          onLayout={onPlaceLayout}
+          style={{ left: hudLeft, bottom: placeBottom, width: placeWidth }}
+        />
+      ) : null}
     </View>
   );
 }

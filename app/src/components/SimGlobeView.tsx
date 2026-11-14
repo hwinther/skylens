@@ -14,7 +14,9 @@
  *    re-selected natively at ~1 Hz and only re-sent when changed), the layer visibility, the camera
  *    mode and the route destination. `targetKey` names the followed object: when "Follow this" changes
  *    it the tracker and traffic start over, without reloading the engine;
- *  - a tap on traffic is picked here (scene picking) and reported by the `onPick` native action;
+ *  - a tap is picked here (scene picking) and reported by the `onPick` native action: traffic as
+ *    { kind, id }, an airport / port label as { kind: "place", id: <its key> } (the native side holds
+ *    the fetched places and resolves the key), and a tap on nothing as null (closes the place card);
  *  - everything that needs the network with auth stays native: airport/port labels are fetched by the
  *    `loadOverlay` native action (an async function prop), so no token ever enters the webview;
  *  - state goes back through native actions: onReady (first frame rendered), onFailed (no WebGL, the
@@ -43,7 +45,8 @@ import type { SimLayerVisibility } from "@/sim/layers";
 import { cesiumBaseUrl, loadCesium } from "@/sim/loadCesium";
 import type { Look } from "@/sim/look";
 import type { GeoPos } from "@/sim/route";
-import type { TrafficItem, TrafficPick } from "@/sim/traffic";
+import type { SimPick } from "@/sim/place";
+import type { TrafficItem } from "@/sim/traffic";
 import {
   AIRPORT_REFETCH_KM,
   PORT_REFETCH_KM,
@@ -93,8 +96,8 @@ export interface SimGlobeViewProps {
   cameraMode: CameraMode;
   /** The route line's destination, or null. */
   destination: GeoPos | null;
-  /** Native action: the user tapped this traffic in the scene. */
-  onPick: (pick: TrafficPick) => Promise<void>;
+  /** Native action: the user tapped this traffic or airport / port label in the scene, or nothing (null). */
+  onPick: (pick: SimPick | null) => Promise<void>;
   /** The followed aircraft/vessel's latest sample; null for a satellite or before the first one. */
   sample: SimSample | null;
   /** The followed satellite's orbital elements; null otherwise. */
@@ -227,8 +230,7 @@ export default function SimGlobeView(props: SimGlobeViewProps) {
         lookRef.current = LEVEL;
       },
       onTap: (x, y) => {
-        const hit = globeRef.current?.pick(x, y);
-        if (hit) void actionsRef.current.onPick(hit);
+        void actionsRef.current.onPick(globeRef.current?.pick(x, y) ?? null);
       },
     });
 

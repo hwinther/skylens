@@ -491,3 +491,132 @@ describe("SimScreen (Android) cockpit extras", () => {
     });
   });
 });
+
+describe("SimScreen (Android) place card", () => {
+  const airport = { ident: "ENGM", iata: "OSL", municipality: "Oslo", name: "Oslo Airport, Gardermoen", type: "large_airport", lat: 60.1939, lon: 11.1004, elevationFt: 681, runways: [], frequencies: [] };
+  const quay = { id: "n42", kind: "ferry", name: "Nesodden ferjekai", lat: 59.87, lon: 10.65 };
+  let requested: string[] = [];
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    resetStores();
+    mockGlobe.props = null;
+    mockGlobe.renders = 0;
+    useSimStore.setState({ target: null, centre: null });
+    useSettingsStore.setState({ simHiddenLayers: [] });
+    seedAircraft([
+      aircraft("abc123", { flight: "SAS123 ", alt: 10000, gs: 250, trk: 90 }),
+      aircraft("def456", { flight: "NOZ77", lat: 59.977, lon: 10.8, alt: 11200, gs: 200, trk: 180 }),
+    ]);
+    useAuthStore.setState({ authRequired: false });
+    requested = routeFetch({
+      "/api/aircraft/abc123": () => backendJson({ metadata: { hex: "abc123" } }),
+      "/api/aircraft/def456": () => backendJson({ metadata: { hex: "def456" } }),
+      "/api/airports": () => backendJson({ airports: [airport] }),
+      "/api/ports": () => backendJson({ ports: [quay], attribution: "© OpenStreetMap contributors (ODbL)" }),
+    });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  /** The cockpit with both label layers fetched (as the globe asks for them), so their places are held. */
+  async function renderWithPlaces() {
+    await renderSim();
+    await act(async () => {});
+    const airports = await act(() => globe().loadOverlay("airports", 59.95, 10.8));
+    const ports = await act(() => globe().loadOverlay("ports", 59.95, 10.8));
+    return { airportKey: airports[0].key!, quayKey: ports[0].key! };
+  }
+
+  it("a tapped airport label opens the small place card from the fetched data, and × closes it", async () => {
+    const { airportKey } = await renderWithPlaces();
+    const fetched = requested.length;
+    expect(screen.getByTestId("detail-card")).toBeOnTheScreen(); // the followed aircraft's card
+
+    await act(() => globe().onPick({ kind: "place", id: airportKey }));
+    expect(screen.getByTestId("sim-place-card")).toBeOnTheScreen();
+    expect(screen.getByTestId("sim-place-name")).toHaveTextContent("Oslo Airport, Gardermoen");
+    expect(screen.getByTestId("sim-place-kind")).toHaveTextContent("Large airport · ENGM · OSL · Oslo");
+    // From the followed aircraft at 59.95 N 10.8 E: ~31 km NE.
+    expect(screen.getByTestId("sim-place-range")).toHaveTextContent(/^\d+ km NE · 0\d\d°$/);
+    expect(screen.getByTestId("sim-place-credit")).toHaveTextContent("Airports: OurAirports (public domain)");
+    // It replaced the detail card, and the tap itself fetched nothing.
+    expect(screen.queryByTestId("detail-card")).toBeNull();
+    expect(requested.length).toBe(fetched);
+
+    await fireEvent.press(screen.getByTestId("sim-place-close"));
+    expect(screen.queryByTestId("sim-place-card")).toBeNull();
+    expect(screen.getByTestId("sim-details")).toBeOnTheScreen();
+  });
+
+  it("a ferry quay shows its kind and the ODbL credit", async () => {
+    const { quayKey } = await renderWithPlaces();
+    await act(() => globe().onPick({ kind: "place", id: quayKey }));
+    expect(screen.getByTestId("sim-place-name")).toHaveTextContent("Nesodden ferjekai");
+    expect(screen.getByTestId("sim-place-kind")).toHaveTextContent(/^Ferry quay$/);
+    expect(screen.getByTestId("sim-place-credit")).toHaveTextContent("© OpenStreetMap contributors (ODbL)");
+  });
+
+  it("the hardware back button closes the place card first, then leaves", async () => {
+    jest.mocked(router.canGoBack).mockReturnValue(true);
+    const { airportKey } = await renderWithPlaces();
+    await act(() => globe().onPick({ kind: "place", id: airportKey }));
+
+    await act(async () => {
+      DeviceEventEmitter.emit("hardwareBackPress");
+    });
+    expect(screen.queryByTestId("sim-place-card")).toBeNull();
+    expect(router.back).not.toHaveBeenCalled();
+
+    await act(async () => {
+      DeviceEventEmitter.emit("hardwareBackPress");
+    });
+    expect(router.back).toHaveBeenCalled();
+  });
+
+  it("a traffic tap replaces the place card, and a label tap replaces the traffic card", async () => {
+    const { airportKey, quayKey } = await renderWithPlaces();
+    await act(() => globe().onPick({ kind: "place", id: airportKey }));
+    expect(screen.getByTestId("sim-place-card")).toBeOnTheScreen();
+
+    await act(() => globe().onPick({ kind: "aircraft", id: "def456" }));
+    expect(screen.queryByTestId("sim-place-card")).toBeNull();
+    expect(screen.getByTestId("detail-title")).toHaveTextContent("NOZ77");
+    expect(screen.getByTestId("sim-follow")).toBeOnTheScreen();
+
+    await act(() => globe().onPick({ kind: "place", id: quayKey }));
+    expect(screen.queryByTestId("detail-card")).toBeNull();
+    expect(screen.getByTestId("sim-place-name")).toHaveTextContent("Nesodden ferjekai");
+
+    // Details brings the followed aircraft's card back, closing the place.
+    await fireEvent.press(screen.getByTestId("sim-details"));
+    expect(screen.queryByTestId("sim-place-card")).toBeNull();
+    expect(screen.getByTestId("detail-title")).toHaveTextContent("SAS123");
+  });
+
+  it("a tap on nothing closes the place card; an unknown label key opens nothing", async () => {
+    const { airportKey } = await renderWithPlaces();
+    await act(() => globe().onPick({ kind: "place", id: "airport:ZZZZ" }));
+    expect(screen.queryByTestId("sim-place-card")).toBeNull();
+    expect(screen.getByTestId("detail-card")).toBeOnTheScreen(); // left as it was
+
+    await act(() => globe().onPick({ kind: "place", id: airportKey }));
+    expect(screen.getByTestId("sim-place-card")).toBeOnTheScreen();
+    await act(() => globe().onPick(null));
+    expect(screen.queryByTestId("sim-place-card")).toBeNull();
+  });
+
+  it("lifts Recenter above the place card where they would overlap", async () => {
+    const { airportKey } = await renderWithPlaces();
+    await act(() => globe().onLook({ yaw: 40, pitch: 0 }));
+    const bottom = () => StyleSheet.flatten(screen.getByTestId("sim-recenter").props.style).bottom as number;
+    const before = bottom();
+    await act(() => globe().onPick({ kind: "place", id: airportKey }));
+    await fireEvent(screen.getByTestId("sim-place-card"), "layout", {
+      nativeEvent: { layout: { x: 12, y: 600, width: 340, height: 90 } },
+    });
+    expect(bottom()).toBe(before + 90 + 12);
+  });
+});

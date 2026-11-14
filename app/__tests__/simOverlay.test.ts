@@ -118,10 +118,24 @@ test("places: the labelled airport classes with their ident, ports with ferry qu
   const base = { lat: 60, lon: 11, runways: [], frequencies: [] };
   expect(
     airportPlaces([
-      { ...base, ident: "ENGM", name: "Oslo Gardermoen", type: "large_airport", elevationFt: 681 },
+      { ...base, ident: "ENGM", iata: "OSL", municipality: "Oslo", name: "Oslo Gardermoen", type: "large_airport", elevationFt: 681 },
       { ...base, ident: "NO-0001", name: "Helipad", type: "heliport" },
     ]),
-  ).toEqual([{ kind: "airport", code: "ENGM", name: "Oslo Gardermoen", lat: 60, lon: 11, altM: 681 * 0.3048 }]);
+  ).toEqual([
+    {
+      kind: "airport",
+      code: "ENGM",
+      name: "Oslo Gardermoen",
+      lat: 60,
+      lon: 11,
+      altM: 681 * 0.3048,
+      key: "airport:ENGM",
+      typeLabel: "Large airport",
+      iata: "OSL",
+      municipality: "Oslo",
+      credit: "Airports: OurAirports (public domain)",
+    },
+  ]);
   expect(
     portPlaces([
       { id: "1", kind: "ferry", lat: 59, lon: 10, name: "Nesodden" },
@@ -141,7 +155,21 @@ test("fetchOverlay returns the labels and the places from one request", async ()
   const r = await fetchOverlay(client as never, "ports", 59.9, 10.75);
   expect(client.ports).toHaveBeenCalledTimes(1);
   expect(r.items).toHaveLength(1);
-  expect(r.places).toEqual([{ kind: "ferry", code: "", name: "Q", lat: 59, lon: 10, altM: 0 }]);
+  expect(r.places).toEqual([
+    {
+      kind: "ferry",
+      code: "",
+      name: "Q",
+      lat: 59,
+      lon: 10,
+      altM: 0,
+      key: "port:1",
+      typeLabel: "Ferry quay",
+      credit: "© OpenStreetMap contributors (ODbL)",
+    },
+  ]);
+  // The label and its place share the key a tap resolves.
+  expect(r.items[0].key).toBe("port:1");
 });
 
 test("bearingDeg: the initial great-circle bearing", () => {
