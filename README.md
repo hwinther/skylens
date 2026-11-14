@@ -73,4 +73,5 @@ with Google Play internal testing later.
 
 Orbital data courtesy of [CelesTrak](https://celestrak.org/). Satellite transmitter data from the
 [SatNOGS DB](https://db.satnogs.org/) (CC BY-SA). AIS/ADS-B from local receivers. Peak and place
-names for AR identify from [GeoNames](https://www.geonames.org/) (CC BY 4.0).
+names for AR identify from [GeoNames](https://www.geonames.org/) (CC BY 4.0). Radar relief from
+[ETOPO 2022](https://www.ncei.noaa.gov/products/etopo-global-relief-model) (NOAA NCEI, public domain).

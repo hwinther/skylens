@@ -121,6 +121,19 @@ npm run coverage:summary          # unit (../app/coverage) + e2e (monocart-cover
   (`map-sat-<norad>`), re-placed at the 1 Hz satellite tick; a tap opens the satellite card. One
   coverage footprint (pure `src/ar/footprint.ts`) for the open card's satellite, else the tracked one;
   policy in `webmap/satelliteLayer.ts`. The Radar plots no satellites.
+- **Radar tilt / relief**: the Radar's tilt control (`radar-tilt`, top-left; gesture-handler Pan + Tap,
+  adjustable a11y actions; `settingsStore.radarTiltDeg`, 0–60°, sanitised in `merge`) swings the scope into
+  an oblique view. Flat (0°) is the classic plain-View scope. From the first tilt, `useRadarTerrain`
+  fetches `GET /api/terrain` (`TerrainDbService`: a ≤129² height grid around a point, metres, 0 = sea)
+  sized to the range (radius ladder + move/zoom refetch policy in `src/radar/terrainFetch.ts`, small LRU),
+  gated like every API caller; demo mode uses `src/mock/demo-terrain.json`. Pure TS in `src/radar/`:
+  `projection.ts` (one perspective projection for terrain, rings, labels, blips and their tap boxes),
+  `terrainGeometry.ts` (land tint, marching-squares coastline, east–west ridge profiles; built per grid /
+  range / position, capped), `terrainPaths.ts` (re-projected per tilt into a few react-native-svg paths,
+  `RadarScopeSvg`, `radar-terrain`). Data: `data/terrain/terrain.bin.gz` (~1.5 MB), built by
+  `node data/terrain/build-etopo-terrain.mjs --cache <dir>` from ETOPO 2022 (NOAA ERDDAP, strided subsets:
+  ~0.9 km over 54–71.5° N 4–32° E, 10′ worldwide); the same script rewrites the demo sample. Baked like
+  ports (`Terrain__TerrainPath`). Show "ETOPO 2022 (NOAA NCEI)" wherever the relief appears.
 - **Demo mode** (`src/mock/`) replays `recorded-aircraft.json` with a drag-to-look pose, so the AR
   overlay works on an emulator or desktop with no feed.
 - **Signal lost** (`src/ar/signalLost.ts`): the one definition of a stale target, from the per-kind

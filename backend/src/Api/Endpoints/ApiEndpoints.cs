@@ -393,6 +393,31 @@ public static class ApiEndpoints
                    })
            .WithName("Landmarks");
 
+        // GET /api/terrain?lat=&lon=&radiusKm= — a coarse elevation grid around the point from the bundled ETOPO
+        // 2022 grids, for the tiltable Radar's simplified relief. The client fetches once per area/range (only
+        // after the radar is first tilted) and contours it locally. radiusKm is clamped to [1, 500] (default
+        // 100); the grid is at most TerrainDbService.MaxCells (129) a side with cells of at least 0.5 km, so a
+        // response is bounded at ~17k heights. Offline like /api/landmarks ("global" limit). Out-of-range
+        // coordinates are a 400; before the DB has loaded (or without the file) the grid is empty (size 0).
+        api.MapGet("/terrain",
+                   Results<Ok<TerrainResponse>, ProblemHttpResult> (TerrainDbService terrain, TimeProvider time,
+                                                                     double lat, double lon, double? radiusKm) =>
+                   {
+                       if (!double.IsFinite(lat) || lat is < -90 or > 90 || !double.IsFinite(lon) ||
+                           lon is < -180 or > 180)
+                           return TypedResults.Problem(
+                               detail: "lat must be within [-90, 90] and lon within [-180, 180]",
+                               statusCode: StatusCodes.Status400BadRequest);
+
+                       var requested = radiusKm is { } rk && double.IsFinite(rk) ? rk : 100;
+                       var r = Math.Clamp(requested, TerrainDbService.MinRadiusKm, TerrainDbService.MaxRadiusKm);
+                       var grid = terrain.Sample(lat, lon, r);
+                       return TypedResults.Ok(new TerrainResponse(time.GetUtcNow(), lat, lon, r, grid?.CellKm ?? 0,
+                                                                  grid?.Size ?? 0, grid?.Heights ?? [],
+                                                                  TerrainDbService.Attribution));
+                   })
+           .WithName("Terrain");
+
         return app;
     }
 

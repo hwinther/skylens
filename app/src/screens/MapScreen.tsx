@@ -394,6 +394,9 @@ export default function MapScreen() {
   const showLostGear = useSettingsStore((s) => s.showLostGear);
   const radarRangeKm = useSettingsStore((s) => s.radarRangeKm);
   const setRadarRangeKm = useSettingsStore((s) => s.setRadarRangeKm);
+  const radarTiltDeg = useSettingsStore((s) => s.radarTiltDeg);
+  const setRadarTiltDeg = useSettingsStore((s) => s.setRadarTiltDeg);
+  const demoMode = useSettingsStore((s) => s.demoMode);
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
   // Ground track for the satellite (if any) selected from a detail sheet. Reads the ephemeral store.
   const track = useSatelliteGroundTrack(client);
@@ -527,6 +530,10 @@ export default function MapScreen() {
             onSelectAirport={setSelectedAirportIdent}
             rangeKm={radarRangeKm}
             onRangeChange={setRadarRangeKm}
+            tiltDeg={radarTiltDeg}
+            onTiltChange={setRadarTiltDeg}
+            terrainClient={client}
+            demoMode={demoMode}
             showCourseVectors={showCourseVectors}
             controlsRightInset={cardRightInset}
           />

@@ -18,6 +18,7 @@ import {
   type ListSection,
 } from "./listFilter";
 import { SIM_LAYERS, type SimLayer } from "@/sim/layers";
+import { clampTilt } from "@/radar/projection";
 
 interface SettingsState {
   /** Manual azimuth trim in degrees, applied on top of declination. */
@@ -34,6 +35,8 @@ interface SettingsState {
   demoMode: boolean;
   /** Radar outer-ring range in km; `0` = auto-scale to the farthest blip (default). */
   radarRangeKm: number;
+  /** Radar tilt in degrees (0 = flat, today's top-down scope; up to MAX_TILT_DEG = oblique relief view). */
+  radarTiltDeg: number;
   /** Show AIS ships on the map/radar/list. */
   showShips: boolean;
   /** Show AIS aids to navigation (lighthouses, beacons, buoys). */
@@ -87,6 +90,7 @@ interface SettingsState {
   setHFov: (deg: number) => void;
   setRadiusKm: (km: number) => void;
   setRadarRangeKm: (km: number) => void;
+  setRadarTiltDeg: (deg: number) => void;
   setDemoMode: (on: boolean) => void;
   setShowShips: (on: boolean) => void;
   setShowAton: (on: boolean) => void;
@@ -129,6 +133,7 @@ export const useSettingsStore = create<SettingsState>()(
       hFovDeg: DEFAULT_HFOV_DEG,
       radiusKm: 60,
       radarRangeKm: 0,
+      radarTiltDeg: 0,
       demoMode: !forceLive,
       showShips: true,
       showAton: true,
@@ -169,6 +174,7 @@ export const useSettingsStore = create<SettingsState>()(
       setHFov: (hFovDeg) => set({ hFovDeg }),
       setRadiusKm: (radiusKm) => set({ radiusKm }),
       setRadarRangeKm: (radarRangeKm) => set({ radarRangeKm }),
+      setRadarTiltDeg: (deg) => set({ radarTiltDeg: clampTilt(deg) }),
       setDemoMode: (demoMode) => set({ demoMode }),
       setShowShips: (showShips) => set({ showShips }),
       setShowAton: (showAton) => set({ showAton }),
@@ -213,6 +219,8 @@ export const useSettingsStore = create<SettingsState>()(
           // Added later: older settings lack it (→ the default), and a non-boolean is ignored.
           showMapSatellites:
             typeof p.showMapSatellites === "boolean" ? p.showMapSatellites : current.showMapSatellites,
+          // Added later: whole degrees within [0, MAX_TILT_DEG]; anything else is flat.
+          radarTiltDeg: clampTilt(p.radarTiltDeg),
         };
       },
       // Flip the hydration flag once persisted settings load, so the onboarding gate can wait for it
