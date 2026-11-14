@@ -19,6 +19,7 @@ import { useAuth } from "@/auth/useAuth";
 import { DEFAULT_HFOV_DEG } from "@/ar/projection";
 import { ApiClient, getApiBaseUrl } from "@/api";
 import { getVersionLine } from "@/lib/version";
+import { ModelCredits } from "@/components/ModelCredits";
 
 /** Common subscription radii offered as one-tap presets on the Radius stepper. */
 const RADIUS_PRESETS = [30, 60, 100, 250] as const;
@@ -419,6 +420,7 @@ export default function SettingsScreen() {
               {showFullSha ? "Tap to hide full commit hash" : "Tap to reveal full commit hash"}
             </Text>
           )}
+          <ModelCredits />
         </Section>
         </Group>
       </ScrollView>

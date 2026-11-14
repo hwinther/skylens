@@ -396,6 +396,22 @@ describe("SimScreen (Android) cockpit extras", () => {
     expect(globe().cameraMode).toBe("chase");
   });
 
+  it("hands the globe the followed object's 3D model class, resolved on the native side", async () => {
+    seedAircraft([aircraft("abc123", { flight: "SAS123", t: "DH8D", cat: "A2" })]);
+    await renderSim();
+    expect(globe().model).toBe("turboprop");
+
+    // A brief gap in the store keeps the class (no dispose / reload of the model in the webview).
+    await act(async () => seedAircraft([]));
+    await tick();
+    expect(globe().model).toBe("turboprop");
+  });
+
+  it("gives a followed satellite the satellite model", async () => {
+    await renderSim("satellite", "25544");
+    expect(globe().model).toBe("satellite");
+  });
+
   it("shows the nearest airport and a known destination (cached route only), with the route line", async () => {
     useAuthStore.setState({ authRequired: false });
     const airport = (ident: string, name: string, type: string, lat: number, lon: number) => ({

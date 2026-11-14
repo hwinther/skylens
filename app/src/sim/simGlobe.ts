@@ -11,8 +11,9 @@
  *  - picking (pick): which traffic or airport / port label is under a tap (traffic wins, place.ts), and
  *    hoverPlace: the place under a resting mouse (web hover hint), one single pick per call;
  *  - the layer filter (setVisibility): airports / ports / ferry quays shown or hidden in place;
- *  - the camera mode (setCameraMode): cockpit, or chase (behind and above, see chase.ts) with a point
- *    and heading chevron marking the followed object;
+ *  - the camera mode (setCameraMode): cockpit, or chase (behind and above, see chase.ts) with the
+ *    followed object drawn as the 3D model of its class (setModel; simModel.ts), or as a point and
+ *    heading chevron while that loads, if it fails, or with no class;
  *  - the route line (setDestination): a great circle from the object to a known destination.
  * Browser only (DOM + WebGL); the pure math it calls lives in look.ts / overlay.ts / chase.ts / route.ts.
  */
@@ -50,7 +51,9 @@ import type { Cesium } from "./loadCesium";
 import type { SimLayerVisibility } from "./layers";
 import { DOUBLE_TAP_MS, forwardMarker, isTap, MAX_LOOK_PITCH_DEG, wrap180, type Look, type PointerMark } from "./look";
 import { distanceKm, type OverlayGroup, type OverlayItem } from "./overlay";
+import { drawnExtentM, MODEL_BASE, type SimModelClass } from "./models";
 import { greatCirclePoints, type GeoPos } from "./route";
+import { createOwnModel, type SimModelState } from "./simModel";
 import type { SimKind } from "./simPose";
 import type { TrackedPose } from "./tracker";
 import { resolveSimPick, type PlacePrimitiveId, type SimPick, type TrafficPrimitiveId } from "./place";
@@ -137,6 +140,8 @@ export interface SimGlobeOptions {
   /** This frame's look offset; called right after `pose`, only when there is one. */
   look: () => Look;
   overlays: readonly SimOverlayLayer[];
+  /** Where the 3D model files are served (models.ts modelBaseUrl); MODEL_BASE by default. */
+  modelBaseUrl?: string;
   /** The first frame has been rendered: the globe is up (imagery may still be streaming in). */
   onFirstFrame?: () => void;
   /**
@@ -164,6 +169,8 @@ export interface SimGlobe {
   /** Show or hide the airport / port / ferry-quay labels (traffic is filtered by the caller). */
   setVisibility: (v: SimLayerVisibility) => void;
   setCameraMode: (mode: CameraMode) => void;
+  /** The followed object's 3D model class for the outside view, or null (point + chevron only). */
+  setModel: (cls: SimModelClass | null) => void;
   /** Draw the route line to this destination, or none. */
   setDestination: (dest: GeoPos | null) => void;
   /** The traffic or place under canvas position (x, y) in CSS px (traffic wins), or null. */
@@ -559,6 +566,20 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
     }
   };
 
+  // --- followed-object model (chase view only), loaded lazily; the marker below is its fallback ------
+  // The class and its load state are mirrored on the container (data-sim-model / data-sim-model-state)
+  // for e2e; nothing reads them back.
+  let modelClass: SimModelClass | null = null;
+  const ownModel = createOwnModel(C, scene, {
+    baseUrl: opts.modelBaseUrl ?? MODEL_BASE,
+    onState: (cls, state: SimModelState) => {
+      opts.container.dataset.simModel = cls ?? "";
+      opts.container.dataset.simModelState = state;
+    },
+  });
+  cleanups.push(ownModel.destroy);
+  const chaseSpecFor = (kind: SimKind) => chaseSpec(kind, modelClass ? drawnExtentM(modelClass, kind) : null);
+
   // --- followed-object marker (chase view only): a point plus a heading chevron ------------------
   const ownPoints: PointPrimitiveCollection = scene.primitives.add(new C.PointPrimitiveCollection());
   const ownLines: PolylineCollection = scene.primitives.add(new C.PolylineCollection());
@@ -567,7 +588,9 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
   let ownKind: SimKind | null = null;
   let ownPoint: PointPrimitive | null = null;
   let ownChevron: Polyline | null = null;
-  const placeOwnMarker = (pose: TrackedPose, kind: SimKind, show: boolean) => {
+  const placeOwnMarker = (pose: TrackedPose, kind: SimKind, chase: boolean, terrainM: number | undefined, now: number) => {
+    // The model when it is drawn, else the marker.
+    const show = chase && !ownModel.update(pose, kind, terrainM, chase, now);
     if (kind !== ownKind) {
       ownKind = kind;
       ownPoints.removeAll();
@@ -587,7 +610,7 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
     if (!show || !ownPoint || !ownChevron) return;
     ownPoint.position = C.Cartesian3.fromDegrees(pose.lon, pose.lat, pose.altM, undefined, ownScratch);
     // A little above the object, so the chevron isn't lost in the sea surface or the terrain mesh.
-    ownChevron.positions = chevronEnu(pose.headingDeg, chevronSizeM(chaseSpec(kind))).map((p) => {
+    ownChevron.positions = chevronEnu(pose.headingDeg, chevronSizeM(chaseSpecFor(kind))).map((p) => {
       chevLocal.x = p.east;
       chevLocal.y = p.north;
       chevLocal.z = p.up + 1.5;
@@ -613,7 +636,7 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
     const origin: Cartesian3 = C.Cartesian3.fromDegrees(pose.lon, pose.lat, pose.altM);
     C.Transforms.eastNorthUpToFixedFrame(origin, undefined, enu);
     if (cameraMode === "chase") {
-      const cam = chaseCamera(pose.headingDeg, look, chaseSpec(kind));
+      const cam = chaseCamera(pose.headingDeg, look, chaseSpecFor(kind));
       camLocal.x = cam.east;
       camLocal.y = cam.north;
       camLocal.z = cam.up;
@@ -641,7 +664,7 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
     }
     placeForwardMarker(pose, look);
     if (diag.paused) return; // nothing is drawn: skip the scene's own primitives
-    placeOwnMarker(pose, kind, cameraMode === "chase");
+    placeOwnMarker(pose, kind, cameraMode === "chase", terrain, now);
     placeTraffic(now);
   };
   cleanups.push(scene.preRender.addEventListener(onPreRender));
@@ -823,6 +846,10 @@ export function createSimGlobe(C: Cesium, opts: SimGlobeOptions): SimGlobe {
     },
     setCameraMode: (mode) => {
       cameraMode = mode;
+    },
+    setModel: (cls) => {
+      modelClass = cls;
+      ownModel.setClass(cls);
     },
     setDestination: (dest) => {
       destination = dest;

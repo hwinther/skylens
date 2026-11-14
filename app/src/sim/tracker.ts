@@ -12,12 +12,18 @@
 import { angleDiff, normalizeAzimuth } from "@/ar/geo";
 import { TrackedPosition, wrapLon, type TrackPoint } from "@/ar/positionTracker";
 import { isSignalLost, sampleAgeS } from "@/ar/signalLost";
-import { clampToTerrain, pitchFor, type SimPose, type SimSample } from "./simPose";
+import { bankForTurn, clampToTerrain, pitchFor, type SimPose, type SimSample } from "./simPose";
 
 export { BLEND_MS, MOVING_MPS, trackLimits } from "@/ar/positionTracker";
 
 /** Time constant for the heading / pitch low-pass. */
 export const ANGLE_TAU_S = 0.6;
+
+/**
+ * Time constant for the turn-rate low-pass behind the bank: the smoothed heading still steps a little at
+ * each ~1 Hz sample, so the rate is smoothed again before it tilts the 3D model.
+ */
+export const TURN_RATE_TAU_S = 2.5;
 
 export interface TrackedPose extends SimPose {
   /** Speed over the ground from the latest sample, m/s. */
@@ -25,6 +31,10 @@ export interface TrackedPose extends SimPose {
   /** Seconds since the latest sample was true. */
   ageS: number;
   stale: boolean;
+  /** The flight-path angle under the camera's base pitch (pitchDeg without it), degrees. */
+  pathPitchDeg?: number;
+  /** Aircraft: the bank of a coordinated turn at the smoothed turn rate (right wing down +); else 0. */
+  bankDeg?: number;
 }
 
 export class SimTracker {
@@ -33,6 +43,7 @@ export class SimTracker {
   private readonly point: TrackPoint = { lat: 0, lon: 0, alt: 0 };
   private heading: number | null = null;
   private pitch: number | null = null;
+  private turnRate = 0;
   private lastPoseMs: number | null = null;
 
   get latest(): SimSample | null {
@@ -55,9 +66,14 @@ export class SimTracker {
     this.lastPoseMs = nowMs;
     const a = dtS > 0 ? 1 - Math.exp(-dtS / ANGLE_TAU_S) : 1;
     const targetPitch = pitchFor(s);
+    const prevHeading = this.heading;
     this.heading =
-      this.heading == null ? s.headingDeg : normalizeAzimuth(this.heading + a * angleDiff(s.headingDeg, this.heading));
+      prevHeading == null ? s.headingDeg : normalizeAzimuth(prevHeading + a * angleDiff(s.headingDeg, prevHeading));
     this.pitch = this.pitch == null ? targetPitch : this.pitch + a * (targetPitch - this.pitch);
+    if (prevHeading != null && dtS > 0) {
+      const rate = angleDiff(this.heading, prevHeading) / dtS;
+      this.turnRate += (1 - Math.exp(-dtS / TURN_RATE_TAU_S)) * (rate - this.turnRate);
+    }
 
     const ageS = sampleAgeS(s, nowMs);
     return {
@@ -69,6 +85,8 @@ export class SimTracker {
       speedMps: s.speedMps,
       ageS,
       stale: isSignalLost(s, nowMs),
+      pathPitchDeg: this.pitch - s.basePitchDeg,
+      bankDeg: s.kind === "aircraft" ? bankForTurn(s.speedMps, this.turnRate) : 0,
     };
   }
 }

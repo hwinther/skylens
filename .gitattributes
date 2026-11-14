@@ -4,3 +4,6 @@
 # swagger.json) and mark them generated so GitHub collapses them in diffs.
 backend/src/Api/openapi.json eol=lf linguist-generated=true
 app/src/api/generated/schema.ts eol=lf linguist-generated=true
+
+# Baked 3D models for the cockpit view (data/models3d): binary, never line-ending converted.
+app/public/models/**/*.glb binary

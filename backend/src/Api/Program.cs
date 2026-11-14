@@ -382,6 +382,8 @@ if (corsOrigins.Length > 0)
 app.UseDefaultFiles();
 app.UseStaticFiles(new StaticFileOptions
 {
+    // + .glb (the cockpit view's 3D models), which the default table lacks.
+    ContentTypeProvider = StaticContentTypes.Create(),
     OnPrepareResponse = static ctx =>
     {
         if (string.Equals(ctx.File.Name, "index.html", StringComparison.OrdinalIgnoreCase))

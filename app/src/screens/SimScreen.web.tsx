@@ -194,6 +194,9 @@ export default function SimScreen() {
     globeRef.current?.setCameraMode(cockpit.cameraMode);
   }, [cockpit.cameraMode, engineReady]);
   useEffect(() => {
+    globeRef.current?.setModel(cockpit.modelClass);
+  }, [cockpit.modelClass, engineReady]);
+  useEffect(() => {
     globeRef.current?.setDestination(cockpit.destination);
   }, [cockpit.destination, engineReady]);
 
