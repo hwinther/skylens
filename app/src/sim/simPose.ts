@@ -7,6 +7,7 @@
  * looks. Kept free of react / react-native / Cesium so jest runs it anywhere.
  */
 
+import { isRotorcraftType } from "@/aircraft/aircraftType";
 import type { AircraftDto, VesselDto } from "@/api/types";
 import { normalizeAzimuth, rad2deg } from "@/ar/geo";
 import type { TrackKind } from "@/ar/positionTracker";
@@ -97,7 +98,8 @@ export function aircraftSample(ac: AircraftDto, receivedAtMs: number): SimSample
     speedMps: finite(ac.gs) ? ac.gs * KNOTS_TO_MPS : 0,
     headingDeg: finite(ac.trk) ? normalizeAzimuth(ac.trk) : 0,
     vertMps: finite(ac.vr) ? ac.vr * FPM_TO_MPS : 0,
-    basePitchDeg: ac.cat === "A7" ? HELICOPTER_PITCH_DEG : AIRCRAFT_PITCH_DEG,
+    // The type table (t) knows rotor vs wing better than the emitter category; A7 when the type is unknown.
+    basePitchDeg: (isRotorcraftType(ac.t) ?? ac.cat === "A7") ? HELICOPTER_PITCH_DEG : AIRCRAFT_PITCH_DEG,
     timeMs: receivedAtMs - seenS * 1000,
   };
 }

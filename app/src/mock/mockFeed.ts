@@ -25,6 +25,8 @@ export interface RawAircraft {
   baro_rate?: number | null;
   geom_rate?: number | null;
   category?: string | null;
+  /** ICAO type designator, as readsb writes it from its aircraft DB (the backend fills it the same way). */
+  t?: string | null;
   seen?: number;
   seen_pos?: number | null;
   nav_altitude_mcp?: number | null;
@@ -72,6 +74,8 @@ export function toDto(raw: RawAircraft, src = "adsb"): AircraftDto {
     vr,
     seen: typeof raw.seen === "number" ? raw.seen : 0,
     cat: raw.category ?? null,
+    // Omitted when unknown, like the backend's DTO.
+    ...(raw.t?.trim() ? { t: raw.t.trim().toUpperCase() } : {}),
     src,
   };
 }

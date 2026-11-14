@@ -195,6 +195,16 @@ npm run coverage:summary          # unit (../app/coverage) + e2e (monocart-cover
   OpenStreetMap (Overpass) for Norway + the NGA World Port Index elsewhere. Refresh by re-running the
   script and committing the output; the image bakes it and sets `Ports__PortsPath`. Show the
   attribution (ODbL) wherever ports appear.
+- **Aircraft types** (readable names, class, rotor vs wing): the hub DTO carries the ICAO type designator
+  as `t` (own feed: offline `AircraftDbService.TypeCode`; away mode: the aggregator's `t`, gaps filled from
+  the same registry; omitted when unknown, ~11 bytes). The app looks it up in the bundled
+  `app/src/aircraft/aircraft-types.json` (pure TS `src/aircraft/aircraftType.ts`: name, "Helicopter · 2
+  turbine engines · Light wake", short name for one-line summaries), no API call, so demo mode works too
+  (the demo recording carries `t`). Used by List rows (`list-typeline-<hex>`), the detail card
+  (`detail-type`, `detail-type-class`) and `iconForAircraft` (the type decides helicopter vs aeroplane over
+  the emitter category; AR chips stay the same length). Built by `node data/aircraft-types/build-aircraft-types.mjs`
+  from the Mictronics aircraft database's `types.json` (pinned commit + SHA-256; bump both to refresh, commit
+  the output). ODC-By: show `AIRCRAFT_TYPES_ATTRIBUTION` wherever a name or class from it appears.
 - **AR identify** ("what am I looking at?"): long-press a point on the AR view, or toggle the viewfinder
   reticle (`ar-identify-toggle`), to name the peak / town in that direction with a laser beam to it.
   Data: `GET /api/landmarks` (`LandmarkDbService`) from `data/landmarks/landmarks.csv.gz`, built by

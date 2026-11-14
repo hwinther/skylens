@@ -49,10 +49,12 @@ public sealed class SnapshotBroadcaster : BackgroundService
 
     /// <summary>
     ///     Filter store aircraft to positioned ones inside the viewer radius (own-feed / "adsb").
-    ///     <paramref name="isMilitary" /> (the offline registry lookup) sets the DTO's <c>mil</c> flag.
+    ///     <paramref name="isMilitary" /> and <paramref name="typeOf" /> (offline registry lookups) set the
+    ///     DTO's <c>mil</c> flag and <c>t</c> type designator.
     /// </summary>
     public static List<AircraftDto> FilterOwnFeed(
-        IReadOnlyList<AircraftState> all, double lat, double lon, double radiusKm, Func<string, bool>? isMilitary = null)
+        IReadOnlyList<AircraftState> all, double lat, double lon, double radiusKm, Func<string, bool>? isMilitary = null,
+        Func<string, string?>? typeOf = null)
     {
         var result = new List<AircraftDto>();
         foreach (var a in all)
@@ -60,10 +62,29 @@ public sealed class SnapshotBroadcaster : BackgroundService
             if (!a.HasPosition)
                 continue;
             if (Geo.DistanceKm(lat, lon, a.Lat!.Value, a.Lon!.Value) <= radiusKm)
-                result.Add(AircraftDto.FromState(a, "adsb", isMilitary?.Invoke(a.Hex) ?? false));
+                result.Add(AircraftDto.FromState(a, "adsb", isMilitary?.Invoke(a.Hex) ?? false, typeOf?.Invoke(a.Hex)));
         }
 
         return result;
+    }
+
+    /// <summary>
+    ///     Away-mode aggregators send their own <c>t</c>; fill the gaps from the offline registry (a local
+    ///     dictionary lookup, no upstream call). Returns the same list when nothing is missing.
+    /// </summary>
+    public static IReadOnlyList<AircraftDto> WithTypeCodes(IReadOnlyList<AircraftDto> aircraft, Func<string, string?> typeOf)
+    {
+        List<AircraftDto>? filled = null;
+        for (var i = 0; i < aircraft.Count; i++)
+        {
+            var a = aircraft[i];
+            if (a.Type is not null || typeOf(a.Hex) is not { } type)
+                continue;
+            filled ??= [.. aircraft];
+            filled[i] = a with { Type = type };
+        }
+
+        return filled ?? aircraft;
     }
 
     /// <summary>True when a viewer at (lat,lon) should be served away-mode data.</summary>
@@ -98,7 +119,7 @@ public sealed class SnapshotBroadcaster : BackgroundService
         {
             try
             {
-                var own = FilterOwnFeed(all, v.Lat, v.Lon, v.RadiusKm, _aircraftDb.IsMilitary);
+                var own = FilterOwnFeed(all, v.Lat, v.Lon, v.RadiusKm, _aircraftDb.IsMilitary, _aircraftDb.TypeCode);
                 if (ShouldUseAwayMode(v.Lat, v.Lon, own.Count))
                 {
                     var away = await _awayMode.GetAsync(v.Lat, v.Lon, v.RadiusKm, ct);
@@ -109,7 +130,8 @@ public sealed class SnapshotBroadcaster : BackgroundService
                         continue;
                     }
 
-                    await _hub.Clients.Client(v.ConnectionId).SendAsync("snapshot", away.Aircraft, ct);
+                    await _hub.Clients.Client(v.ConnectionId)
+                              .SendAsync("snapshot", WithTypeCodes(away.Aircraft, _aircraftDb.TypeCode), ct);
                 }
                 else
                 {
