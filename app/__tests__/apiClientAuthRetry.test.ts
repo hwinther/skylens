@@ -97,7 +97,7 @@ test("retries only once: a second 401 after the refresh is reported, not looped"
 
 test("a failed refresh ends the session: signed out, tokens cleared, the 401 surfaces", async () => {
   await tokens.setTokens(VALID);
-  refreshAsync.mockRejectedValue(new Error("invalid_grant"));
+  refreshAsync.mockRejectedValue(Object.assign(new Error("invalid_grant"), { code: "invalid_grant" }));
   let calls = 0;
   const fetchImpl = (async () => {
     calls++;
@@ -123,5 +123,21 @@ test("an injected token source and mock tokens are never refreshed on 401", asyn
     new ApiClient({ baseUrl: "http://x", getToken: () => "injected", fetchImpl }).me(),
   ).rejects.toMatchObject({ status: 401 });
   expect(refreshAsync).not.toHaveBeenCalled();
+  expect(useAuthStore.getState().status).toBe("authenticated");
+});
+
+test("a 401 while the IdP can't be reached keeps the session and does not retry", async () => {
+  await tokens.setTokens(VALID);
+  refreshAsync.mockRejectedValue(new TypeError("Network request failed"));
+  let calls = 0;
+  const fetchImpl = (async () => {
+    calls++;
+    return response(401);
+  }) as unknown as typeof fetch;
+
+  await expect(new ApiClient({ baseUrl: "http://x", fetchImpl }).me()).rejects.toMatchObject({ status: 401 });
+
+  expect(calls).toBe(1);
+  expect(tokens.getTokensSync()).toMatchObject({ accessToken: VALID.accessToken });
   expect(useAuthStore.getState().status).toBe("authenticated");
 });

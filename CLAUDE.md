@@ -98,6 +98,11 @@ npm run coverage:summary          # unit (../app/coverage) + e2e (monocart-cover
   localStorage (`state/persistStorage`, key `skylens.tokens.v1`; SecureStore on native), shared across
   tabs: `refresh.ts` re-reads storage before refreshing and before giving up, and the root layout
   follows the `storage` event. `ApiClient` refreshes once and retries on a 401 with a real session.
+  The session only ends on an OAuth rejection of the refresh token (`invalid_grant` etc., see
+  `src/auth/errors.ts`), with "Your session has ended" in `lastError`; offline/5xx keeps it. `useAuth`
+  builds a fresh PKCE request (state + verifier) per attempt. Native also refreshes on AppState
+  "active" (`useRefreshOnResume`), and `/oauth` reached by a redirect no sign-in waits for (app
+  restarted while the Custom Tab was open) sets a "try again" message.
 - **Local/dev escape hatches**: `Auth:Disabled=true` (Development only) swaps in `DevAuthHandler`
   with a fixed principal. App env: `EXPO_PUBLIC_API_BASE_URL`, `EXPO_PUBLIC_FORCE_LIVE=1` (skip demo
   mode), `EXPO_PUBLIC_HOME_LAT/LON`. `npm run reverse:android` maps the device's port 5000 to the host.

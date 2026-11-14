@@ -3,11 +3,18 @@
  * and refresh. Exposes a hook the sign-in screen and app root use.
  *
  * Flow:
- *  - useAutoDiscovery loads the OIDC discovery document from auth.wsh.no.
- *  - useAuthRequest builds a PKCE (S256) request for the `skylens` public client.
+ *  - useOidcDiscovery loads the OIDC discovery document from auth.wsh.no.
+ *  - useFreshAuthRequest prepares a PKCE (S256) request for the `skylens` public client, with a new
+ *    `state` and code verifier for EVERY attempt (expo's useAuthRequest builds one request per mount
+ *    and reuses its URL, state and verifier on every retry). The URL is built ahead of the press, so
+ *    on web the popup still opens straight from the user gesture.
+ *  - promptAsync opens the IdP: a popup on web, a Custom Tab on Android that comes back through the
+ *    `skylens://oauth` redirect. expo-auth-session turns a redirect whose `state` doesn't match into
+ *    an error result (`state_mismatch`).
  *  - On success we exchange the code for tokens (exchangeCodeAsync), persist them,
- *    and mark the session authenticated. Any failure (popup blocked, IdP error, failed
- *    exchange) returns to "unauthenticated" with a message in authStore.lastError.
+ *    and mark the session authenticated. Any failure (popup blocked, no browser, IdP error, failed
+ *    exchange, network down) returns to "unauthenticated" with a message in authStore.lastError
+ *    (worded in ./errors). Closing the browser is not an error: it just returns to signed out.
  *  - Refresh lives in ./refresh (hook-free) so the hub and the root layout can use it too.
  *
  * Mock mode (dev-only default, see authStore) short-circuits all of this and mints
@@ -25,6 +32,7 @@ import {
   OIDC_SCHEME,
   OIDC_SCOPES,
 } from "./config";
+import { IDP_UNREACHABLE_MESSAGE, signInErrorMessage } from "./errors";
 import { mintMockToken } from "./mockAuth";
 import { ensureFreshAccessToken, toStored } from "./refresh";
 import { clearTokens, setTokens } from "./tokenStore";
@@ -37,6 +45,26 @@ export const OIDC_REDIRECT_URI = AuthSession.makeRedirectUri({
   scheme: OIDC_SCHEME,
   path: OIDC_REDIRECT_PATH,
 });
+
+const AUTH_REQUEST_CONFIG: AuthSession.AuthRequestConfig = {
+  clientId: OIDC_CLIENT_ID,
+  scopes: OIDC_SCOPES,
+  redirectUri: OIDC_REDIRECT_URI,
+  usePKCE: true,
+  // Ask Authelia to include the API audience in the access token.
+  extraParams: { audience: OIDC_AUDIENCE },
+};
+
+/**
+ * True from the moment a sign-in opens the IdP until it has settled (code exchange included). The
+ * native /oauth route reads it to tell the redirect of a sign-in in progress from one that nothing
+ * is waiting for (Android restarted the app while the browser was open).
+ */
+let signInInFlight = false;
+
+export function isSignInInFlight(): boolean {
+  return signInInFlight;
+}
 
 /**
  * Like AuthSession.useAutoDiscovery, but (a) only fetches when `enabled`, (b) swallows fetch/parse
@@ -80,14 +108,39 @@ function useOidcDiscovery(
   };
 }
 
-/** A user-facing message for a failed sign-in attempt. */
-function signInErrorMessage(err: unknown): string {
-  const code = (err as { code?: unknown } | null)?.code;
-  if (code === "ERR_WEB_BROWSER_BLOCKED") {
-    return "The sign-in window was blocked. Allow pop-ups for this site and try again.";
-  }
-  const detail = err instanceof Error && err.message ? ` (${err.message})` : "";
-  return `Sign-in failed${detail}. Try again.`;
+interface PreparedRequest {
+  request: AuthSession.AuthRequest;
+  discovery: AuthSession.DiscoveryDocument;
+  generation: number;
+}
+
+/**
+ * A PKCE request for `generation` with its authorization URL already built, so promptAsync opens the
+ * browser without awaiting anything first. Bumping `generation` spends the current request: the next
+ * one gets a new `state` and code verifier. Null while discovery or the request is still loading.
+ */
+function useFreshAuthRequest(
+  discovery: AuthSession.DiscoveryDocument | null,
+  generation: number,
+): AuthSession.AuthRequest | null {
+  const [prepared, setPrepared] = useState<PreparedRequest | null>(null);
+  useEffect(() => {
+    if (!discovery) return;
+    let alive = true;
+    const request = new AuthSession.AuthRequest(AUTH_REQUEST_CONFIG);
+    request
+      .makeAuthUrlAsync(discovery)
+      .then(() => {
+        if (alive) setPrepared({ request, discovery, generation });
+      })
+      .catch((err: unknown) => {
+        if (alive) console.warn("could not prepare the sign-in request", err);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [discovery, generation]);
+  return prepared?.discovery === discovery && prepared.generation === generation ? prepared.request : null;
 }
 
 export function useAuth() {
@@ -107,17 +160,8 @@ export function useAuth() {
     retry: retryDiscovery,
   } = useOidcDiscovery(OIDC_ISSUER, !mockMode);
 
-  const [request, , promptAsync] = AuthSession.useAuthRequest(
-    {
-      clientId: OIDC_CLIENT_ID,
-      scopes: OIDC_SCOPES,
-      redirectUri: OIDC_REDIRECT_URI,
-      usePKCE: true,
-      // Ask Authelia to include the API audience in the access token.
-      extraParams: { audience: OIDC_AUDIENCE },
-    },
-    discovery,
-  );
+  const [generation, setGeneration] = useState(0);
+  const request = useFreshAuthRequest(discovery, generation);
 
   // Call straight from a press handler: on web the popup only opens inside the user gesture, so
   // nothing may be awaited before promptAsync.
@@ -132,19 +176,19 @@ export function useAuth() {
       // Discovery still loading, or loaded and the PKCE request still being built: just wait.
       // Discovery failed: say so and fetch it again for the next attempt.
       const stillLoading = discoveryPending || discovery != null;
-      setLastError(
-        stillLoading
-          ? "Sign-in is still loading. Try again in a moment."
-          : "Couldn't reach the sign-in service. Check the connection and try again.",
-      );
+      setLastError(stillLoading ? "Sign-in is still loading. Try again in a moment." : IDP_UNREACHABLE_MESSAGE);
       if (!stillLoading) retryDiscovery();
       return;
     }
     setLastError(null);
     setStatus("authenticating");
+    signInInFlight = true;
+    // This request's state and verifier are spent whatever happens next: prepare new ones.
+    setGeneration((g) => g + 1);
     try {
-      const result = await promptAsync();
+      const result = await request.promptAsync(discovery, { windowFeatures: {} });
       if (result.type !== "success" || !result.params.code) {
+        // "dismiss"/"cancel": the user closed the browser. Not an error, just signed out again.
         setStatus("unauthenticated");
         if (result.type === "error") {
           setLastError(signInErrorMessage(result.error ?? new Error("the sign-in service returned an error")));
@@ -169,17 +213,10 @@ export function useAuth() {
       console.warn("sign-in failed", err);
       setStatus("unauthenticated");
       setLastError(signInErrorMessage(err));
+    } finally {
+      signInInFlight = false;
     }
-  }, [
-    mockMode,
-    request,
-    discovery,
-    discoveryPending,
-    retryDiscovery,
-    promptAsync,
-    setStatus,
-    setLastError,
-  ]);
+  }, [mockMode, request, discovery, discoveryPending, retryDiscovery, setStatus, setLastError]);
 
   const signOut = useCallback(async () => {
     setLastError(null);
