@@ -1,16 +1,18 @@
 /**
- * The tiltable Radar: the tilt control (gesture-handler Pan + Tap, plus accessibility actions), the lazy
+ * The tiltable, rotatable Radar: the tilt control (gesture-handler Pan + Tap, plus accessibility actions), the lazy
  * terrain fetch (nothing until the first tilt, gated like every API caller), the bundled demo relief,
  * and the blips staying tappable while tilted. Rendered directly (AircraftRadar) with a stub API client;
  * the Map screen wiring is covered by MapScreen.native.test.tsx.
  */
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { createGestureController, getByGestureTestId } from "react-native-gesture-handler/jest-utils";
 import type { ApiClient } from "@/api/client";
 import { AircraftRadar } from "@/components/AircraftRadar";
 import { TILT_DEG_PER_PX, TILT_PAN_GESTURE_ID, TILT_TAP_GESTURE_ID } from "@/components/RadarTiltControl";
 import { clearRadarTerrainCache } from "@/components/useRadarTerrain";
+import { ROTATE_PAN_GESTURE_ID } from "@/components/useRadarRotation";
 import { useAuthStore } from "@/state/authStore";
 import demoTerrain from "@/mock/demo-terrain.json";
 import { aircraft, resetStores } from "./fixtures";
@@ -61,7 +63,7 @@ describe("Radar tilt", () => {
     const tilt = screen.getByTestId("radar-tilt");
     expect(tilt).toHaveAccessibleName("Radar tilt");
     expect(tilt.props.accessibilityRole).toBe("adjustable");
-    expect(tilt.props.accessibilityValue).toMatchObject({ min: 0, max: 60, now: 0 });
+    expect(tilt.props.accessibilityValue).toMatchObject({ min: 0, max: 80, now: 0 });
     expect(screen.getByTestId("radar-tilt-value")).toHaveTextContent("0°");
     expect(screen.queryByTestId("radar-terrain")).not.toBeOnTheScreen();
     expect(terrain).not.toHaveBeenCalled();
@@ -153,5 +155,69 @@ describe("Radar tilt", () => {
     await act(async () => {});
     expect(terrain).not.toHaveBeenCalled();
     expect(screen.queryByTestId("radar-terrain")).not.toBeOnTheScreen();
+  });
+});
+
+describe("Radar rotation", () => {
+  // The layout above gives a 400 px scope: R = 200 − 18 px; a drag of R·π/2 px turns it a quarter.
+  const QUARTER_PX = ((400 / 2 - 18) * Math.PI) / 2;
+  const nPos = () => {
+    const st = StyleSheet.flatten(screen.getByTestId("radar-cardinal-n").props.style);
+    return { left: st.left as number, top: st.top as number };
+  };
+
+  beforeEach(() => {
+    resetStores();
+    clearRadarTerrainCache();
+  });
+
+  it("starts north up, with no north-up button", async () => {
+    await renderRadar();
+    expect(screen.queryByTestId("radar-north-up")).not.toBeOnTheScreen();
+  });
+
+  it("a horizontal drag turns the scope; the north-up button appears and turns it back", async () => {
+    await renderRadar({ tiltDeg: 45, demoMode: true });
+    const before = nPos();
+    const pan = createGestureController(getByGestureTestId(ROTATE_PAN_GESTURE_ID));
+    await act(async () => {
+      pan.begin({ translationX: 0 });
+      pan.activate({ translationX: 0 });
+      pan.update({ translationX: -QUARTER_PX / 2 });
+      pan.end({ translationX: -QUARTER_PX });
+    });
+    // Facing east: N has swung from the top to the left of the scope, and the relief is still drawn.
+    const turned = nPos();
+    expect(turned.left).toBeLessThan(before.left - 100);
+    expect(screen.getByTestId("radar-terrain")).toBeOnTheScreen();
+    const northUp = screen.getByTestId("radar-north-up");
+    expect(northUp).toHaveAccessibleName("North up");
+
+    await fireEvent.press(northUp);
+    expect(screen.queryByTestId("radar-north-up")).not.toBeOnTheScreen();
+    expect(nPos()).toEqual(before);
+  });
+
+  it("a blip press that is really a rotation drag doesn't open the card; a later tap does", async () => {
+    const { onSelect } = await renderRadar();
+    const pan = createGestureController(getByGestureTestId(ROTATE_PAN_GESTURE_ID));
+    await act(async () => {
+      pan.begin({ translationX: 0 });
+      pan.activate({ translationX: 0 });
+      pan.update({ translationX: 40 });
+    });
+    await fireEvent.press(screen.getByTestId("map-ac-abc123"));
+    expect(onSelect).not.toHaveBeenCalled();
+    await act(async () => {
+      pan.end({ translationX: 40 });
+    });
+    const now = Date.now();
+    const clock = jest.spyOn(Date, "now").mockReturnValue(now + 1000);
+    try {
+      await fireEvent.press(screen.getByTestId("map-ac-abc123"));
+      expect(onSelect).toHaveBeenCalledWith("abc123");
+    } finally {
+      clock.mockRestore();
+    }
   });
 });

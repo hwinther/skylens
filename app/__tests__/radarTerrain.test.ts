@@ -1,11 +1,14 @@
 import { clipLineToCircle, contourLines } from "@/radar/contours";
-import { makeRadarProjection } from "@/radar/projection";
+import { makeRadarProjection, projectPoint, r1 } from "@/radar/projection";
+import { fromViewKm } from "@/radar/rotation";
 import { roundCentre, shouldRefetchTerrain, terrainRadiusFor } from "@/radar/terrainFetch";
 import {
   COAST_LEVEL_M,
   MAX_RIDGE_POINTS,
   MAX_RIDGE_ROWS,
+  buildTerrainBase,
   buildTerrainGeometry,
+  buildTerrainRidges,
   ridgeRowsFor,
   smoothLand,
 } from "@/radar/terrainGeometry";
@@ -297,6 +300,49 @@ describe("terrainPaths", () => {
     expect(Math.max(...ys) - Math.min(...ys)).toBeLessThan(0.2);
     // Tilted: the summit stands well above the row's sea-level baseline.
     expect(Math.max(...ysOf(tm.fill)) - Math.min(...ysOf(tm.stroke))).toBeGreaterThan(15);
+  });
+});
+
+describe("terrain under a turned view", () => {
+  // A ridge running north–south 10 km east of the observer, 600 m at its crest.
+  const ridge = makeGrid(65, 1, (x, y) => (Math.abs(x - 10) < 6 && Math.abs(y) < 20 ? 600 - 90 * Math.abs(x - 10) : 0));
+
+  it("north up, the split builders give exactly the combined geometry", () => {
+    const combined = buildTerrainGeometry(ridge, { dx: 0, dy: 0 }, 30, { ridgeRows: 20 });
+    const base = buildTerrainBase(ridge, { dx: 0, dy: 0 }, 30);
+    const rows = buildTerrainRidges(ridge, { dx: 0, dy: 0 }, 30, { ridgeRows: 20 });
+    expect(combined).toEqual({ ...base, ...rows, capped: base.capped || rows.capped });
+    expect(rows.ridgeBearingDeg).toBe(0);
+  });
+
+  it("samples the rows across the screen for the view bearing, far to near", () => {
+    // Facing east (90°): the ridge lies across the screen, 10 km ahead.
+    const rows = buildTerrainRidges(ridge, { dx: 0, dy: 0 }, 30, { ridgeRows: 30, viewBearingDeg: 90 });
+    expect(rows.ridgeBearingDeg).toBe(90);
+    const ys = rows.ridges.map((r) => r.yKm);
+    expect(ys).toEqual([...ys].sort((a, b) => b - a));
+    // Rows only where the ridge is (10 ± 6 km up the screen), every sample on it on the ground.
+    for (const row of rows.ridges) {
+      expect(Math.abs(row.yKm - 10)).toBeLessThan(6.5);
+      for (const run of row.runs)
+        for (let i = 0; i < run.length; i += 2) {
+          const g = fromViewKm(run[i], row.yKm, 90);
+          expect(Math.abs(g.x - 10)).toBeLessThan(6.6);
+        }
+    }
+    // The row along the crest stands near the full height.
+    const crest = rows.ridges.reduce((a, b) => (Math.abs(b.yKm - 10) < Math.abs(a.yKm - 10) ? b : a));
+    expect(Math.max(...crest.runs[0].filter((_, i) => i % 2 === 1))).toBeGreaterThan(450);
+  });
+
+  it("projects rows built for one bearing back onto the ground, so they stay registered while turning", () => {
+    const geom = buildTerrainGeometry(ridge, { dx: 0, dy: 0 }, 30, { ridgeRows: 20, viewBearingDeg: 45 });
+    const p = makeRadarProjection({ size: 360, rangeKm: 30, tiltDeg: 0, bearingDeg: 47 });
+    const paths = terrainPaths(geom, p);
+    const row = geom.ridges[0];
+    const g = fromViewKm(row.runs[0][0], row.yKm, 45);
+    const pt = projectPoint(p, g.x, g.y);
+    expect(paths.ridges[0].stroke.startsWith(`M${r1(pt.x)} ${r1(pt.y)}`)).toBe(true);
   });
 });
 

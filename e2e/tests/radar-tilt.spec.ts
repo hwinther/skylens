@@ -69,7 +69,7 @@ test('the radar tilts into a relief view of the area, fetched once from the terr
   await page.mouse.down()
   for (let i = 1; i <= 15; i++) await page.mouse.move(cx, cy - i * 6)
   await page.mouse.up()
-  await expect(page.getByTestId('radar-tilt-value')).toHaveText('60°')
+  await expect(page.getByTestId('radar-tilt-value')).toHaveText('80°')
 
   // The same area and range reuse the grid: no second request.
   expect(terrainRequests).toHaveLength(1)
@@ -77,7 +77,7 @@ test('the radar tilts into a relief view of the area, fetched once from the terr
   // The tilt is remembered across a reload.
   await page.reload()
   await page.getByTestId('map-view-radar').click()
-  await expect(page.getByTestId('radar-tilt-value')).toHaveText('60°')
+  await expect(page.getByTestId('radar-tilt-value')).toHaveText('80°')
   await expect(page.getByTestId('radar-terrain')).toHaveCount(1, { timeout: 30_000 })
 
   // A click on a tilted scope flattens it: the relief goes, the classic scope is back.

@@ -7,6 +7,7 @@
  */
 
 import { projectPoint, r1, type RadarProjection } from "./projection";
+import { fromViewKm } from "./rotation";
 import type { TerrainGeometry } from "./terrainGeometry";
 
 export interface RidgePath {
@@ -14,7 +15,7 @@ export interface RidgePath {
   fill: string;
   /** The profile line itself. */
   stroke: string;
-  /** 0 for the farthest (northernmost) row → 1 for the nearest: nearer rows draw brighter. */
+  /** 0 for the farthest (top of the screen) row → 1 for the nearest: nearer rows draw brighter. */
   depth: number;
 }
 
@@ -44,20 +45,28 @@ export function terrainPaths(geom: TerrainGeometry, p: RadarProjection): Terrain
     }
   }
 
+  // The rows are in the view frame they were sampled for. Back to the ground, then through the current
+  // projection: they stay registered with the land and blips even while a rebuild for a new view
+  // bearing is pending (only their painter's order lags a few degrees behind a drag).
+  const rb = geom.ridgeBearingDeg;
+  const at = (x: number, y: number, z = 0) => {
+    const g = fromViewKm(x, y, rb);
+    return projectPoint(p, g.x, g.y, z);
+  };
   const rows = geom.ridges.length;
   const ridges: RidgePath[] = geom.ridges.map((row, k) => {
     const fill: string[] = [];
     const stroke: string[] = [];
     for (const run of row.runs) {
       for (let i = 0; i < run.length; i += 2) {
-        const pt = projectPoint(p, run[i], row.yKm, run[i + 1]);
+        const pt = at(run[i], row.yKm, run[i + 1]);
         const cmd = `${i === 0 ? "M" : "L"}${r1(pt.x)} ${r1(pt.y)}`;
         fill.push(cmd);
         stroke.push(cmd);
       }
-      // Close the silhouette along sea level (a straight line on screen: the row has one northing).
-      const east = projectPoint(p, run[run.length - 2], row.yKm);
-      const west = projectPoint(p, run[0], row.yKm);
+      // Close the silhouette along sea level (a straight line on screen: the row is one ground line).
+      const east = at(run[run.length - 2], row.yKm);
+      const west = at(run[0], row.yKm);
       fill.push(`L${r1(east.x)} ${r1(east.y)}L${r1(west.x)} ${r1(west.y)}Z`);
     }
     return { fill: fill.join(""), stroke: stroke.join(""), depth: rows > 1 ? k / (rows - 1) : 1 };
