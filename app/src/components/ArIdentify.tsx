@@ -10,8 +10,11 @@
  *    landmarks prepared once per observer — never one request per frame.
  *
  * The long-press catcher (ArIdentifyTouch) is the overlay's underlay, beneath its labels, so taps on
- * labels still open their cards, and a drag (demo / web drag-to-look) fails the long-press before it fires. The
- * beam, reticle, result card and toggle (ArIdentifyLayer) sit above the overlay.
+ * labels still open their cards, and a drag (demo / web drag-to-look) fails the long-press before it fires.
+ * A hold that starts ON a label identifies too: the overlay hands onLongPressAt to every label through
+ * LabelLongPressContext (see LabelPressable), so a label never hides the landscape behind it from
+ * identify, and that hold's release does not open the label's card. The beam, reticle, result card and
+ * toggle (ArIdentifyLayer) sit above the overlay, so labels never cover them.
  */
 
 import { alpha, color, font, radius, space } from "@/theme";
@@ -45,7 +48,7 @@ import {
   type PreparedLandmark,
   type ProjectionConfig,
 } from "@/ar";
-import { DRAG_SLOP_PX } from "./dragSlop";
+import { DRAG_SLOP_PX, LONG_PRESS_MS } from "./dragSlop";
 import { useLandmarks, type LandmarksStatus } from "./useLandmarks";
 import {
   identifyAccessibleLabel,
@@ -53,8 +56,8 @@ import {
   identifySummary,
 } from "./identifyFormat";
 
-/** How long a press must be held to identify (a little under RN's 500 ms default, still clearly a hold). */
-export const LONG_PRESS_MS = 450;
+/** How long a press must be held to identify (shared with the labels' hold, see dragSlop). */
+export { LONG_PRESS_MS };
 /** Viewfinder re-identify cadence; between ticks the pose must also have moved VIEWFINDER_MIN_MOVE_DEG. */
 export const IDENTIFY_INTERVAL_MS = 250;
 const VIEWFINDER_MIN_MOVE_DEG = 0.2;

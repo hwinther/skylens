@@ -1,11 +1,15 @@
 /**
- * The one "this press became a drag" threshold for the AR view. Drag-to-look is a gesture-handler Pan,
- * and anything that should only react to a still press (a label tap, the identify long-press) gives up
- * once the pointer has moved this far.
+ * The press thresholds for the AR view. Drag-to-look is a gesture-handler Pan, and anything that
+ * should only react to a still press (a label tap, the identify long-press) gives up once the pointer
+ * has moved DRAG_SLOP_PX; a still press held for LONG_PRESS_MS identifies, on the bare view and on a
+ * label alike.
  */
 
 /** Movement (px) after which a press counts as a drag, not a tap or a hold. */
 export const DRAG_SLOP_PX = 10;
+
+/** How long a press must be held to identify (a little under RN's 500 ms default, still clearly a hold). */
+export const LONG_PRESS_MS = 450;
 
 export interface PagePoint {
   pageX: number;

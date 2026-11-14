@@ -9,9 +9,12 @@
  * - Press-and-hold on the horizon identifies the point under the pointer: a result card plus a laser
  *   beam. Which landmark sits there depends on the dataset, so the sweep below only requires that SOME
  *   named landmark turns up while turning; the match itself is unit-tested in app/__tests__.
+ * - A hold that starts ON a label identifies too (a label must not hide the landscape behind it), and
+ *   its release does not open the label's card; a plain click on the label still does, and a drag that
+ *   starts on it does neither.
  */
 
-import { dragView, freePoint, openArAtHorizon } from './arView'
+import { airportLabel, dragView, freePoint, openArAtHorizon } from './arView'
 import { expect, type Page, test } from './fixtures'
 
 /**
@@ -100,4 +103,70 @@ test('press-and-hold on the horizon names a landmark with a laser beam, and clos
   await page.getByTestId('ar-identify-close').click()
   await expect(card).toHaveCount(0)
   await expect(page.getByTestId('ar-identify-beam')).toHaveCount(0)
+})
+
+/** Let the page draw a few frames (the overlay redraws at ~20 fps), so a card a click opened is there. */
+async function settleFrames(page: Page) {
+  await page.evaluate(
+    () =>
+      new Promise<void>((done) => {
+        const t0 = performance.now()
+        const frame = () => (performance.now() - t0 >= 250 ? done() : requestAnimationFrame(frame))
+        requestAnimationFrame(frame)
+      }),
+  )
+}
+
+/** Turn from east to north, toward the airports north of the fixture home (as ar-label-tap does). */
+async function faceNorthAtHorizon(page: Page) {
+  await openArAtHorizon(page)
+  const body = (await page.locator('body').boundingBox())!
+  const cy = body.y + body.height / 2
+  await dragView(page, cy, -300, 0)
+  await dragView(page, cy, -300, 0)
+  await expect(page.getByTestId('compass-N')).toBeVisible()
+}
+
+test('a hold that starts on a label identifies the direction behind it without opening its card', async ({ page }) => {
+  await faceNorthAtHorizon(page)
+  const card = page.getByTestId('detail-card')
+  const result = page.getByTestId('ar-identify-result')
+
+  // An airport label on the horizon: fixed on the sky, and where landmarks are too.
+  const target = await airportLabel(page, 80)
+  const label = page.getByTestId(`ar-airport-${target.ident}`)
+  const at = { x: target.box.x + target.box.width / 2, y: target.box.y + target.box.height / 2 }
+  // The press really starts on the label, not on identify's catcher beneath it.
+  const owner = await page.evaluate(
+    ({ x, y }) => document.elementFromPoint(x, y)?.closest('[data-testid^="ar-airport-"]:not([data-testid^="ar-airport-icon-"])')?.getAttribute('data-testid'),
+    at,
+  )
+  expect(owner).toBe(`ar-airport-${target.ident}`)
+
+  await pressAndHold(page, at.x, at.y)
+  await expect(page.getByTestId('ar-identify-name')).not.toHaveText(/Looking up landmarks|Landmarks unavailable/)
+  await expect(page.getByTestId('ar-identify-marker')).toBeVisible()
+  // The release that ended the hold was not a tap on the label.
+  await settleFrames(page)
+  await expect(card).toHaveCount(0)
+  await expect(result).toBeVisible()
+
+  // A plain click on the same label still opens its card (which replaces the identify result).
+  await label.click()
+  await expect(card).toBeVisible({ timeout: 15_000 })
+  await expect(card).toHaveAttribute('aria-label', 'Airport details')
+  await expect(result).toHaveCount(0)
+})
+
+test('a drag that starts on a label neither identifies nor opens its card', async ({ page }) => {
+  await faceNorthAtHorizon(page)
+  const target = await airportLabel(page, 260)
+  const from = { x: target.box.x + target.box.width / 2, y: target.box.y + target.box.height / 2 }
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  await page.mouse.move(from.x + 60, from.y, { steps: 12 })
+  await page.mouse.up()
+  await settleFrames(page)
+  await expect(page.getByTestId('detail-card')).toHaveCount(0)
+  await expect(page.getByTestId('ar-identify-result')).toHaveCount(0)
 })

@@ -11,7 +11,7 @@
  * zustand) and is consumed by the overlay's rAF loop.
  */
 
-import { alpha, color } from "@/theme";
+import { alpha, color, space } from "@/theme";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Image, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
@@ -43,6 +43,8 @@ import {
 import { airportFilter } from "@/components/webmap/airportStyle";
 import { useDetailSelection } from "@/components/useDetailSelection";
 import { ArIdentifyLayer, ArIdentifyTouch, useArIdentify } from "@/components/ArIdentify";
+import { AR_FILTER_BUTTON, ArFilter } from "@/components/ArFilter";
+import { arFilterChips, arGroupVisibility, detailHiddenByFilter, hiddenArGroupCount } from "@/state/arFilter";
 import { RADIO_SOURCES, satGroupsFromSettings, type IdentifyObserver } from "@/ar";
 import { ApiClient } from "@/api/client";
 import { getApiBaseUrl } from "@/api/config";
@@ -62,6 +64,8 @@ const BANNER_CLEARANCE = 44;
 const NO_SIGNAL_LOST: SignalLostIds = { aircraft: [], vessels: [] };
 /** Demo-mode identify observer: the demo home at the same 100 m eye height the demo pose uses. */
 const DEMO_IDENTIFY_OBSERVER: IdentifyObserver = { lat: DEMO_HOME.lat, lon: DEMO_HOME.lon, alt: 100 };
+/** The Layers button sits right above the identify toggle (same size, bottom-right corner). */
+const AR_FILTER_BOTTOM = space.lg + AR_FILTER_BUTTON + space.sm;
 
 export default function ArScreen() {
   const demoMode = useSettingsStore((s) => s.demoMode);
@@ -82,6 +86,25 @@ export default function ArScreen() {
   const showRadioSky = useSettingsStore((s) => s.showRadioSky);
   const showAirports = useSettingsStore((s) => s.showAirports);
   const showSmallAirfields = useSettingsStore((s) => s.showSmallAirfields);
+  const arHiddenGroups = useSettingsStore((s) => s.arHiddenGroups);
+  const toggleArGroup = useSettingsStore((s) => s.toggleArGroup);
+  const setArHiddenGroups = useSettingsStore((s) => s.setArHiddenGroups);
+
+  // AR-only filter on top of the Settings layers: decides what the overlay DRAWS, never what is fetched
+  // or subscribed (the hooks below stay gated on the Settings toggles alone, so the List, Map and
+  // cockpit are unaffected and un-hiding is instant). A hidden pass is skipped in the overlay's loop.
+  const arLayers = {
+    showShips,
+    showAton,
+    showSatellites,
+    showPlanets,
+    showEcliptic,
+    showRadioSky,
+    showAirports,
+  };
+  const arVisible = arGroupVisibility(arLayers, arHiddenGroups);
+  const arChips = arFilterChips(arLayers, arHiddenGroups);
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   // One selection slot for all six detail cards: the cards are non-modal, so tapping another object
@@ -229,6 +252,13 @@ export default function ArScreen() {
   const closeDetail = useCallback(() => {
     if (detailSelection) detailSet[detailSelection.kind](null);
   }, [detailSelection, detailSet]);
+  // Hiding the open card's group closes the card: a card for a label that is no longer drawn reads as a bug.
+  const detailKind = detailSelection?.kind;
+  const detailHidden = detailHiddenByFilter(detailKind, arVisible);
+  useEffect(() => {
+    if (detailHidden && detailKind) detailSet[detailKind](null);
+  }, [detailHidden, detailKind, detailSet]);
+
   const identify = useArIdentify({
     client,
     observer: identifyObserver,
@@ -278,24 +308,25 @@ export default function ArScreen() {
   const overlay = (
     <ArOverlay
       aircraft={aircraft}
+      showAircraft={arVisible.aircraft}
       snapshotAt={snapshotAt}
       vessels={vessels}
       vesselsSnapshotAt={vesselsSnapshotAt}
-      showShips={showShips}
-      showAton={showAton}
+      showShips={showShips && arVisible.vessels}
+      showAton={showAton && arVisible.vessels}
       satellites={satHook.visible}
       satellitesSampledAt={satHook.satellitesSampledAt}
-      showSatellites={showSatellites}
+      showSatellites={showSatellites && arVisible.satellites}
       planets={planetHook.visible}
-      showPlanets={showPlanets}
+      showPlanets={showPlanets && arVisible.sky}
       ecliptic={planetHook.ecliptic}
-      showEcliptic={showEcliptic}
+      showEcliptic={showEcliptic && arVisible.sky}
       onSelectPlanet={setSelectedPlanet}
       radioTargets={radioHook.visible}
-      showRadioSky={showRadioSky}
+      showRadioSky={showRadioSky && arVisible.sky}
       onSelectRadio={setSelectedRadioKey}
       airports={shownAirports}
-      showAirports={showAirports}
+      showAirports={showAirports && arVisible.airports}
       onSelectAirport={setSelectedAirportIdent}
       poseRef={poseRef}
       positionRef={live.positionRef}
@@ -306,8 +337,10 @@ export default function ArScreen() {
       onSignalLost={setSignalLost}
       // No camera feed (native without permission, or web without a working AR camera) → synthetic horizon.
       showHorizon={!demoMode && !cameraPermission?.granted && !webCamShown}
-      // AR identify's long-press catcher, beneath the labels so label taps still reach them.
+      // AR identify's long-press catcher, beneath the labels so label taps still reach them; a hold that
+      // starts on a label identifies through the labels themselves (onLabelLongPress).
       underlay={polarisCalibrating ? null : <ArIdentifyTouch onLongPressAt={identify.onLongPressAt} />}
+      onLabelLongPress={polarisCalibrating ? null : identify.onLongPressAt}
     />
   );
 
@@ -416,6 +449,20 @@ export default function ArScreen() {
           hFovDeg={hFovDeg}
           suppressed={detail.open || showLegend}
           cardTop={panelTop + 8 + (cameraDenied ? BANNER_CLEARANCE : 0)}
+        />
+      )}
+
+      {polarisCalibrating ? null : (
+        <ArFilter
+          chips={arChips}
+          hiddenCount={hiddenArGroupCount(arChips)}
+          open={filterOpen}
+          onToggleOpen={() => setFilterOpen((o) => !o)}
+          onToggleGroup={toggleArGroup}
+          onShowAll={() => setArHiddenGroups([])}
+          // Hides what is offered (the groups on in Settings), so one turned on later shows up.
+          onHideAll={() => setArHiddenGroups(arChips.map((c) => c.group))}
+          bottom={AR_FILTER_BOTTOM}
         />
       )}
 

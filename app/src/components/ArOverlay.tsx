@@ -45,6 +45,7 @@ import { SatelliteLabel } from "./SatelliteLabel";
 import { PlanetLabel } from "./PlanetLabel";
 import { RadioLabel } from "./RadioLabel";
 import { AirportArLabel } from "./AirportArLabel";
+import { LabelLongPressContext, type LabelLongPressHandler } from "./LabelPressable";
 import { airportArPriority, airportShortLabel } from "./webmap/airportStyle";
 import { PositionTracker, type TrackPoint } from "@/ar/positionTracker";
 import { lostAgeS } from "@/ar/signalLost";
@@ -61,6 +62,8 @@ export interface SignalLostIds {
 
 export interface ArOverlayProps {
   aircraft: AircraftDto[];
+  /** Draw the aircraft labels and their edge arrows (default on; the AR filter can hide them). */
+  showAircraft?: boolean;
   /** Epoch ms the aircraft snapshot was received (for dead-reckoning age). */
   snapshotAt: number;
   /** AIS vessels (ships + AtoN) for the horizon surface band. */
@@ -115,6 +118,9 @@ export interface ArOverlayProps {
   /** Drawn first, beneath every label (AR identify's long-press catcher): inside the overlay, so on web
    *  it is what the pointer hits wherever no label is, while labels on top still take their taps. */
   underlay?: React.ReactNode;
+  /** A still hold that starts on a label (page coordinates): AR identify, so a label never hides the
+   *  direction behind it. Handed to every label through LabelLongPressContext; omitted = no hold. */
+  onLabelLongPress?: LabelLongPressHandler | null;
 }
 
 interface RenderLabel {
@@ -231,6 +237,7 @@ const CARDINALS: { label: string; az: number; primary: boolean }[] = [
 
 export function ArOverlay({
   aircraft,
+  showAircraft = true,
   snapshotAt,
   vessels = NO_VESSELS_INPUT,
   vesselsSnapshotAt = 0,
@@ -259,6 +266,7 @@ export function ArOverlay({
   onSignalLost,
   showHorizon = false,
   underlay,
+  onLabelLongPress = null,
 }: ArOverlayProps) {
   const { width, height } = useWindowDimensions();
   const [labels, setLabels] = useState<RenderLabel[]>([]);
@@ -304,6 +312,7 @@ export function ArOverlay({
   // Keep the latest inputs in refs so the rAF loop (started once) reads fresh data.
   // Syncing happens in an effect (not during render) so ref writes stay side-effects.
   const aircraftRef = useRef(aircraft);
+  const showAircraftRef = useRef(showAircraft);
   const hFovRef = useRef(hFovDeg);
   const showHorizonRef = useRef(showHorizon);
   const vesselsRef = useRef(vessels);
@@ -322,6 +331,7 @@ export function ArOverlay({
   const showEclipticRef = useRef(showEcliptic);
   useEffect(() => {
     aircraftRef.current = aircraft;
+    showAircraftRef.current = showAircraft;
     hFovRef.current = hFovDeg;
     showHorizonRef.current = showHorizon;
     vesselsRef.current = vessels;
@@ -338,7 +348,7 @@ export function ArOverlay({
     showAirportsRef.current = showAirports;
     eclipticRef.current = ecliptic;
     showEclipticRef.current = showEcliptic;
-  }, [aircraft, hFovDeg, showHorizon, vessels, showShips, showAton, satellites, satellitesSampledAt, showSatellites, planets, showPlanets, radioTargets, showRadioSky, airports, showAirports, ecliptic, showEcliptic]);
+  }, [aircraft, showAircraft, hFovDeg, showHorizon, vessels, showShips, showAton, satellites, satellitesSampledAt, showSatellites, planets, showPlanets, radioTargets, showRadioSky, airports, showAirports, ecliptic, showEcliptic]);
 
   // The signal-lost callback lives in its own ref so the rAF loop never restarts for it.
   const onSignalLostRef = useRef(onSignalLost);
@@ -383,7 +393,8 @@ export function ArOverlay({
       const lostAircraft: string[] = [];
       const lostVessels: string[] = [];
 
-      if (observer) {
+      // Hidden by the AR filter: no labels, no edge arrows, no lost reports (the tracker keeps syncing).
+      if (observer && showAircraftRef.current) {
         for (const ac of aircraftRef.current) {
           // Unknown to the tracker = no position in the snapshot.
           if (!aircraftTracker.positionAt(ac.hex, nowMs, pos)) continue;
@@ -668,146 +679,148 @@ export function ArOverlay({
   }, [width, height, poseRef, positionRef, aircraftTracker, vesselTracker]);
 
   return (
-    <View style={[StyleSheet.absoluteFill, { pointerEvents: "box-none" }]}>
-      {underlay}
-      {showHorizon && horizonY != null && (
-        <>
-          <View
-            testID="ar-ground"
-            style={[styles.ground, { top: Math.max(0, Math.min(height, horizonY)) }]}
+    <LabelLongPressContext.Provider value={onLabelLongPress}>
+      <View style={[StyleSheet.absoluteFill, { pointerEvents: "box-none" }]}>
+        {underlay}
+        {showHorizon && horizonY != null && (
+          <>
+            <View
+              testID="ar-ground"
+              style={[styles.ground, { top: Math.max(0, Math.min(height, horizonY)) }]}
+            />
+            {horizonY >= 0 && horizonY <= height && (
+              <View testID="ar-horizon" style={[styles.horizon, { top: horizonY }]} />
+            )}
+            {cardinals.map((c) => (
+              <Text
+                key={c.label}
+                testID={`compass-${c.label}`}
+                style={[
+                  styles.cardinal,
+                  c.primary && styles.cardinalPrimary,
+                  { left: c.x - 10, top: horizonY + 4 },
+                ]}
+              >
+                {c.label}
+              </Text>
+            ))}
+          </>
+        )}
+        {airportLabels.map((a) => (
+          <AirportArLabel
+            key={a.airport.ident}
+            airport={a.airport}
+            x={a.x}
+            y={a.y}
+            anchorY={a.anchorY}
+            onPress={onSelectAirport ?? noopSelectAirport}
           />
-          {horizonY >= 0 && horizonY <= height && (
-            <View testID="ar-horizon" style={[styles.horizon, { top: horizonY }]} />
-          )}
-          {cardinals.map((c) => (
-            <Text
-              key={c.label}
-              testID={`compass-${c.label}`}
-              style={[
-                styles.cardinal,
-                c.primary && styles.cardinalPrimary,
-                { left: c.x - 10, top: horizonY + 4 },
-              ]}
-            >
-              {c.label}
-            </Text>
-          ))}
-        </>
-      )}
-      {airportLabels.map((a) => (
-        <AirportArLabel
-          key={a.airport.ident}
-          airport={a.airport}
-          x={a.x}
-          y={a.y}
-          anchorY={a.anchorY}
-          onPress={onSelectAirport ?? noopSelectAirport}
-        />
-      ))}
-      {airportClusters.map((c, i) => (
-        <View key={`acl${i}`} style={[styles.airportCluster, { left: c.x, top: c.y }]}>
-          <Text style={styles.airportClusterText}>+{c.count}</Text>
-        </View>
-      ))}
-      {vesselLabels.map((v) => (
-        <VesselLabel
-          key={v.vessel.mmsi}
-          vessel={v.vessel}
-          x={v.x}
-          y={v.y}
-          anchorY={v.anchorY}
-          rangeKm={v.rangeKm}
-          lostAgeS={v.lostAgeS}
-          onPress={onSelectVessel}
-        />
-      ))}
-      {vesselClusters.map((c, i) => (
-        <View key={`vcl${i}`} style={[styles.vesselCluster, { left: c.x, top: c.y }]}>
-          <Text style={styles.vesselClusterText}>+{c.count}</Text>
-        </View>
-      ))}
-      {satLabels.map((s) => (
-        <SatelliteLabel
-          key={s.satellite.noradId}
-          satellite={s.satellite}
-          x={s.x}
-          y={s.y}
-          anchorY={s.anchorY}
-          onPress={onSelectSatellite ?? noopSelectSatellite}
-        />
-      ))}
-      {satClusters.map((c, i) => (
-        <View key={`scl${i}`} style={[styles.satCluster, { left: c.x, top: c.y }]}>
-          <Text style={styles.satClusterText}>+{c.count}</Text>
-        </View>
-      ))}
-      {eclipticMarks.map((m, i) => (
-        <View key={`ecl${i}`} style={[styles.eclipticDot, { left: m.x - 1.5, top: m.y - 1.5 }]} />
-      ))}
-      {planetLabels.map((p) => (
-        <PlanetLabel
-          key={p.planet.body}
-          planet={p.planet}
-          x={p.x}
-          y={p.y}
-          anchorY={p.anchorY}
-          onPress={onSelectPlanet ?? noopSelectPlanet}
-        />
-      ))}
-      {planetClusters.map((c, i) => (
-        <View key={`pcl${i}`} style={[styles.planetCluster, { left: c.x, top: c.y }]}>
-          <Text style={styles.planetClusterText}>+{c.count}</Text>
-        </View>
-      ))}
-      {radioLabels.map((r) => (
-        <RadioLabel
-          key={r.target.key}
-          target={r.target}
-          x={r.x}
-          y={r.y}
-          anchorY={r.anchorY}
-          onPress={onSelectRadio ?? noopSelectRadio}
-        />
-      ))}
-      {radioClusters.map((c, i) => (
-        <View key={`rcl${i}`} style={[styles.radioCluster, { left: c.x, top: c.y }]}>
-          <Text style={styles.radioClusterText}>+{c.count}</Text>
-        </View>
-      ))}
-      {labels.map((l) => (
-        <AircraftLabel
-          key={l.aircraft.hex}
-          aircraft={l.aircraft}
-          x={l.x}
-          y={l.y}
-          anchorY={l.anchorY}
-          rangeKm={l.rangeKm}
-          lostAgeS={l.lostAgeS}
-          onPress={onSelect}
-        />
-      ))}
-      {clusters.map((c, i) => (
-        <View key={`cl${i}`} style={[styles.cluster, { left: c.x, top: c.y }]}>
-          <Text style={styles.clusterText}>+{c.count}</Text>
-        </View>
-      ))}
-      {arrows.map((a) => (
-        <View
-          key={`ar${a.hex}`}
-          testID={`ac-arrow-${a.hex}`}
-          style={[styles.arrow, arrowPosition(a.bearingDeg, width, height)]}
-        >
-          {a.lost ? (
-            // Signal lost: a hollow, dimmed arrow, like the label's hollow anchor dot.
-            <Text testID={`ar-ac-arrow-lost-${a.hex}`} style={[styles.arrowText, styles.arrowTextLost]}>
-              △
-            </Text>
-          ) : (
-            <Text style={styles.arrowText}>▲</Text>
-          )}
-        </View>
-      ))}
-    </View>
+        ))}
+        {airportClusters.map((c, i) => (
+          <View key={`acl${i}`} style={[styles.airportCluster, { left: c.x, top: c.y }]}>
+            <Text style={styles.airportClusterText}>+{c.count}</Text>
+          </View>
+        ))}
+        {vesselLabels.map((v) => (
+          <VesselLabel
+            key={v.vessel.mmsi}
+            vessel={v.vessel}
+            x={v.x}
+            y={v.y}
+            anchorY={v.anchorY}
+            rangeKm={v.rangeKm}
+            lostAgeS={v.lostAgeS}
+            onPress={onSelectVessel}
+          />
+        ))}
+        {vesselClusters.map((c, i) => (
+          <View key={`vcl${i}`} style={[styles.vesselCluster, { left: c.x, top: c.y }]}>
+            <Text style={styles.vesselClusterText}>+{c.count}</Text>
+          </View>
+        ))}
+        {satLabels.map((s) => (
+          <SatelliteLabel
+            key={s.satellite.noradId}
+            satellite={s.satellite}
+            x={s.x}
+            y={s.y}
+            anchorY={s.anchorY}
+            onPress={onSelectSatellite ?? noopSelectSatellite}
+          />
+        ))}
+        {satClusters.map((c, i) => (
+          <View key={`scl${i}`} style={[styles.satCluster, { left: c.x, top: c.y }]}>
+            <Text style={styles.satClusterText}>+{c.count}</Text>
+          </View>
+        ))}
+        {eclipticMarks.map((m, i) => (
+          <View key={`ecl${i}`} style={[styles.eclipticDot, { left: m.x - 1.5, top: m.y - 1.5 }]} />
+        ))}
+        {planetLabels.map((p) => (
+          <PlanetLabel
+            key={p.planet.body}
+            planet={p.planet}
+            x={p.x}
+            y={p.y}
+            anchorY={p.anchorY}
+            onPress={onSelectPlanet ?? noopSelectPlanet}
+          />
+        ))}
+        {planetClusters.map((c, i) => (
+          <View key={`pcl${i}`} style={[styles.planetCluster, { left: c.x, top: c.y }]}>
+            <Text style={styles.planetClusterText}>+{c.count}</Text>
+          </View>
+        ))}
+        {radioLabels.map((r) => (
+          <RadioLabel
+            key={r.target.key}
+            target={r.target}
+            x={r.x}
+            y={r.y}
+            anchorY={r.anchorY}
+            onPress={onSelectRadio ?? noopSelectRadio}
+          />
+        ))}
+        {radioClusters.map((c, i) => (
+          <View key={`rcl${i}`} style={[styles.radioCluster, { left: c.x, top: c.y }]}>
+            <Text style={styles.radioClusterText}>+{c.count}</Text>
+          </View>
+        ))}
+        {labels.map((l) => (
+          <AircraftLabel
+            key={l.aircraft.hex}
+            aircraft={l.aircraft}
+            x={l.x}
+            y={l.y}
+            anchorY={l.anchorY}
+            rangeKm={l.rangeKm}
+            lostAgeS={l.lostAgeS}
+            onPress={onSelect}
+          />
+        ))}
+        {clusters.map((c, i) => (
+          <View key={`cl${i}`} style={[styles.cluster, { left: c.x, top: c.y }]}>
+            <Text style={styles.clusterText}>+{c.count}</Text>
+          </View>
+        ))}
+        {arrows.map((a) => (
+          <View
+            key={`ar${a.hex}`}
+            testID={`ac-arrow-${a.hex}`}
+            style={[styles.arrow, arrowPosition(a.bearingDeg, width, height)]}
+          >
+            {a.lost ? (
+              // Signal lost: a hollow, dimmed arrow, like the label's hollow anchor dot.
+              <Text testID={`ar-ac-arrow-lost-${a.hex}`} style={[styles.arrowText, styles.arrowTextLost]}>
+                △
+              </Text>
+            ) : (
+              <Text style={styles.arrowText}>▲</Text>
+            )}
+          </View>
+        ))}
+      </View>
+    </LabelLongPressContext.Provider>
   );
 }
 
@@ -865,6 +878,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     transform: [{ translateX: -12 }, { translateY: -10 }],
+    // Non-interactive like the other "+N" chips: a hold on it reaches identify's catcher underneath.
+    pointerEvents: "none",
   },
   clusterText: { color: "#1a1a1a", fontSize: 11, fontWeight: "700" },
   // Marine-tinted "+N" chip for vessels collapsed by the band declutter; non-interactive.
