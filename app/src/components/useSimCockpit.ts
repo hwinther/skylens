@@ -11,6 +11,10 @@
  * button). The one call of its own: when that route's destination is not among the nearby airports,
  * one GET /api/airports/{ident} per code (offline database, free; behind the API gate, remembered for
  * the screen's life, a failure just means no line), so the route line shows from any distance.
+ *
+ * A tap on an airport / port / ferry-quay label opens the small place card instead (`pick` with a
+ * PlacePick): the key is resolved here from those same fetched places, no call per tap. One card at a
+ * time: a place replaces the traffic card and a traffic card (or Details) replaces the place.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -22,6 +26,7 @@ import { AirportLookup } from "@/sim/airportLookup";
 import type { CameraMode } from "@/sim/chase";
 import { hiddenSummary, simFilterChips, simLayerVisibility, type SimLayer } from "@/sim/layers";
 import type { OverlayLayerKind, OverlayPlace } from "@/sim/overlay";
+import { findPlaceByKey, type SimPick } from "@/sim/place";
 import { describeDestination, describeNearest, findPlaceByCode, nearestPlace, type GeoPos } from "@/sim/route";
 import type { HudRow } from "@/sim/hud";
 import { selectTraffic, trafficKey, TRAFFIC_UPDATE_MS, type TrafficItem, type TrafficPick } from "@/sim/traffic";
@@ -56,8 +61,23 @@ export function useSimCockpit({ target, focused, onTraffic }: SimCockpitOptions)
     (next: SimSelection | null) => setChosen({ forTarget: targetKey, selection: next }),
     [targetKey],
   );
-  const select = useCallback((pick: TrafficPick) => setSelection({ kind: pick.kind, id: pick.id }), [setSelection]);
-  const showDetails = useCallback(() => setSelection(target), [setSelection, target]);
+
+  // --- the place card (airport / port / ferry quay), also per followed object ----------------------
+  const [placeState, setPlaceState] = useState<{ forTarget: string; place: OverlayPlace } | null>(null);
+  const place = placeState && placeState.forTarget === targetKey ? placeState.place : null;
+  const closePlace = useCallback(() => setPlaceState(null), []);
+
+  const select = useCallback(
+    (pick: TrafficPick) => {
+      setPlaceState(null);
+      setSelection({ kind: pick.kind, id: pick.id });
+    },
+    [setSelection],
+  );
+  const showDetails = useCallback(() => {
+    setPlaceState(null);
+    setSelection(target);
+  }, [setSelection, target]);
   const closeCard = useCallback(() => setSelection(null), [setSelection]);
 
   /** Re-target the cockpit at another object (the card's "Follow this"): same session handoff as a card. */
@@ -87,6 +107,30 @@ export function useSimCockpit({ target, focused, onTraffic }: SimCockpitOptions)
   const onPlaces = useCallback((layer: OverlayLayerKind, places: OverlayPlace[]) => {
     placesRef.current[layer] = places;
   }, []);
+  /** A picked label's place, from the fetched places (null once a refetch dropped it). */
+  const placeByKey = useCallback((key: string) => findPlaceByKey(placesRef.current, key), []);
+  /** Open the place card for a picked label (closing the traffic card); an unknown key does nothing. */
+  const selectPlace = useCallback(
+    (key: string) => {
+      const found = findPlaceByKey(placesRef.current, key);
+      if (!found) return;
+      setSelection(null);
+      setPlaceState({ forTarget: targetKey, place: found });
+    },
+    [setSelection, targetKey],
+  );
+  /**
+   * A tap in the 3D scene: traffic opens its card, a label its place card, and a tap on nothing (null)
+   * dismisses the place card (the traffic card keeps its own close / back, as before).
+   */
+  const pick = useCallback(
+    (hit: SimPick | null) => {
+      if (!hit) setPlaceState(null);
+      else if (hit.kind === "place") selectPlace(hit.id);
+      else select(hit);
+    },
+    [select, selectPlace],
+  );
   const routesRef = useRef<Record<string, RouteResponse>>({});
   const onRoute = useCallback((hex: string, route: RouteResponse) => {
     routesRef.current[hex] = route;
@@ -183,6 +227,10 @@ export function useSimCockpit({ target, focused, onTraffic }: SimCockpitOptions)
     select,
     showDetails,
     closeCard,
+    place,
+    closePlace,
+    pick,
+    placeByKey,
     follow,
     cameraMode,
     toggleCamera,

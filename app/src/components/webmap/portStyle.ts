@@ -26,6 +26,11 @@ const KIND_LABEL: Record<PortKind, string> = {
   ferry: "Ferry quay",
 };
 
+/** The kind in words: "Harbour", "Ferry quay". */
+export function portKindLabel(kind: PortKind): string {
+  return KIND_LABEL[kind];
+}
+
 /** Marker glyph size: commercial ports a little larger than the many small quays and marinas. */
 export function portGlyphSize(kind: PortKind): number {
   return kind === "port" ? 16 : 13;

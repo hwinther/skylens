@@ -25,6 +25,28 @@ describe("ListScreen", () => {
     expect(screen.queryByTestId("list-ac-nopos1")).not.toBeOnTheScreen();
   });
 
+  it("shows a readable type line under the callsign where the designator is known, with the type-data credit", async () => {
+    seedAircraft([
+      aircraft("abc123", { flight: "SAS123", t: "B738" }),
+      aircraft("heli01", { flight: "LIFE1", lat: 59.97, t: "EC35" }),
+      aircraft("odd001", { flight: "ODD1", lat: 59.98, t: "ZZ99" }),
+      aircraft("none01", { flight: "NONE1", lat: 59.99 }),
+    ]);
+    await render(<ListScreen />);
+
+    expect(screen.getByTestId("list-typeline-abc123")).toHaveTextContent("Boeing 737-800 · B738");
+    expect(screen.getByTestId("list-typeline-heli01")).toHaveTextContent("Airbus Helicopters EC-135/635 · EC35");
+    expect(screen.getByTestId("list-typeline-odd001")).toHaveTextContent("ZZ99");
+    expect(screen.queryByTestId("list-typeline-none01")).not.toBeOnTheScreen();
+    expect(screen.getByTestId("list-type-credit")).toBeOnTheScreen();
+  });
+
+  it("no type-data credit when no row uses the type table", async () => {
+    seedAircraft([aircraft("abc123", { flight: "SAS123" })]);
+    await render(<ListScreen />);
+    expect(screen.queryByTestId("list-type-credit")).not.toBeOnTheScreen();
+  });
+
   it("follows store updates", async () => {
     await render(<ListScreen />);
     expect(screen.getByText("No traffic in range")).toBeOnTheScreen();

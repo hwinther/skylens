@@ -40,7 +40,7 @@ import { ridgeBearingFor, rimLabelBox } from "@/radar/rotation";
 import { buildTerrainBase, buildTerrainRidges, ridgeRowsFor, smoothLand } from "@/radar/terrainGeometry";
 import { terrainPaths } from "@/radar/terrainPaths";
 import { gridOffsetKm, heightAtKm } from "@/radar/terrainGrid";
-import { aircraftAccent, iconForCategory } from "./aircraftIcon";
+import { aircraftAccent, iconForAircraft } from "./aircraftIcon";
 import { iconForVessel } from "./vesselIcon";
 import { EmptyState } from "./EmptyState";
 import { isAutoRange, zoomIn, zoomOut } from "./radarRange";
@@ -450,7 +450,7 @@ export function AircraftRadar({
                   hitSlop={6}
                 >
                   <MaterialCommunityIcons
-                    name={iconForCategory(a.cat)}
+                    name={iconForAircraft(a)}
                     size={18}
                     color={alpha(aircraftAccent(a), 0.95)}
                   />

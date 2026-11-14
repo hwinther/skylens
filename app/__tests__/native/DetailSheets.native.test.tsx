@@ -86,6 +86,44 @@ describe("DetailSheet (aircraft)", () => {
     expect(screen.queryByText("Route (uses AeroAPI)")).not.toBeOnTheScreen();
   });
 
+  it("reads the live designator as a type name and class with no API call (demo / signed out)", async () => {
+    const requested = routeFetch({});
+    seedAircraft([aircraft(HEX, { flight: "LIFE1", alt: 1500, t: "EC35" })]);
+    await render(<DetailSheet hex={HEX} client={client} onClose={jest.fn()} />);
+
+    // Collapsed: the short readable name instead of the bare code.
+    expect(screen.getByTestId("detail-card-summary")).toHaveTextContent(/^Airbus EC-135\/635 · 1,500 ft/);
+    await settleAndExpand();
+    expect(requested).toEqual([]);
+    expect(screen.getByTestId("detail-type")).toHaveTextContent("Airbus Helicopters EC-135/635 (EC35)");
+    expect(screen.getByTestId("detail-type-class")).toHaveTextContent("Helicopter · 2 turbine engines · Light wake");
+    expect(screen.getByTestId("detail-type-credit")).toHaveTextContent(/Mictronics aircraft database \(ODC-By\)/);
+  });
+
+  it("prefers the airframe's own type name from the detail, keeping the code and class", async () => {
+    useAuthStore.setState({ authRequired: false });
+    routeFetch({
+      [`/api/aircraft/${HEX}`]: () => backendJson({ metadata: { ...DETAIL.metadata, typeName: "BOEING 737-86N" } }),
+      [`/api/aircraft/${HEX}/route/cached`]: notFound,
+    });
+    await render(<DetailSheet hex={HEX} client={client} onClose={jest.fn()} />);
+    await settleAndExpand();
+
+    expect(screen.getByTestId("detail-type")).toHaveTextContent("Boeing 737-86N (B738)");
+    expect(screen.getByTestId("detail-type-class")).toHaveTextContent("Aeroplane · 2 jet engines · Medium wake");
+  });
+
+  it("an unknown designator shows as the bare code, with no class and no type-data credit", async () => {
+    routeFetch({});
+    seedAircraft([aircraft(HEX, { flight: "SAS123", t: "ZZ99" })]);
+    await render(<DetailSheet hex={HEX} client={client} onClose={jest.fn()} />);
+    await settleAndExpand();
+
+    expect(screen.getByTestId("detail-type")).toHaveTextContent("ZZ99");
+    expect(screen.queryByTestId("detail-type-class")).not.toBeOnTheScreen();
+    expect(screen.queryByTestId("detail-type-credit")).not.toBeOnTheScreen();
+  });
+
   it("keeps the live data when the detail lookup fails, and says why", async () => {
     useAuthStore.setState({ authRequired: false });
     routeFetch({

@@ -186,15 +186,31 @@ npm run coverage:summary          # unit (../app/coverage) + e2e (monocart-cover
   "Layers" filter (`settingsStore.simHiddenLayers`, `src/sim/layers.ts`; ferry quays split from ports);
   an outside/chase camera (`src/sim/chase.ts`); nearest airport/port and destination in the HUD plus a
   great-circle route line (`src/sim/route.ts`) only from places already fetched for labels and a route the
-  card already knows (free cached read on open or the user tapping the paid Route button). On Android these
-  cross the webview as slim props (`traffic`, `layers`, `cameraMode`, `destination`, `targetKey`) and the
-  `onPick` action. Maestro covers the Android screen in `app/.maestro/cockpit.yaml` (globe state
+  card already knows (free cached read on open or the user tapping the paid Route button). A tap on an
+  airport / port / ferry-quay label or point opens the light place card (`SimPlaceCard.tsx`,
+  `sim-place-card|name|close`: name, kind, codes, distance/bearing, credit), resolved by key from the
+  places already fetched (pure `src/sim/place.ts`: traffic wins a shared pick, a miss closes it, Android
+  back closes it first, it and the traffic card replace each other); on the web a resting mouse shows the
+  name (`sim-place-hint`, one throttled `scene.pick`). E2E taps it via the globe's `skylensSimPlaces()`
+  hook on `sim-view`. On Android these cross the webview as slim props (`traffic`, `layers`, `cameraMode`,
+  `destination`, `targetKey`) and the `onPick` action (traffic `{kind,id}`, `{kind:"place",id:key}`, or
+  null for a miss). Maestro covers the Android screen in `app/.maestro/cockpit.yaml` (globe state
   screenshot-only; the outside view is never switched on there, it hung the CI emulator's GPU; see its README).
 - **Ports layer** (`GET /api/ports`, `PortDbService`): an offline file committed at
   `data/ports/ports.csv.gz`, built by `node data/ports/extract-osm-ports.mjs [--wpi UpdatedPub150.csv]`:
   OpenStreetMap (Overpass) for Norway + the NGA World Port Index elsewhere. Refresh by re-running the
   script and committing the output; the image bakes it and sets `Ports__PortsPath`. Show the
   attribution (ODbL) wherever ports appear.
+- **Aircraft types** (readable names, class, rotor vs wing): the hub DTO carries the ICAO type designator
+  as `t` (own feed: offline `AircraftDbService.TypeCode`; away mode: the aggregator's `t`, gaps filled from
+  the same registry; omitted when unknown, ~11 bytes). The app looks it up in the bundled
+  `app/src/aircraft/aircraft-types.json` (pure TS `src/aircraft/aircraftType.ts`: name, "Helicopter · 2
+  turbine engines · Light wake", short name for one-line summaries), no API call, so demo mode works too
+  (the demo recording carries `t`). Used by List rows (`list-typeline-<hex>`), the detail card
+  (`detail-type`, `detail-type-class`) and `iconForAircraft` (the type decides helicopter vs aeroplane over
+  the emitter category; AR chips stay the same length). Built by `node data/aircraft-types/build-aircraft-types.mjs`
+  from the Mictronics aircraft database's `types.json` (pinned commit + SHA-256; bump both to refresh, commit
+  the output). ODC-By: show `AIRCRAFT_TYPES_ATTRIBUTION` wherever a name or class from it appears.
 - **AR identify** ("what am I looking at?"): long-press a point on the AR view, or toggle the viewfinder
   reticle (`ar-identify-toggle`), to name the peak / town in that direction with a laser beam to it.
   Data: `GET /api/landmarks` (`LandmarkDbService`) from `data/landmarks/landmarks.csv.gz`, built by

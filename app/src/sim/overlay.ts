@@ -5,8 +5,8 @@
  */
 
 import type { AirportDto, PortDto, PortKind } from "@/api/types";
-import { airportShortLabel } from "@/components/webmap/airportStyle";
-import { portTitle } from "@/components/webmap/portStyle";
+import { airportShortLabel, airportTypeLabel } from "@/components/webmap/airportStyle";
+import { portKindLabel, portTitle } from "@/components/webmap/portStyle";
 import { color } from "@/theme";
 import { FEET_TO_M, type SimKind } from "./simPose";
 
@@ -36,6 +36,24 @@ export interface OverlayItem {
   group: OverlayGroup;
   /** CSS colour for the point and label text; the layer's colour + white text when absent. */
   color?: string;
+  /**
+   * The place's key (placeKey), stamped on its primitives so a tap can name it; the screen resolves it
+   * to the full place it already holds (OverlayPlace.key). Absent → not pickable.
+   */
+  key?: string;
+}
+
+/** Data credit shown with a place: OurAirports for airports, ODbL / NGA for ports by source. */
+export const AIRPORT_CREDIT = "Airports: OurAirports (public domain)";
+export const PORT_CREDIT_OSM = "© OpenStreetMap contributors (ODbL)";
+export const PORT_CREDIT_WPI = "World Port Index (NGA)";
+
+/** A place's pick key: "airport:<ident>" or "port:<id>" (ferry quays are ports in /api/ports). */
+export function airportKey(a: Pick<AirportDto, "ident">): string {
+  return `airport:${a.ident}`;
+}
+export function portKey(p: Pick<PortDto, "id">): string {
+  return `port:${p.id}`;
 }
 
 /**
@@ -51,6 +69,16 @@ export interface OverlayPlace {
   lat: number;
   lon: number;
   altM: number;
+  /** Matches the label's OverlayItem.key (absent on places not drawn as labels, e.g. a looked-up destination). */
+  key?: string;
+  /** What it is, in words: "Large airport", "Harbour", "Ferry quay". */
+  typeLabel?: string;
+  /** IATA code (airports), when the dataset has one. */
+  iata?: string;
+  /** Municipality / served city (airports), when the dataset has one. */
+  municipality?: string;
+  /** The data credit to show with it (ODbL for OpenStreetMap ports). */
+  credit?: string;
 }
 
 /** The two labelled-point layers of the 3D view. */
@@ -144,6 +172,7 @@ export function airportOverlayItems(airports: readonly AirportDto[]): OverlayIte
       rangeM,
       pixelSize: a.type === "large_airport" ? 9 : 6,
       group: "airports",
+      key: airportKey(a),
     });
   }
   return items;
@@ -161,6 +190,11 @@ export function airportPlaces(airports: readonly AirportDto[]): OverlayPlace[] {
       lat: a.lat,
       lon: a.lon,
       altM: (a.elevationFt ?? 0) * FEET_TO_M,
+      key: airportKey(a),
+      typeLabel: airportTypeLabel(a.type),
+      ...(a.iata?.trim() ? { iata: a.iata.trim() } : {}),
+      ...(a.municipality?.trim() ? { municipality: a.municipality.trim() } : {}),
+      credit: AIRPORT_CREDIT,
     });
   }
   return places;
@@ -175,6 +209,9 @@ export function portPlaces(ports: readonly PortDto[]): OverlayPlace[] {
     lat: p.lat,
     lon: p.lon,
     altM: 0,
+    key: portKey(p),
+    typeLabel: portKindLabel(p.kind),
+    credit: p.id.startsWith("wpi") ? PORT_CREDIT_WPI : PORT_CREDIT_OSM,
   }));
 }
 
@@ -193,6 +230,7 @@ export function portOverlayItems(ports: readonly PortDto[]): OverlayItem[] {
     rangeM: portLabelRangeM(p.kind),
     pixelSize: p.kind === "port" ? 8 : 5,
     ...(p.kind === "ferry" ? { group: "ferries" as const, color: FERRY_COLOR } : { group: "ports" as const }),
+    key: portKey(p),
   }));
 }
 

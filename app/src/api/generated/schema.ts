@@ -636,6 +636,7 @@ export interface components {
             seenPos?: number | null;
             cat?: string | null;
             mil?: boolean | null;
+            t?: string | null;
             src?: string | null;
         };
         "Skylens.Api.State.VesselDto": {

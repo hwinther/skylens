@@ -46,6 +46,20 @@ describe("toDto — dump1090 gotchas", () => {
     const raw: RawAircraft = { hex: "abc", seen: 0.2 };
     expect(toDto(raw).seen).toBeCloseTo(0.2, 6);
   });
+
+  it("carries the type designator upper-cased, and omits it when blank (like the backend DTO)", () => {
+    expect(toDto({ hex: "abc", t: " ec45 " }).t).toBe("EC45");
+    expect(toDto({ hex: "abc", t: " " })).not.toHaveProperty("t");
+    expect(toDto({ hex: "abc" })).not.toHaveProperty("t");
+  });
+});
+
+describe("recorded series types", () => {
+  it("knows the demo's airliner and its rescue helicopter", () => {
+    const frame = allFramesAsDtos()[0];
+    expect(frame.find((a) => a.hex === "4ca7b3")?.t).toBe("B738");
+    expect(frame.find((a) => a.hex === "4d0a01")?.t).toBe("EC45");
+  });
 });
 
 describe("recorded series", () => {
