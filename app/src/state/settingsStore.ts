@@ -80,6 +80,8 @@ interface SettingsState {
   listCollapsedSections: ListSection[];
   /** Cockpit view filter: layers hidden from the 3D scene (see src/sim/layers.ts). */
   simHiddenLayers: SimLayer[];
+  /** Cockpit view: draw the generic window frame (aeroplane / helicopter / bridge) in the cockpit camera. */
+  simCockpitFrame: boolean;
   /** AR view filter: label groups hidden from the AR overlay only (see ./arFilter). */
   arHiddenGroups: ArGroup[];
   /** First-run onboarding completed (or skipped). Gates the one-time intro flow. */
@@ -117,6 +119,7 @@ interface SettingsState {
   setListHiddenKinds: (kinds: ListKind[]) => void;
   toggleListSection: (section: ListSection) => void;
   toggleSimLayer: (layer: SimLayer) => void;
+  setSimCockpitFrame: (on: boolean) => void;
   toggleArGroup: (group: ArGroup) => void;
   setArHiddenGroups: (groups: ArGroup[]) => void;
   setOnboarded: (on: boolean) => void;
@@ -172,6 +175,8 @@ export const useSettingsStore = create<SettingsState>()(
       listCollapsedSections: [],
       // The cockpit view starts with every layer drawn.
       simHiddenLayers: [],
+      // The cockpit window frame is on until the user hides it.
+      simCockpitFrame: true,
       // The AR view starts with every group drawn.
       arHiddenGroups: [],
       onboarded: false,
@@ -203,6 +208,7 @@ export const useSettingsStore = create<SettingsState>()(
       toggleListSection: (section) =>
         set({ listCollapsedSections: toggleId(get().listCollapsedSections, section, LIST_SECTIONS) }),
       toggleSimLayer: (layer) => set({ simHiddenLayers: toggleId(get().simHiddenLayers, layer, SIM_LAYERS) }),
+      setSimCockpitFrame: (simCockpitFrame) => set({ simCockpitFrame }),
       toggleArGroup: (group) => set({ arHiddenGroups: toggleId(get().arHiddenGroups, group, AR_GROUPS) }),
       setArHiddenGroups: (groups) => set({ arHiddenGroups: sanitizeIds(groups, AR_GROUPS) }),
       setOnboarded: (onboarded) => set({ onboarded }),
@@ -230,6 +236,8 @@ export const useSettingsStore = create<SettingsState>()(
           // Added later: older settings lack it (→ the default), and a non-boolean is ignored.
           showMapSatellites:
             typeof p.showMapSatellites === "boolean" ? p.showMapSatellites : current.showMapSatellites,
+          // Added later: older settings lack it (→ on), and a non-boolean is ignored.
+          simCockpitFrame: typeof p.simCockpitFrame === "boolean" ? p.simCockpitFrame : current.simCockpitFrame,
           // Added later: whole degrees within [0, MAX_TILT_DEG]; anything else is flat.
           radarTiltDeg: clampTilt(p.radarTiltDeg),
         };

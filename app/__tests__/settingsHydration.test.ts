@@ -158,6 +158,25 @@ test("the radar tilt survives a restart, sanitised to whole degrees within range
   expect(store.getState().radarTiltDeg).toBe(45);
 });
 
+test("the cockpit window frame defaults on, and a saved choice (only a boolean) is kept", async () => {
+  installLocalStorage({ [KEY]: JSON.stringify({ state: { onboarded: true }, version: 0 }) });
+  expect((await loadStore()).getState().simCockpitFrame).toBe(true);
+
+  installLocalStorage({ [KEY]: JSON.stringify({ state: { simCockpitFrame: false }, version: 0 }) });
+  expect((await loadStore()).getState().simCockpitFrame).toBe(false);
+
+  installLocalStorage({ [KEY]: JSON.stringify({ state: { simCockpitFrame: "off" }, version: 0 }) });
+  expect((await loadStore()).getState().simCockpitFrame).toBe(true);
+
+  // Switched off, it survives a restart.
+  installLocalStorage();
+  const first = await loadStore();
+  first.getState().setSimCockpitFrame(false);
+  const saved = (globalThis as unknown as { localStorage: Storage }).localStorage.getItem(KEY);
+  installLocalStorage({ [KEY]: saved! });
+  expect((await loadStore()).getState().simCockpitFrame).toBe(false);
+});
+
 test("the AR filter survives a restart; unknown or missing groups are ignored", async () => {
   installLocalStorage();
   const first = await loadStore();

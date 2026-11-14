@@ -8,10 +8,12 @@
  * and the nearest-airport / destination aids.
  */
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
-import { DeviceEventEmitter, Dimensions, StyleSheet } from "react-native";
+import { Animated, DeviceEventEmitter, Dimensions, StyleSheet } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import SimScreen, { GLOBE_START_TIMEOUT_MS } from "@/screens/SimScreen";
 import { HUD_COLUMN_GAP, hudMaxWidth } from "@/sim/layout";
+import { frameParallax } from "@/sim/cockpitFrame";
+import { FRAME_GLIDE_MS } from "@/components/SimCockpitFrame";
 import type { SimGlobeViewProps } from "@/components/SimGlobeView";
 import { useSimStore } from "@/state/simStore";
 import { useMapFocusStore } from "@/state/mapFocusStore";
@@ -618,5 +620,128 @@ describe("SimScreen (Android) place card", () => {
       nativeEvent: { layout: { x: 12, y: 600, width: 340, height: 90 } },
     });
     expect(bottom()).toBe(before + 90 + 12);
+  });
+});
+
+describe("SimScreen (Android) cockpit frame", () => {
+  const pressed = (testID: string) => screen.getByTestId(testID).props["aria-pressed"] as boolean;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    resetStores();
+    mockGlobe.props = null;
+    useSimStore.setState({ target: null, centre: null });
+    useSettingsStore.setState({ simCockpitFrame: true });
+    seedAircraft([
+      aircraft("abc123", { flight: "SAS123", t: "B738" }),
+      aircraft("heli01", { flight: "LN-OOA", cat: "A7" }),
+      aircraft("def456", { flight: "NOZ77", lat: 59.977, lon: 10.8 }),
+    ]);
+    useVesselStore.getState().setSnapshot([
+      { mmsi: "257000001", kind: "ship", name: "COLOR MAGIC", lat: 59.94, lon: 10.79, sog: 12, cog: 200, seen: 1 },
+    ]);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  async function ready(kind = "aircraft", id = "abc123") {
+    await renderSim(kind, id);
+    await act(() => globe().onReady());
+  }
+
+  it("draws the aeroplane frame once the globe is ready, never taking a touch", async () => {
+    await renderSim();
+    // Not over the loading spinner.
+    expect(screen.queryByTestId("sim-frame")).toBeNull();
+    await act(() => globe().onReady());
+    const frame = screen.getByTestId("sim-frame");
+    expect(frame.props.pointerEvents).toBe("none");
+    expect(screen.getByTestId("sim-frame-aeroplane").props.pointerEvents).toBe("none");
+    expect(pressed("sim-frame-toggle")).toBe(true);
+    expect(screen.getByTestId("sim-frame-toggle")).toHaveAccessibleName("Cockpit frame: show the window frame");
+  });
+
+  it("picks the helicopter canopy for a rotorcraft", async () => {
+    await ready("aircraft", "heli01");
+    expect(screen.getByTestId("sim-frame-helicopter")).toBeOnTheScreen();
+  });
+
+  it("picks the bridge for a vessel", async () => {
+    await ready("vessel", "257000001");
+    expect(screen.getByTestId("sim-frame-vessel")).toBeOnTheScreen();
+    expect(screen.getByTestId("sim-frame-toggle")).toBeOnTheScreen();
+  });
+
+  it("stays hidden when it was switched off before", async () => {
+    useSettingsStore.setState({ simCockpitFrame: false });
+    await ready();
+    expect(screen.queryByTestId("sim-frame")).toBeNull();
+    expect(pressed("sim-frame-toggle")).toBe(false);
+  });
+
+  it("has no frame and no toggle for a satellite", async () => {
+    await ready("satellite", "25544");
+    expect(screen.queryByTestId("sim-frame")).toBeNull();
+    expect(screen.queryByTestId("sim-frame-toggle")).toBeNull();
+  });
+
+  it("follows Follow this to the new object's frame", async () => {
+    await ready();
+    expect(screen.getByTestId("sim-frame-aeroplane")).toBeOnTheScreen();
+    jest.mocked(useLocalSearchParams).mockReturnValue({ kind: "aircraft", id: "heli01" });
+    await screen.rerender(<SimScreen />);
+    await tick();
+    expect(screen.getByTestId("sim-frame-helicopter")).toBeOnTheScreen();
+  });
+
+  it("is hidden in the outside view (and so is its toggle), and back in the cockpit", async () => {
+    await ready();
+    await fireEvent.press(screen.getByTestId("sim-camera-toggle"));
+    expect(screen.queryByTestId("sim-frame")).toBeNull();
+    expect(screen.queryByTestId("sim-frame-toggle")).toBeNull();
+    await fireEvent.press(screen.getByTestId("sim-camera-toggle"));
+    expect(screen.getByTestId("sim-frame-aeroplane")).toBeOnTheScreen();
+  });
+
+  it("the toggle hides it and the choice is persisted", async () => {
+    await ready();
+    await fireEvent.press(screen.getByTestId("sim-frame-toggle"));
+    expect(screen.queryByTestId("sim-frame")).toBeNull();
+    expect(pressed("sim-frame-toggle")).toBe(false);
+    expect(useSettingsStore.getState().simCockpitFrame).toBe(false);
+
+    await fireEvent.press(screen.getByTestId("sim-frame-toggle"));
+    expect(screen.getByTestId("sim-frame-aeroplane")).toBeOnTheScreen();
+    expect(useSettingsStore.getState().simCockpitFrame).toBe(true);
+  });
+
+  it("glides opposite to the look offset reported by the globe, on the native driver", async () => {
+    await ready();
+    // The native driver moves the view outside React, so check where each glide is headed.
+    const timing = jest.spyOn(Animated, "timing");
+    try {
+      const targets = () => {
+        const calls = timing.mock.calls.slice(-3);
+        timing.mockClear();
+        for (const [, config] of calls) {
+          expect(config.useNativeDriver).toBe(true);
+          expect(config.duration).toBe(FRAME_GLIDE_MS);
+        }
+        return calls.map(([, config]) => config.toValue as number);
+      };
+      await act(() => globe().onLook({ yaw: 40, pitch: 20 }));
+      const [x, y, opacity] = targets();
+      expect(x).toBeLessThan(0); // looking right slides the frame left …
+      expect(y).toBeGreaterThan(0); // … and looking up slides it down
+      expect(opacity).toBe(1);
+      expect({ x, y, opacity }).toEqual(frameParallax({ yaw: 40, pitch: 20 }, Dimensions.get("window").width, Dimensions.get("window").height));
+
+      await fireEvent.press(screen.getByTestId("sim-recenter"));
+      expect(targets()).toEqual([0, 0, 1]);
+    } finally {
+      timing.mockRestore();
+    }
   });
 });

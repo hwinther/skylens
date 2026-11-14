@@ -1,5 +1,5 @@
 # Cockpit view (simulator) flow for the release APK in demo mode: onboarding Skip -> List -> first
-# aircraft's detail card -> "Cockpit view" -> card, outside-view toggle present, Layers filter -> wait
+# aircraft's detail card -> "Cockpit view" -> card, outside-view and frame toggles present, Layers filter -> wait
 # for the 3D globe -> screenshot -> hardware back (closes the card, then leaves).
 # A separate file from smoke.yaml so a globe problem shows up as its own failing flow and never makes
 # the smoke steps flaky. Run with `maestro test .maestro` from app/ (README.md); CI runs every
@@ -109,6 +109,13 @@ name: Cockpit view (demo mode)
 - extendedWaitUntil:
     visible:
       id: "sim-camera-toggle"
+    timeout: 30000
+# The window-frame chip (on by default; the frame itself is a plain native SVG over the webview, drawn
+# once the globe is ready). Only asserted: a tap could land in one of the UI-thread stalls above and
+# could not be safely retried without reading its state back.
+- extendedWaitUntil:
+    visible:
+      id: "sim-frame-toggle"
     timeout: 30000
 - runFlow: subflows/dismiss-system-anr.yaml
 - retry:
