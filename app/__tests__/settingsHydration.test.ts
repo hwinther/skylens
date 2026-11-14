@@ -144,7 +144,7 @@ test("the radar tilt survives a restart, sanitised to whole degrees within range
   expect((await loadStore()).getState().radarTiltDeg).toBe(38);
 
   installLocalStorage({ [KEY]: JSON.stringify({ state: { radarTiltDeg: 400 }, version: 0 }) });
-  expect((await loadStore()).getState().radarTiltDeg).toBe(60);
+  expect((await loadStore()).getState().radarTiltDeg).toBe(80);
 
   installLocalStorage({ [KEY]: JSON.stringify({ state: { radarTiltDeg: "steep" }, version: 0 }) });
   expect((await loadStore()).getState().radarTiltDeg).toBe(0);

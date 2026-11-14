@@ -10,10 +10,26 @@
  *
  * The depth used for perspective is the ground position only (heights don't change the scale), so at
  * tilt 0 every point lands exactly where the flat radar draws it, whatever its height.
+ *
+ * Rotation (`bearingDeg`, the true bearing that points up the screen; see rotation.ts) turns the ground
+ * into the view frame first, so the tilt always leans towards the bottom of the screen. Bearing 0 is the
+ * north-up scope, bit for bit.
  */
 
+import { fromViewKm, normalizeBearing } from "./rotation";
+
 /** Steepest tilt the control allows, in degrees. */
-export const MAX_TILT_DEG = 60;
+export const MAX_TILT_DEG = 80;
+
+/**
+ * Past 60° a true cos t squash would flatten the disc into an unreadable strip (cos 80° ≈ 0.17), so
+ * the tilt eases from there: the vertical squash goes linearly from cos 60° = 0.5 down to this at
+ * MAX_TILT_DEG instead, and the relief grows by up to RELIEF_BOOST_AT_MAX, so the steepest tilts read
+ * as a low view across the land with its hills standing up. Up to 60° the projection is unchanged.
+ */
+const EASE_FROM_DEG = 60;
+const SQUASH_AT_MAX = 0.3;
+const RELIEF_BOOST_AT_MAX = 1.5;
 
 /** Camera distance in units of the scope radius: smaller = stronger perspective. */
 const PERSPECTIVE_DISTANCE_R = 4;
@@ -38,6 +54,7 @@ export interface RadarProjection {
   pxPerKm: number;
   tiltDeg: number;
   sin: number;
+  /** The ground's vertical squash: cos t up to 60°, eased beyond (see groundSquash). */
   cos: number;
   /** Camera distance in px. */
   D: number;
@@ -47,6 +64,11 @@ export interface RadarProjection {
   cy0: number;
   /** Height scale: px per metre (before the sin t factor). */
   zPxPerM: number;
+  /** View bearing: the true bearing that points up the screen (whole degrees, 0 = north up). */
+  bearingDeg: number;
+  /** cos / sin of the view bearing. */
+  bCos: number;
+  bSin: number;
 }
 
 export interface ProjectionInput {
@@ -57,6 +79,8 @@ export interface ProjectionInput {
   tiltDeg: number;
   /** Highest terrain height in view (m); picks the relief exaggeration. 0 when there is no terrain. */
   reliefMaxM?: number;
+  /** View bearing (deg true up the screen); 0 / omitted = north up. */
+  bearingDeg?: number;
 }
 
 /** A tilt in whole degrees within [0, MAX_TILT_DEG]; anything non-finite is flat. */
@@ -65,12 +89,20 @@ export function clampTilt(deg: unknown): number {
   return Math.round(Math.min(MAX_TILT_DEG, Math.max(0, deg)));
 }
 
-export function makeRadarProjection({ size, rangeKm, tiltDeg, reliefMaxM = 0 }: ProjectionInput): RadarProjection {
+export function makeRadarProjection({
+  size,
+  rangeKm,
+  tiltDeg,
+  reliefMaxM = 0,
+  bearingDeg = 0,
+}: ProjectionInput): RadarProjection {
   const tilt = clampTilt(tiltDeg);
+  const bearing = normalizeBearing(bearingDeg);
+  const b = (bearing * Math.PI) / 180;
   const R = Math.max(1, size / 2 - SCOPE_PADDING_PX);
   const t = (tilt * Math.PI) / 180;
   const sin = Math.sin(t);
-  const cos = Math.cos(t);
+  const cos = groundSquash(tilt);
   const D = PERSPECTIVE_DISTANCE_R * R;
   // Perspective scale of the near and far rim; `fit` brings the near rim back to the flat width.
   const sNear = D / (D - R * sin);
@@ -92,8 +124,28 @@ export function makeRadarProjection({ size, rangeKm, tiltDeg, reliefMaxM = 0 }: 
     D,
     fit,
     cy0,
-    zPxPerM: (RELIEF_FRACTION * R) / ref,
+    zPxPerM: (RELIEF_FRACTION * R * reliefBoost(tilt)) / ref,
+    bearingDeg: bearing,
+    bCos: bearing === 0 ? 1 : Math.cos(b),
+    bSin: bearing === 0 ? 0 : Math.sin(b),
   };
+}
+
+/** How far tilting past EASE_FROM_DEG has gone, 0 → 1 at MAX_TILT_DEG. */
+function easeAmount(tiltDeg: number): number {
+  return Math.min(1, Math.max(0, (tiltDeg - EASE_FROM_DEG) / (MAX_TILT_DEG - EASE_FROM_DEG)));
+}
+
+/** The vertical squash of the ground at a tilt: cos t up to 60°, then easing to SQUASH_AT_MAX. */
+export function groundSquash(tiltDeg: number): number {
+  if (tiltDeg <= EASE_FROM_DEG) return Math.cos((tiltDeg * Math.PI) / 180);
+  const at = Math.cos((EASE_FROM_DEG * Math.PI) / 180);
+  return at + (SQUASH_AT_MAX - at) * easeAmount(tiltDeg);
+}
+
+/** The relief exaggeration factor at a tilt: 1 up to 60°, growing to RELIEF_BOOST_AT_MAX. */
+export function reliefBoost(tiltDeg: number): number {
+  return 1 + (RELIEF_BOOST_AT_MAX - 1) * easeAmount(tiltDeg);
 }
 
 export interface ScreenPoint {
@@ -105,8 +157,11 @@ export interface ScreenPoint {
 
 /** Ground point (km east/north of the observer) at height zM → screen px. */
 export function projectPoint(p: RadarProjection, xKm: number, yKm: number, zM = 0): ScreenPoint {
-  const gx = xKm * p.pxPerKm;
-  const gy = yKm * p.pxPerKm;
+  // Into the view frame (right / up the screen); a no-op north up.
+  const vx = p.bearingDeg === 0 ? xKm : xKm * p.bCos - yKm * p.bSin;
+  const vy = p.bearingDeg === 0 ? yKm : xKm * p.bSin + yKm * p.bCos;
+  const gx = vx * p.pxPerKm;
+  const gy = vy * p.pxPerKm;
   const s = p.D / (p.D + gy * p.sin);
   const k = p.fit * s;
   return { x: p.cx + gx * k, y: p.cy0 - (gy * p.cos + zM * p.zPxPerM * p.sin) * k, s: k };
@@ -132,7 +187,8 @@ export function unprojectGround(p: RadarProjection, sx: number, sy: number): { x
   const s = p.D / (p.D + gy * p.sin);
   if (!(s > 0)) return null;
   const gx = a / s;
-  return { xKm: gx / p.pxPerKm, yKm: gy / p.pxPerKm };
+  const g = fromViewKm(gx / p.pxPerKm, gy / p.pxPerKm, p.bearingDeg);
+  return { xKm: g.x, yKm: g.y };
 }
 
 /** Top-left of a `box`-px square tap target centred on a projected point (blips are 24 px). */

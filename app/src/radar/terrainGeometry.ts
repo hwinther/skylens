@@ -1,11 +1,13 @@
 /**
  * Terrain geometry for the tilted Radar — pure, no RN imports. Built once per grid / range / observer
- * offset (never per frame); a tilt change only re-projects it (see terrainPaths.ts). All coordinates are
- * km east/north of the observer, clipped to the scope disc; heights are metres.
+ * offset (never per frame); a tilt change only re-projects it (see terrainPaths.ts). Coordinates are km
+ * east/north of the observer (the ridges: km in the view frame they were sampled for), clipped to the
+ * scope disc; heights are metres.
  *
  *  - Land: the land cells as row runs (rectangles), a faint tint that sets land off from the sea.
  *  - Coastline: the sea → land iso-line (marching squares), the brightest line, at sea level.
- *  - Ridges: east–west height profiles across the land every few km, north to south. Drawn at their
+ *  - Ridges: height profiles across the screen (east–west when north is up) every few km, far to near,
+ *    re-sampled for the view bearing when the scope is turned (buildTerrainRidges). Drawn at their
  *    height, each filled down to sea level so it hides the ones behind it, they read as an oblique relief
  *    view once the scope tilts — the scan-line look of an old vector display, mountains rising as the
  *    profiles bunch up and peak. Over the sea there is nothing, so the coastline and fjords stay clear.
@@ -14,6 +16,7 @@
  */
 
 import { clipLineToCircle, contourLines, type FlatLine } from "./contours";
+import { fromViewKm, normalizeBearing } from "./rotation";
 import type { TerrainGrid } from "./terrainGrid";
 
 /** Sea is 0 and land at least 10 m, so the coastline is the 5 m iso-line. */
@@ -34,24 +37,34 @@ const MIN_COAST_POINTS = 4;
 const LAND_SUBDIVISIONS = 2;
 
 export interface RidgeRow {
-  /** The row's northing (km). */
+  /** The row's distance up the screen (km, view frame; the northing when north is up). */
   yKm: number;
-  /** Runs over land, each flat [x0, h0, x1, h1, …] (km, m), west → east. */
+  /** Runs over land, each flat [x0, h0, x1, h1, …] (km across the screen in the view frame, m), left → right. */
   runs: number[][];
 }
 
-export interface TerrainGeometry {
+/** The land tint, coastline and height range: independent of the view bearing. */
+export interface TerrainBase {
   /** Land tint rectangles, 4 numbers each: west, east, north, south edge (km). */
   land: number[];
   /** Coastline polylines, flat [x0, y0, …] (km). */
   coast: FlatLine[];
-  /** Height profiles, north → south (the drawing order: nearer rows cover farther ones). */
-  ridges: RidgeRow[];
   /** Highest height within the scope disc (m): picks the relief exaggeration. */
   maxM: number;
   /** True when anything was dropped or thinned to stay within the caps. */
   capped: boolean;
 }
+
+/** The height profiles: they run across the screen, so they are sampled for one view bearing. */
+export interface TerrainRidges {
+  /** Height profiles, far → near up the screen (the drawing order: nearer rows cover farther ones). */
+  ridges: RidgeRow[];
+  /** The view bearing the rows were sampled for (their frame; see rotation.ts). */
+  ridgeBearingDeg: number;
+  capped: boolean;
+}
+
+export type TerrainGeometry = TerrainBase & TerrainRidges;
 
 export interface GeometryOptions {
   /** Ridge rows across the diameter (default MAX_RIDGE_ROWS); see ridgeRowsFor. */
@@ -59,6 +72,10 @@ export interface GeometryOptions {
   maxRidgePoints?: number;
   maxCoastPoints?: number;
   maxLandRects?: number;
+  /** View bearing the ridge rows run across (deg; 0 = east–west rows, north up). */
+  viewBearingDeg?: number;
+  /** The grid's smoothLand copy, when the caller already has it (it depends on the grid only). */
+  smooth?: ArrayLike<number>;
 }
 
 /**
@@ -71,6 +88,18 @@ export function buildTerrainGeometry(
   rangeKm: number,
   opts: GeometryOptions = {},
 ): TerrainGeometry {
+  const base = buildTerrainBase(grid, offset, rangeKm, opts);
+  const ridges = buildTerrainRidges(grid, offset, rangeKm, opts);
+  return { ...base, ...ridges, capped: base.capped || ridges.capped };
+}
+
+/** The land tint, coastline and highest point: built once per grid / range / observer offset. */
+export function buildTerrainBase(
+  grid: TerrainGrid,
+  offset: { dx: number; dy: number },
+  rangeKm: number,
+  opts: GeometryOptions = {},
+): TerrainBase {
   const n = grid.size;
   const half = (n - 1) / 2;
   const cell = grid.cellKm;
@@ -105,8 +134,25 @@ export function buildTerrainGeometry(
     land = land.slice(0, maxRects * 4);
   }
 
-  // Ridges on a lightly smoothed copy (a 1 km grid in rough terrain is spiky), land tested on the raw grid.
-  const smooth = smoothLand(grid.heights, n);
+  return { land, coast, maxM: maxInDisc(grid, offset, rangeKm), capped };
+}
+
+/**
+ * The height profiles for one view bearing: rows across the screen every few km, far → near, sampled on
+ * a lightly smoothed copy of the grid (a 1 km grid in rough terrain is spiky), land tested on the raw grid.
+ * Cheap enough (≤ MAX_RIDGE_ROWS × MAX_RIDGE_SAMPLES samples) to rebuild as the view turns.
+ */
+export function buildTerrainRidges(
+  grid: TerrainGrid,
+  offset: { dx: number; dy: number },
+  rangeKm: number,
+  opts: GeometryOptions = {},
+): TerrainRidges {
+  const n = grid.size;
+  const cell = grid.cellKm;
+  const bearing = normalizeBearing(opts.viewBearingDeg ?? 0);
+  let capped = false;
+  const smooth = opts.smooth ?? smoothLand(grid.heights, n);
   const rows = Math.min(MAX_RIDGE_ROWS, Math.max(2, Math.round(opts.ridgeRows ?? MAX_RIDGE_ROWS)));
   const spacing = Math.max(cell, (2 * rangeKm) / rows);
   const step = Math.max(cell * 0.75, (2 * rangeKm) / MAX_RIDGE_SAMPLES);
@@ -119,10 +165,12 @@ export function buildTerrainGeometry(
     let run: number[] | null = null;
     for (let i = 0; i < count; i++) {
       const x = -xLim + (2 * xLim * i) / (count - 1);
-      const isLand = sample(grid.heights, n, cell, offset, x, y) >= COAST_LEVEL_M;
+      // (x, y) is in the view frame; the grid is sampled at the ground point under it.
+      const g = fromViewKm(x, y, bearing);
+      const isLand = sample(grid.heights, n, cell, offset, g.x, g.y) >= COAST_LEVEL_M;
       if (isLand) {
         if (!run) run = [];
-        run.push(x, Math.max(0, sample(smooth, n, cell, offset, x, y)));
+        run.push(x, Math.max(0, sample(smooth, n, cell, offset, g.x, g.y)));
       } else if (run) {
         if (run.length >= 4) runs.push(run);
         run = null;
@@ -141,8 +189,7 @@ export function buildTerrainGeometry(
     ridges = ridges.filter((_, i) => i % 2 === 0);
     points = ridges.reduce((s, row) => s + row.runs.reduce((a, r) => a + r.length / 2, 0), 0);
   }
-
-  return { land, coast, ridges, maxM: maxInDisc(grid, offset, rangeKm), capped };
+  return { ridges, ridgeBearingDeg: bearing, capped };
 }
 
 /**
