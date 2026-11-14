@@ -100,7 +100,8 @@ async function settled<T>(
 /**
  * A point on the row at height `y` that belongs to the bare view: identify's long-press catcher, not a
  * label. Airport labels sit right on the horizon and replayed aircraft drift across the sky; they are
- * tap targets above the catcher, so a hold on one never reaches identify. Where they are depends on the
+ * tap targets above the catcher (a hold on one identifies through the label itself, and a click opens
+ * its card), so a drag or a bare-view hold starts away from them. Where they are depends on the
  * replay's timing, so search outward from the middle for a free spot, with a margin around it.
  */
 export async function freePoint(page: Page, y: number): Promise<{ x: number; y: number }> {

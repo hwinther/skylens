@@ -176,3 +176,30 @@ test("the cockpit window frame defaults on, and a saved choice (only a boolean) 
   installLocalStorage({ [KEY]: saved! });
   expect((await loadStore()).getState().simCockpitFrame).toBe(false);
 });
+
+test("the AR filter survives a restart; unknown or missing groups are ignored", async () => {
+  installLocalStorage();
+  const first = await loadStore();
+  expect(first.getState().arHiddenGroups).toEqual([]);
+  first.getState().toggleArGroup("sky");
+  first.getState().toggleArGroup("aircraft");
+  expect(first.getState().arHiddenGroups).toEqual(["aircraft", "sky"]);
+  const saved = (globalThis as unknown as { localStorage: Storage }).localStorage.getItem(KEY);
+  installLocalStorage({ [KEY]: saved! });
+  const relaunched = await loadStore();
+  expect(relaunched.getState().arHiddenGroups).toEqual(["aircraft", "sky"]);
+  relaunched.getState().setArHiddenGroups([]);
+  expect(relaunched.getState().arHiddenGroups).toEqual([]);
+
+  installLocalStorage({
+    [KEY]: JSON.stringify({ state: { arHiddenGroups: ["comets", "vessels", "vessels"] }, version: 0 }),
+  });
+  expect((await loadStore()).getState().arHiddenGroups).toEqual(["vessels"]);
+
+  installLocalStorage({ [KEY]: JSON.stringify({ state: { arHiddenGroups: "aircraft" }, version: 0 }) });
+  expect((await loadStore()).getState().arHiddenGroups).toEqual([]);
+
+  // Saved before the AR filter existed.
+  installLocalStorage({ [KEY]: JSON.stringify({ state: { onboarded: true, showShips: false }, version: 0 }) });
+  expect((await loadStore()).getState()).toMatchObject({ onboarded: true, showShips: false, arHiddenGroups: [] });
+});

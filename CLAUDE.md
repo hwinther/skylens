@@ -225,10 +225,21 @@ for satellites) persists `settingsStore.simCockpitFrame` (default on). Maestro c
   Show "GeoNames (CC BY 4.0)" wherever results appear. Matching is pure TS in `src/ar/identify.ts`
   (no DEM: bearing + curvature/refraction-corrected elevation bands, tolerance cone, crude occlusion);
   `prepareLandmarks` runs per observer, `identifyAt` per move. The app fetches once per area
-  (refetch after 10 km), lazily on first use, gated like every API caller. The long-press catcher
-  (`ArIdentifyTouch`) is a gesture-handler LongPress passed to `ArOverlay` as `underlay` (beneath the
-  labels, so label taps still win; it fails on movement, so drag-to-look is unaffected). Not a
-  Pressable: under the web Pan it never sees the release and fires on every tap.
+  (refetch after 10 km), lazily on first use, gated like every API caller. On the bare view the
+  long-press catcher (`ArIdentifyTouch`) is a gesture-handler LongPress passed to `ArOverlay` as
+  `underlay` (beneath the labels, so label taps still win; it fails on movement, so drag-to-look is
+  unaffected). Not a Pressable: under the web Pan it never sees the release and fires on every tap.
+  A hold that starts ON a label identifies too: `ArOverlay`'s `onLabelLongPress` reaches every label's
+  `LabelPressable` through `LabelLongPressContext` (native: Pressable `onLongPress`, which skips the
+  release's onPress; web: its own pointer-event timer, cancelled past `DRAG_SLOP_PX`, that swallows the
+  following click). `LONG_PRESS_MS` / `DRAG_SLOP_PX` live in `components/dragSlop.ts`; keep every
+  overlay chip that is not a label `pointerEvents: "none"` so a hold on it falls through to the catcher.
+- **AR filter** (`ar-filter`, `ar-filter-<group>`, `ar-filter-reset`, `ar-filter-hide-all`): a Layers
+  button above the identify toggle hides label groups (aircraft, vessels, satellites, sky, airports)
+  from the AR overlay only, persisted as `settingsStore.arHiddenGroups` (policy in `state/arFilter.ts`).
+  It sits on top of the Settings layers (a group off there has no chip), never changes what is fetched
+  or what the List / Map / cockpit show, skips the hidden passes (incl. aircraft edge arrows), badges
+  the button with the hidden count, and closes an open card whose group gets hidden.
 - **Hidden routes**: in expo-router 58, `href: null` on a `Tabs.Screen` makes it `hidden`, and hidden
   routes redirect to `/`. To keep a route navigable without a tab button, use `HIDDEN_ROUTE`
   (`tabBarItemStyle: { display: "none" }`) in `app/_layout.tsx` instead. That only hides the button;

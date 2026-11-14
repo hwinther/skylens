@@ -239,6 +239,38 @@ describe("AR identify", () => {
     expect(screen.queryByTestId("ar-identify-beam")).not.toBeOnTheScreen();
   });
 
+  it("a hold that starts on a label identifies the direction under it, without opening the label's card", async () => {
+    liveWithLandmarks([NORTH_PEAK]);
+    // A low aircraft right in front of the peak: its label covers the point the user holds.
+    seedAircraft([aircraft("cover1", { flight: "COV1", lat: 60.08, lon: 10.75, alt: 2200 })]);
+    await renderAr();
+    await frames();
+    const label = screen.getByTestId("ac-label-cover1");
+
+    const { x, y } = pixelOf(0, 1.8, { azimuth: 0, elevation: 0, roll: 0 });
+    // Pressable's long press (Pressability fires it after LONG_PRESS_MS with the press-in event).
+    await fireEvent(label, "longPress", { nativeEvent: { pageX: x, pageY: y } });
+    await frames();
+
+    expect(screen.getByTestId("ar-identify-name")).toHaveTextContent("Nordtoppen");
+    expect(screen.queryByTestId("detail-card")).not.toBeOnTheScreen();
+    await frames();
+    expect(screen.getByTestId("ar-identify-beam")).toBeOnTheScreen();
+
+    // The release of that hold is not a tap (on the device Pressability skips it too)...
+    await fireEvent.press(screen.getByTestId("ac-label-cover1"), { nativeEvent: { pageX: x, pageY: y } });
+    await frames();
+    expect(screen.queryByTestId("detail-card")).not.toBeOnTheScreen();
+    expect(screen.getByTestId("ar-identify-result")).toBeOnTheScreen();
+
+    // ...but the next plain tap on the label opens its card, which replaces the identify result.
+    await fireEvent(screen.getByTestId("ac-label-cover1"), "pressIn", { nativeEvent: { pageX: x, pageY: y } });
+    await fireEvent.press(screen.getByTestId("ac-label-cover1"), { nativeEvent: { pageX: x, pageY: y } });
+    await frames();
+    expect(screen.getByTestId("detail-card")).toBeOnTheScreen();
+    expect(screen.queryByTestId("ar-identify-result")).not.toBeOnTheScreen();
+  });
+
   it("live mode signed out behind auth makes no call and says landmarks are unavailable", async () => {
     useSettingsStore.setState({ demoMode: false });
     useObserverStore.setState({ position: OBSERVER });
