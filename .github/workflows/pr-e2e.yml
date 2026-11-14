@@ -21,16 +21,6 @@ on:
     branches:
       - main
     types: [opened, reopened, labeled, synchronize, ready_for_review]
-    paths:
-      - "backend/**"
-      - "app/**"
-      - "e2e/**"
-      - "Dockerfile"
-      - ".dockerignore"
-      - "docker-compose.e2e.yml"
-      # A PR labelled deploy-feature previews its manifest changes.
-      - "deploy/**"
-      - ".github/workflows/pr-e2e.yml"
   push:
     branches:
       - main
@@ -50,6 +40,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Whether this PR touches the image, the e2e suite or the deploy manifests. The workflow runs on
+  # every PR (no on.pull_request.paths) so the e2e-required check below always reports; a PR that
+  # changes none of these paths skips the build and e2e jobs and passes it. Always true on push.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      changed: ${{ steps.changed.outputs.changed }}
+    steps:
+      - name: Changed files
+        id: changed
+        uses: hwinther/reusable-workflows/.github/actions/changed-files@05d82fa2339b2085bae78c0faa55083c86e5da2e # v2.38.0
+        with:
+          patterns: |
+            ^backend/
+            ^app/
+            ^e2e/
+            ^Dockerfile$
+            ^\.dockerignore$
+            ^docker-compose\.e2e\.yml$
+            # A PR labelled deploy-feature previews its manifest changes.
+            ^deploy/
+            ^\.github/workflows/pr-e2e\.yml$
+
   # The tag for builds of main: main-<sha7>, also used for the quality artifact below.
   main-tag:
     runs-on: ubuntu-latest
@@ -88,7 +103,8 @@ jobs:
       dotnet_solution_file: "Skylens.slnx"
 
   build:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    needs: [changes]
+    if: ${{ needs.changes.outputs.changed == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     permissions:
       contents: read
       packages: write
@@ -119,7 +135,8 @@ jobs:
   # The @wshno/playwright-config version the e2e image builds on: the one e2e/'s lock file resolves,
   # so the image's browser matches the suite's Playwright.
   e2e-base:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    needs: [changes]
+    if: ${{ needs.changes.outputs.changed == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -336,3 +353,23 @@ jobs:
         ${{ needs.main-tag.outputs.tag }}
         main
       version: ${{ needs.build.outputs.version }}
+
+  # The required status check (ruleset "e2e-required" in wshno/devops): fails when any job on the
+  # way to the e2e run failed or was cancelled, passes when they passed or were skipped (no matching
+  # changes, or a draft). always() so it reports even when a job it needs failed.
+  e2e-required:
+    name: e2e-required
+    if: ${{ always() }}
+    needs: [changes, build, e2e-base, e2e-image, e2e]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Check the e2e jobs' results
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          if echo "$RESULTS" | jq -e 'any(.[]; .result == "failure" or .result == "cancelled")' > /dev/null; then
+            echo "::error::A job on the way to the e2e run failed or was cancelled."
+            exit 1
+          fi
