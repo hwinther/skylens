@@ -173,6 +173,80 @@ public sealed class AirportDbServiceTests
         Assert.Equal(new[] { "ENCN", "ENQC" }, capped.Select(a => a.Ident).ToArray());
     }
 
+    // -- Lookup by identifier ------------------------------------------------------------------------
+
+    [Fact]
+    public void Lookup_finds_an_airport_by_ident_or_iata_case_insensitively()
+    {
+        var service = CreateService();
+        service.Load(
+            Path.Combine(FixtureDir, "airports.csv"),
+            Path.Combine(FixtureDir, "runways.csv"),
+            Path.Combine(FixtureDir, "airport-frequencies.csv"));
+
+        var engm = service.Lookup("ENGM");
+        Assert.NotNull(engm);
+        Assert.Equal("Oslo Airport, Gardermoen", engm.Name);
+        Assert.Equal(60.193901, engm.Lat, 5);
+
+        Assert.Same(engm, service.Lookup("engm")); // case-insensitive
+        Assert.Same(engm, service.Lookup("OSL"));  // unique IATA code
+        Assert.Equal("ENCN", service.Lookup("krs")?.Ident);
+        Assert.Equal("NO-0003", service.Lookup("NO-0003")?.Ident); // a local ident with a dash
+
+        Assert.Null(service.Lookup("ENXX")); // closed → never loaded
+        Assert.Null(service.Lookup("ZZZZ")); // unknown
+        Assert.Null(service.Lookup("EN GM")); // malformed
+    }
+
+    [Fact]
+    public void Lookup_returns_nothing_before_the_dataset_has_loaded()
+    {
+        Assert.Null(CreateService().Lookup("ENGM"));
+    }
+
+    [Fact]
+    public void Code_index_prefers_idents_adds_icao_aliases_and_drops_ambiguous_codes()
+    {
+        using var reader = new StringReader(
+            "\"ident\",\"type\",\"name\",\"latitude_deg\",\"longitude_deg\",\"icao_code\",\"iata_code\"\n" +
+            "ENAA,medium_airport,Alpha,60.0,10.0,ENAA,AAA\n" +
+            "NO-0101,small_airport,Bravo,60.1,10.1,ENBB,DUP\n" +   // ICAO differs from the ident → alias
+            "ENCC,small_airport,Charlie,60.2,10.2,,DUP\n" +       // DUP shared with Bravo → ambiguous
+            "ENDD,small_airport,Delta,60.3,10.3,,ENAA\n");         // an IATA equal to Alpha's ident: ident wins
+        var aliases = new List<KeyValuePair<string, string>>();
+        var airports = AirportDbService.ParseAirports(
+            reader,
+            new Dictionary<string, List<RunwayDto>>(StringComparer.Ordinal),
+            new Dictionary<string, List<AirportFrequencyDto>>(StringComparer.Ordinal),
+            aliases);
+
+        var alias = Assert.Single(aliases); // ENAA's icao_code equals its ident: no alias
+        Assert.Equal(new KeyValuePair<string, string>("ENBB", "NO-0101"), alias);
+
+        var index = AirportDbService.BuildCodeIndex(airports, aliases);
+        Assert.Equal("NO-0101", index["enbb"].Ident);
+        Assert.Equal("ENAA", index["AAA"].Ident);
+        Assert.Equal("ENAA", index["ENAA"].Ident);
+        Assert.False(index.ContainsKey("DUP"));
+    }
+
+    [Theory]
+    [InlineData("ENGM", true)]
+    [InlineData("OSL", true)]
+    [InlineData("NO-0003", true)]
+    [InlineData("EN", false)]
+    [InlineData("ABCDEFGHIJK", false)]
+    [InlineData("EN GM", false)]
+    [InlineData("ENGM;", false)]
+    [InlineData("ØSL", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void IsValidIdent_accepts_3_to_10_ascii_letters_digits_or_dashes(string? ident, bool valid)
+    {
+        Assert.Equal(valid, AirportDbService.IsValidIdent(ident));
+    }
+
     private static AirportDbService CreateService() => new(
         Microsoft.Extensions.Options.Options.Create(new AirportsOptions()),
         new FakeHostEnvironment(),

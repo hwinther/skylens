@@ -14,7 +14,8 @@
 import { alpha, color } from "@/theme";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
-import { Sheet, sheetActionStyle, SheetSummary } from "./Sheet";
+import { vesselIdentityLines } from "./cockpitSummary";
+import { Sheet, sheetActionStyle, SheetSummary, sheetSummaryLines } from "./Sheet";
 import { ShowOnMapButton } from "./ShowOnMapButton";
 import { SimulatorButton } from "./SimulatorButton";
 import { ApiClient } from "@/api/client";
@@ -42,6 +43,13 @@ export interface VesselDetailSheetProps {
   cockpitAction?: ReactNode;
   /** Measure the summary's distance from here instead of the observer (the cockpit's followed object). */
   relativeTo?: { lat: number; lon: number } | null;
+  /**
+   * The collapsed summary says what the vessel is (type, call sign, destination) instead of its live
+   * speed / course / distance: the cockpit view's followed vessel, whose HUD shows those.
+   */
+  identitySummary?: boolean;
+  /** False drops "Show on map" (the cockpit view's own Map chip / minimap does that). Default true. */
+  mapAction?: boolean;
 }
 
 export function VesselDetailSheet({
@@ -52,6 +60,8 @@ export function VesselDetailSheet({
   signalLost = false,
   cockpitAction,
   relativeTo,
+  identitySummary = false,
+  mapAction = true,
 }: VesselDetailSheetProps) {
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
   // Without API access (signed out behind real auth) only the live DTO's rows show.
@@ -150,29 +160,42 @@ export function VesselDetailSheet({
         </View>
       }
       summary={
-        <SheetSummary
-          parts={
-            isAton
-              ? [aidTypeLabel(vessel?.aidType), vessel?.virtual ? "Virtual aid" : null, distance]
-              : [
-                  signalLost && "Signal lost",
-                  moving ? `${vessel!.sog!.toFixed(1)} kn` : navStatus,
-                  vessel?.cog != null ? `${Math.round(vessel.cog)}°` : null,
-                  distance,
-                ]
-          }
-        />
+        identitySummary ? (
+          sheetSummaryLines(
+            vesselIdentityLines({
+              metadata,
+              aton: isAton ? { aidType: aidTypeLabel(vessel?.aidType), virtual: !!vessel?.virtual } : null,
+              navStatus,
+              signalLost,
+            }),
+          )
+        ) : (
+          <SheetSummary
+            parts={
+              isAton
+                ? [aidTypeLabel(vessel?.aidType), vessel?.virtual ? "Virtual aid" : null, distance]
+                : [
+                    signalLost && "Signal lost",
+                    moving ? `${vessel!.sog!.toFixed(1)} kn` : navStatus,
+                    vessel?.cog != null ? `${Math.round(vessel.cog)}°` : null,
+                    distance,
+                  ]
+            }
+          />
+        )
       }
       actions={
-        mmsi != null && hasPosition ? (
+        mmsi != null && hasPosition && (mapAction || cockpitAction !== null) ? (
           <>
-            <ShowOnMapButton
-              testID="vessel-show-on-map"
-              focus={{ kind: "vessel", mmsi }}
-              accent={color.entity.sea}
-              onClose={onClose}
-              style={sheetActionStyle}
-            />
+            {mapAction ? (
+              <ShowOnMapButton
+                testID="vessel-show-on-map"
+                focus={{ kind: "vessel", mmsi }}
+                accent={color.entity.sea}
+                onClose={onClose}
+                style={sheetActionStyle}
+              />
+            ) : null}
             {cockpitAction !== undefined ? (
               cockpitAction
             ) : (

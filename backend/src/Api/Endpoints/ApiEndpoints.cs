@@ -353,6 +353,25 @@ public static class ApiEndpoints
                    })
            .WithName("Airports");
 
+        // GET /api/airports/{ident} — one airport from the same offline OurAirports dataset, by its ident
+        // (the ICAO code for most), its ICAO code, or an unambiguous IATA code; case-insensitive. The cockpit
+        // view resolves a known route's destination with it when that airport is beyond the nearby fetch.
+        // 400 for a malformed ident (3-10 letters, digits or dashes), 404 when unknown or ambiguous (also
+        // before the dataset has loaded). No upstream calls, so it stays on the group's "global" limit.
+        api.MapGet("/airports/{ident}",
+                   Results<Ok<AirportDto>, NotFound, ProblemHttpResult> (string ident, AirportDbService airports) =>
+                   {
+                       if (!AirportDbService.IsValidIdent(ident))
+                           return TypedResults.Problem(
+                               detail: $"ident must be 3-{AirportDbService.MaxIdentLength} letters, digits or dashes",
+                               statusCode: StatusCodes.Status400BadRequest);
+
+                       return airports.Lookup(ident) is { } airport
+                           ? TypedResults.Ok(airport)
+                           : TypedResults.NotFound();
+                   })
+           .WithName("Airport");
+
         // GET /api/ports?lat=&lon=&radiusKm= — harbours, marinas, ferry terminals and port areas from the
         // bundled extract (OpenStreetMap for Norway + World Port Index elsewhere), nearest-first, capped at 500. radiusKm is clamped to
         // [1, 500] (default 150). Offline like /api/airports, so it stays on the group's "global" limit.

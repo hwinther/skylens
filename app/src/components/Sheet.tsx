@@ -71,6 +71,22 @@ export function SheetSummary({ parts }: { parts: (string | null | undefined | fa
   );
 }
 
+/**
+ * A summary of one or two short lines (the cockpit's followed object), each a SheetSummary; undefined
+ * when no line has anything to show, so the card then has no summary row at all.
+ */
+export function sheetSummaryLines(lines: (string | null | undefined | false)[][]): ReactNode {
+  const shown = lines.filter((parts) => parts.some(Boolean));
+  if (shown.length === 0) return undefined;
+  return (
+    <>
+      {shown.map((parts, i) => (
+        <SheetSummary key={i} parts={parts} />
+      ))}
+    </>
+  );
+}
+
 /** Style for a button in the card's `actions` row: share the row, no stacked top margin. */
 export const sheetActionStyle: ViewStyle = { flex: 1, marginTop: 0, paddingVertical: 8 };
 

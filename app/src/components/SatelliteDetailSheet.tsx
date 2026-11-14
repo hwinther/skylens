@@ -13,7 +13,8 @@
 import { alpha, color } from "@/theme";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import { Sheet, sheetActionStyle, SheetSummary } from "./Sheet";
+import { satelliteIdentityLines } from "./cockpitSummary";
+import { Sheet, sheetActionStyle, SheetSummary, sheetSummaryLines } from "./Sheet";
 import { SimulatorButton } from "./SimulatorButton";
 import { useRouter } from "expo-router";
 import { ApiClient } from "@/api/client";
@@ -50,6 +51,13 @@ export interface SatelliteDetailSheetProps {
   panelTop?: number;
   /** Replaces the "Cockpit view" action (null in the cockpit view itself). Undefined keeps it. */
   cockpitAction?: ReactNode;
+  /**
+   * The collapsed summary says what the satellite is (orbit class and period, active transmitters)
+   * instead of its elevation / azimuth / range from the user: the cockpit view's followed satellite.
+   */
+  identitySummary?: boolean;
+  /** False drops "Show ground track" (the cockpit view's own Map chip / minimap does that). Default true. */
+  mapAction?: boolean;
 }
 
 /** Local wall-clock time for a pass instant, e.g. "18:42:10" (display only — not unit-tested). */
@@ -80,6 +88,8 @@ export function SatelliteDetailSheet({
   onClose,
   panelTop,
   cockpitAction,
+  identitySummary = false,
+  mapAction = true,
 }: SatelliteDetailSheetProps) {
   const client = useMemo(() => new ApiClient({ baseUrl: getApiBaseUrl() }), []);
   // Without API access (signed out behind real auth) only the live view's rows show.
@@ -167,34 +177,42 @@ export function SatelliteDetailSheet({
         </View>
       }
       summary={
-        <SheetSummary
-          parts={
-            view
-              ? [
-                  `El ${Math.round(view.elevationDeg)}°`,
-                  `Az ${Math.round(view.azimuthDeg)}° ${compass8(view.azimuthDeg)}`,
-                  `${view.rangeKm.toFixed(0)} km`,
-                ]
-              : ["Below the elevation mask"]
-          }
-        />
+        identitySummary ? (
+          sheetSummaryLines(
+            satelliteIdentityLines(orbit, detail ? detail.transmitters.filter(isActive).length : null),
+          )
+        ) : (
+          <SheetSummary
+            parts={
+              view
+                ? [
+                    `El ${Math.round(view.elevationDeg)}°`,
+                    `Az ${Math.round(view.azimuthDeg)}° ${compass8(view.azimuthDeg)}`,
+                    `${view.rangeKm.toFixed(0)} km`,
+                  ]
+                : ["Below the elevation mask"]
+            }
+          />
+        )
       }
       actions={
-        noradId != null ? (
+        noradId != null && (mapAction || cockpitAction !== null) ? (
           <>
-            <Pressable
-              testID="sat-show-ground-track"
-              style={[styles.trackButton, sheetActionStyle]}
-              onPress={() => {
-                // Hand the selection to the Map via the ephemeral store, close the sheet, and route to
-                // the Map tab (the sheet is reached from both AR and List — both land on the map).
-                setTracked(noradId);
-                onClose();
-                router.push("/map");
-              }}
-            >
-              <Text style={styles.trackButtonText}>Show ground track</Text>
-            </Pressable>
+            {mapAction ? (
+              <Pressable
+                testID="sat-show-ground-track"
+                style={[styles.trackButton, sheetActionStyle]}
+                onPress={() => {
+                  // Hand the selection to the Map via the ephemeral store, close the sheet, and route to
+                  // the Map tab (the sheet is reached from both AR and List — both land on the map).
+                  setTracked(noradId);
+                  onClose();
+                  router.push("/map");
+                }}
+              >
+                <Text style={styles.trackButtonText}>Show ground track</Text>
+              </Pressable>
+            ) : null}
             {cockpitAction !== undefined ? (
               cockpitAction
             ) : (

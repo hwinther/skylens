@@ -522,6 +522,39 @@
         }
       }
     },
+    "/api/airports/{ident}": {
+      "get": {
+        "tags": [
+          "Skylens.Api, Version=0.0.0.1, Culture=neutral, PublicKeyToken=null"
+        ],
+        "operationId": "Airport",
+        "parameters": [
+          {
+            "name": "ident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Skylens.Api.Enrichment.AirportDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
     "/api/ports": {
       "get": {
         "tags": [
