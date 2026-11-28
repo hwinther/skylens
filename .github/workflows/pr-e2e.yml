@@ -52,7 +52,7 @@ jobs:
     steps:
       - name: Changed files
         id: changed
-        uses: hwinther/reusable-workflows/.github/actions/changed-files@05d82fa2339b2085bae78c0faa55083c86e5da2e # v2.38.0
+        uses: hwinther/reusable-workflows/.github/actions/changed-files@533b9a2bdab2bc3b0b8b7b9ff673330932bd9641 # v2.47.0
         with:
           patterns: |
             ^backend/
@@ -86,8 +86,9 @@ jobs:
       checks: write
       pull-requests: write
       packages: read
-    uses: hwinther/reusable-workflows/.github/workflows/pr-build.yml@6b6810e17143f38ac9dc0f84d504e7ff08b1d2bf # v2.26.0
+    uses: hwinther/reusable-workflows/.github/workflows/pr-build.yml@533b9a2bdab2bc3b0b8b7b9ff673330932bd9641 # v2.47.0
     with:
+      pr_report_enabled: true
       node_enabled: true
       node_version: "26.x"
       node_working_directory: "app"
@@ -108,7 +109,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: hwinther/reusable-workflows/.github/workflows/build-image-docker.yml@6b6810e17143f38ac9dc0f84d504e7ff08b1d2bf # v2.26.0
+    uses: hwinther/reusable-workflows/.github/workflows/build-image-docker.yml@533b9a2bdab2bc3b0b8b7b9ff673330932bd9641 # v2.47.0
     with:
       container_registry: ghcr.io
       container_image_name_postfix: api
@@ -124,8 +125,9 @@ jobs:
       actions: read
       security-events: write
       pull-requests: write
-    uses: hwinther/reusable-workflows/.github/workflows/scan-image.yml@6b6810e17143f38ac9dc0f84d504e7ff08b1d2bf # v2.26.0
+    uses: hwinther/reusable-workflows/.github/workflows/scan-image.yml@533b9a2bdab2bc3b0b8b7b9ff673330932bd9641 # v2.47.0
     with:
+      pr_report_enabled: true
       image: ${{ needs.build.outputs.image }}
       container_image_name_postfix: api
       grype_fail_build: auto
@@ -165,7 +167,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: hwinther/reusable-workflows/.github/workflows/build-image-docker.yml@6b6810e17143f38ac9dc0f84d504e7ff08b1d2bf # v2.26.0
+    uses: hwinther/reusable-workflows/.github/workflows/build-image-docker.yml@533b9a2bdab2bc3b0b8b7b9ff673330932bd9641 # v2.47.0
     with:
       container_registry: ghcr.io
       container_image_name_postfix: e2e
@@ -181,15 +183,16 @@ jobs:
       packages: read
       pull-requests: write
       actions: read
-    uses: hwinther/reusable-workflows/.github/workflows/playwright-e2e.yml@56a8121d7a91b3c48c444c7b3fde8d0801320f08 # v2.35.0
+    uses: hwinther/reusable-workflows/.github/workflows/playwright-e2e.yml@533b9a2bdab2bc3b0b8b7b9ff673330932bd9641 # v2.47.0
     with:
+      pr_report_enabled: true
       compose_file: docker-compose.e2e.yml
       # The suite runs from the e2e image as a compose service (`npm run test:ci`), not with Node and
       # browsers on the runner: the same `docker compose --profile e2e run --rm playwright` as locally.
       compose_playwright_service: playwright
       playwright_working_directory: e2e
       # The API traces to the stack's collector; API requests over 2 s are reported in the job
-      # summary and the PR comment.
+      # summary and the PR report.
       otel_traces_file: e2e/otel-out/traces.jsonl
       slow_span_threshold_ms: 2000
       report_paths_json: '["playwright-report","test-results","otel-out"]'
@@ -201,7 +204,7 @@ jobs:
          "E2E_IMAGE":"${{ needs.e2e-image.outputs.image }}"}
 
   # Unit + e2e line coverage, kept apart from ci.yml's unit-test comment: its own job summary and
-  # sticky PR comment. On builds of main the unit side is the unit job's quality-node artifact; pull
+  # a section of the PR report. On builds of main the unit side is the unit job's quality-node artifact; pull
   # requests (whose unit tests run in ci.yml) re-run jest with coverage. Merged with the e2e-coverage
   # artifact by @wshno/playwright-config's wshno-coverage-summary (approximate: istanbul vs V8 line
   # accounting). Informational only; nothing gates on it.
@@ -211,8 +214,9 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    uses: hwinther/reusable-workflows/.github/workflows/e2e-coverage-summary.yml@f55297593d7ac787485fedaf3cb83b63030bc629 # v2.36.0
+    uses: hwinther/reusable-workflows/.github/workflows/e2e-coverage-summary.yml@533b9a2bdab2bc3b0b8b7b9ff673330932bd9641 # v2.47.0
     with:
+      pr_report_enabled: true
       source_root: app
       source_dirs: src,app
       # jest-config parity: collectCoverageFrom in app/jest.config.js leaves out the demo feed.
@@ -232,7 +236,7 @@ jobs:
       id-token: write
       attestations: write
       actions: read
-    uses: hwinther/reusable-workflows/.github/workflows/image-push.yml@6b6810e17143f38ac9dc0f84d504e7ff08b1d2bf # v2.26.0
+    uses: hwinther/reusable-workflows/.github/workflows/image-push.yml@533b9a2bdab2bc3b0b8b7b9ff673330932bd9641 # v2.47.0
     with:
       container_registry: ghcr.io
       container_image_name_postfix: api
@@ -270,7 +274,7 @@ jobs:
 
       - name: Render, validate, push and sign
         id: push
-        uses: hwinther/reusable-workflows/.github/actions/manifests@1fa5882e8aa1048af78492baf016f5a7b310be11 # v2.29.0
+        uses: hwinther/reusable-workflows/.github/actions/manifests@533b9a2bdab2bc3b0b8b7b9ff673330932bd9641 # v2.47.0
         with:
           mode: push
           artifact: ghcr.io/hwinther/skylens/manifests
@@ -290,7 +294,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    uses: hwinther/reusable-workflows/.github/workflows/gitops-preview-upsert.yml@6b6810e17143f38ac9dc0f84d504e7ff08b1d2bf # v2.26.0
+    uses: hwinther/reusable-workflows/.github/workflows/gitops-preview-upsert.yml@533b9a2bdab2bc3b0b8b7b9ff673330932bd9641 # v2.47.0
     with:
       target_repo: hwinther/proxmox
       preview_base_path: clusters/production/apps/previews/skylens
@@ -312,7 +316,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Post or update the preview-URL sticky comment
-        uses: hwinther/reusable-workflows/.github/actions/sticky-pr-comment@5ba6e5a72dec8dcd121cc864279889bb2fa6ed73 # v2.31.0
+        uses: hwinther/reusable-workflows/.github/actions/sticky-pr-comment@533b9a2bdab2bc3b0b8b7b9ff673330932bd9641 # v2.47.0
         with:
           github_token: ${{ github.token }}
           comment_identifier: skylens-preview-env
@@ -347,7 +351,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    uses: hwinther/reusable-workflows/.github/workflows/quality-artifact.yml@56a8121d7a91b3c48c444c7b3fde8d0801320f08 # v2.35.0
+    uses: hwinther/reusable-workflows/.github/workflows/quality-artifact.yml@533b9a2bdab2bc3b0b8b7b9ff673330932bd9641 # v2.47.0
     with:
       tags: |
         ${{ needs.main-tag.outputs.tag }}
